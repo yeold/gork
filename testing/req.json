@@ -1,0 +1,8 @@
+
+{"model":"claude-sonnet-5","max_tokens":1024,
+ "tools":[{"name":"read_file",
+   "description":"Read a file from disk. Returns contents with line numbers.",
+   "input_schema":{"type":"object",
+     "properties":{"path":{"type":"string"}},
+     "required":["path"]}}],
+ "messages":[{"role":"user","content":"What's in src/main.c?"}]}
