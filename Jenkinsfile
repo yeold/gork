@@ -3,7 +3,7 @@
 // Containers build as root in their own /tmp and only copy finished
 // packages into out/, chowned back to the Jenkins user.
 pipeline {
-    agent any
+    agent { label 'docker' }
     options { buildDiscarder(logRotator(numToKeepStr: '20')) }
     stages {
         stage('dist') {
