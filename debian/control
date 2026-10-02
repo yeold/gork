@@ -1,0 +1,14 @@
+Source: gork
+Section: utils
+Priority: optional
+Maintainer: Yeold <isac.selea@gmail.com>
+Build-Depends: debhelper-compat (= 13), libncurses-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/yeold/gork
+
+Package: gork
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: AI agent harness for machines that predate TLS
+ gork runs an agent's tool-use loop in strict C89 with no dependencies beyond
+ libc, curses and vendored cJSON, talking plaintext HTTP/1.0 to a TLS relay.
