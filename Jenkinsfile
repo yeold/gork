@@ -45,6 +45,20 @@ pipeline {
                 }
             }
         }
+        stage('release') {
+            when { tag 'v*' }
+            steps {
+                withCredentials([string(credentialsId: 'github-release-token', variable: 'GITHUB_TOKEN'),
+                                 string(credentialsId: 'forgejo-release-token', variable: 'FORGEJO_TOKEN')]) {
+                    sh '''
+                        docker run --rm -v "$PWD":/w:ro -w /w -e TAG="$TAG_NAME" -e GITHUB_TOKEN -e FORGEJO_TOKEN debian:stable sh -ec '
+                            apt-get -qq update
+                            DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl jq ca-certificates >/dev/null
+                            sh release.sh out'
+                    '''
+                }
+            }
+        }
     }
     post {
         success { archiveArtifacts artifacts: 'out/*', fingerprint: true }
