@@ -33,3 +33,11 @@ for f in "$DIR"/*; do
     echo "forgejo: $(basename "$f")"
     fj -F "attachment=@$f" "$FJ/releases/$id/assets?name=$(basename "$f")" >/dev/null
 done
+
+# Forgejo package registry: apt and dnf repos, plus the tarball as a generic
+# package.  Built on debian:stable, so the debs go in the "stable" suite.
+P=https://git.yeold.org/api/packages/yeold
+up() { echo "registry: $(basename "$2")"; curl -fsS -u "yeold:$FORGEJO_TOKEN" -T "$2" "$1" >/dev/null; }
+for f in "$DIR"/*.deb; do up "$P/debian/pool/stable/main/upload" "$f"; done
+for f in "$DIR"/*.rpm; do case "$f" in *.src.rpm) ;; *) up "$P/rpm/upload" "$f";; esac; done
+for f in "$DIR"/gork-*.tar.gz; do up "$P/generic/gork/${TAG#v}/$(basename "$f")" "$f"; done
