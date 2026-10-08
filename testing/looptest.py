@@ -456,6 +456,8 @@ def check_mcp():
         with open(os.path.join(home, ".gork", "mcp.json"), "w") as f:
             json.dump({"mcpServers": {
                 "broken": {"command": "/nonexistent/server"},
+                "picky": {"command": sys.executable, "args": [FAKEMCP],
+                          "tools": ["echo"]},
                 "fake": {"command": sys.executable, "args": [FAKEMCP]},
                 "off": {"command": sys.executable, "args": [FAKEMCP],
                         "disabled": True},
@@ -475,6 +477,8 @@ def check_mcp():
     names = [t["name"] for t in turns[0]["tools"]]
     assert names[-2:] == ["mcp__fake__echo", "mcp__fake__fail"], names
     assert not [n for n in names if n.startswith("mcp__off")], names
+    assert [n for n in names if n.startswith("mcp__picky")] == \
+        ["mcp__picky__echo"], names
     echo = turns[0]["tools"][-2]
     assert echo["input_schema"]["required"] == ["text"], echo
 
@@ -564,13 +568,14 @@ def check_skills():
 def check_config():
     """Settings come from the config file; the environment beats it; a bad
     file is refused with a reason rather than half-used."""
-    seen = []
+    seen, delay = [], [0]
 
     class H(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"
 
         def do_POST(self):
             req = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            time.sleep(delay[0])
             seen.append(({k.lower(): v for k, v in self.headers.items()},
                          self.path, req))
             reply(self, {"id": "m", "stop_reason": "end_turn",
@@ -593,6 +598,9 @@ def check_config():
         same = run_gork(8092, "hi", config=conf, ANTHROPIC_API_KEY="sk-env",
                          AGENT_HOST="cfg.local")    # same as the file: quiet
         effort = run_gork(8092, "hi", config=conf + "default_effort = xhigh\n")
+        delay[0] = 2
+        short = run_gork(8092, "hi", config=conf + "timeout = 1\nretries = 0\n")
+        long_ = run_gork(8092, "hi", config=conf + "timeout = 5\n")
     finally:
         srv.shutdown()
 
@@ -614,6 +622,10 @@ def check_config():
 
     assert effort.returncode == 0, effort.stderr
     assert seen[2][2]["output_config"] == {"effort": "xhigh"}, seen[2][2]
+    assert short.returncode != 0 and "timeout" in short.stderr, short.stderr
+    assert long_.returncode == 0, long_.stderr
+    proc = run_gork(8092, "hi", config="relay = 127.0.0.1:8092\ntimeout = 0\n")
+    assert proc.returncode == 2 and "want timeout" in proc.stderr, proc.stderr
     proc = run_gork(8092, "hi", config="relay = 127.0.0.1:8092\ndefault_effort = igh\n")
     assert proc.returncode == 2 and "want default_effort" in proc.stderr, proc.stderr
 

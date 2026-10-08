@@ -46,4 +46,7 @@ int relay_post(const char *relay_host, int relay_port,
 
 extern int (*relay_abort)(void);
 
+/* Seconds one request (and one MCP tool call) may take; `timeout`. */
+extern int relay_timeout;
+
 #endif /* GORK_RELAY_H */

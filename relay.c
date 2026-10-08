@@ -19,11 +19,11 @@
 
 #include "relay.h"
 
-#define TIMEOUT_SECS 120
 #define BUF_INITIAL 8192
 #define READ_CHUNK 4096
 
 int (*relay_abort)(void);
+int relay_timeout = 120;
 
 /* ------------------------------------------------------------------ */
 /* growable byte buffer                                               */
@@ -299,7 +299,7 @@ int relay_post(const char *relay_host, int relay_port, const char *api_host,
     return -1;
   }
 
-  alarm(TIMEOUT_SECS);
+  alarm(relay_timeout);
 
   rc = -1;
   if (write_all(fd, head, strlen(head)) != 0 ||

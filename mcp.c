@@ -27,7 +27,6 @@
 #include "mcp.h"
 
 #define INIT_TIMEOUT     30     /* seconds for initialize / tools/list */
-#define CALL_TIMEOUT     120    /* seconds for one tools/call */
 #define MCP_OUT_MAX      65536  /* tool output beyond this is cut off */
 #define MAX_PAGES        50     /* tools/list pages, against a looping cursor */
 #define TOOL_NAME_MAX    64     /* the API's limit on tool names */
@@ -438,8 +437,16 @@ static void start_server(const char *name, cJSON *cfg)
                     name, rpc_err);
             break;
         }
-        cJSON_ArrayForEach(nc, cJSON_GetObjectItem(res, "tools"))
+        cJSON_ArrayForEach(nc, cJSON_GetObjectItem(res, "tools")) {
+            /* A "tools" list keeps only those: some servers' schemas
+               would fill the context window on their own. */
+            if (cJSON_IsArray(cJSON_GetObjectItem(cfg, "tools")) &&
+                (!cJSON_IsString(cJSON_GetObjectItem(nc, "name")) ||
+                 !listed(cJSON_GetObjectItem(cfg, "tools"),
+                         cJSON_GetObjectItem(nc, "name")->valuestring)))
+                continue;
             add_tool(si, nc, cJSON_GetObjectItem(cfg, "autoApprove"));
+        }
         nc = cJSON_GetObjectItem(res, "nextCursor");
         if (cJSON_IsString(nc) && *nc->valuestring != '\0')
             cursor = mstrdup(nc->valuestring);
@@ -550,7 +557,7 @@ char *mcp_call(int i, cJSON *input, int *is_err)
     cJSON_AddItemToObject(params, "arguments", input != NULL
                           ? cJSON_Duplicate(input, 1) : cJSON_CreateObject());
 
-    res = rpc(s, "tools/call", params, CALL_TIMEOUT);
+    res = rpc(s, "tools/call", params, relay_timeout);
     if (res == NULL) {
         sprintf(msg, "error: MCP server %.50s: %.200s", s->name, rpc_err);
         return mstrdup(msg);

@@ -1,3 +1,11 @@
+gork (0.2) unstable; urgency=medium
+
+  * Add a timeout setting for API requests and MCP tool calls.
+  * Let an MCP server's "tools" list limit which tools are offered.
+  * Install the gork icon.
+
+ -- Yeold <isac.selea@gmail.com>  Thu, 08 Oct 2026 18:35:22 +0200
+
 gork (0.1) unstable; urgency=medium
 
   * Initial package.

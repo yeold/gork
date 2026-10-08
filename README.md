@@ -1,4 +1,4 @@
-# gork
+# <img src="images/gork.png" width="64" alt=""> gork
 
 A general-purpose AI agent harness for machines that predate TLS.
 
@@ -221,6 +221,7 @@ skipped.
 | `retries` | `AGENT_RETRIES` | `2` | Extra attempts for a request that hits a network error, 429 or 5xx (0..10) |
 | `context_window` | `AGENT_CONTEXT_WINDOW` | `200000` | Tokens the model can take; set it to the loaded context length for a local model |
 | `auto_compact` | `AGENT_AUTO_COMPACT` | `80` | Compact once the context passes this percentage of `context_window` (0 = never, max 99) |
+| `timeout` | `AGENT_TIMEOUT` | `120` | Seconds one API request or MCP tool call may take before it fails |
 | `default_effort` | `AGENT_DEFAULT_EFFORT` | *(unset: model default)* | Reasoning effort at startup: `low`, `medium`, `high`, `xhigh` or `max`, sent as `output_config.effort`; `/effort` changes it in the TUI |
 
 A set environment variable beats the file, and gork says so at startup (e.g. `model meta/muse-glimmer from AGENT_MODEL overrides ~/.gork.conf`), since a stale `export` in an old shell is easy to forget. If the file holds `api_key` and
@@ -287,11 +288,13 @@ copied over:
 At startup gork runs each server, asks for its tools, and offers them to the
 model as `mcp__<server>__<tool>`. In the TUI every MCP call asks for approval
 first, unless the tool is in that server's `autoApprove` list or you've
-answered `a`. `"disabled": true` skips a server.
+answered `a`. `"disabled": true` skips a server. `"tools": [...]` offers
+only the named tools -- every tool's schema goes out with every request, and
+some servers list enough to overflow the model's context on their own.
 
 A server that fails to start or doesn't answer within 30 s is reported and
-skipped; the others still load. A call that takes longer than 120 s fails
-with an error the model sees. Server stderr is discarded unless
+skipped; the others still load. A call that takes longer than `timeout`
+(120 s) fails with an error the model sees. Server stderr is discarded unless
 `GORK_TRACE` is set, so its logging doesn't flood the TUI.
 
 HTTP servers (`"url": ...`) are skipped: they are mostly TLS-only, which old

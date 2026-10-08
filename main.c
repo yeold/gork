@@ -22,7 +22,8 @@
  *   model    model id               env AGENT_MODEL   (claude-opus-5)
  *   api_key  x-api-key header       env ANTHROPIC_API_KEY
  *   allow    extra directories the file tools may use, `:`-separated
- *   max_turns, retries, context_window, auto_compact, default_effort
+ *   max_turns, retries, context_window, auto_compact, default_effort,
+ *   timeout
  *            (see README)
  * A set environment variable beats the file.
  *
@@ -126,7 +127,8 @@ static char *kstrdup(const char *s)
 
 /* The environment beats ~/.gork.conf, which beats the default. */
 enum { CFG_RELAY, CFG_MODEL, CFG_HOST, CFG_PATH, CFG_KEY, CFG_ALLOW,
-       CFG_TURNS, CFG_RETRIES, CFG_WINDOW, CFG_COMPACT, CFG_EFFORT, NCFG };
+       CFG_TURNS, CFG_RETRIES, CFG_WINDOW, CFG_COMPACT, CFG_EFFORT,
+       CFG_TIMEOUT, NCFG };
 
 static const struct {
     const char *name, *env, *fallback;
@@ -141,7 +143,8 @@ static const struct {
     { "retries", "AGENT_RETRIES",     RETRIES             },
     { "context_window", "AGENT_CONTEXT_WINDOW", CTX_WINDOW    },
     { "auto_compact", "AGENT_AUTO_COMPACT", AUTO_COMPACT      },
-    { "default_effort", "AGENT_DEFAULT_EFFORT", ""            }
+    { "default_effort", "AGENT_DEFAULT_EFFORT", ""            },
+    { "timeout", "AGENT_TIMEOUT",     "120"               }
 };
 
 static char *cfg_file[NCFG];
@@ -248,7 +251,7 @@ static int load_config(void)
         if (v == NULL || i == NCFG) {
             fprintf(stderr, "gork: %s:%d: expected `key = value`, key one of "
                             "relay, model, host, path, api_key, allow, max_turns, retries, "
-                            "context_window, auto_compact, default_effort\n", path, n);
+                            "context_window, auto_compact, default_effort, timeout\n", path, n);
             fclose(f);
             return -1;
         }
@@ -1898,6 +1901,11 @@ int main(int argc, char **argv)
         return 2;
     }
     strcpy(effort, cfg(CFG_EFFORT));
+    relay_timeout = atoi(cfg(CFG_TIMEOUT));
+    if (relay_timeout < 1) {
+        fprintf(stderr, "gork: want timeout >= 1 (seconds)\n");
+        return 2;
+    }
     if (c.ctx_window < 1000 || c.auto_compact < 0 || c.auto_compact > 99) {
         fprintf(stderr, "gork: want context_window >= 1000 and "
                         "auto_compact 0..99\n");
