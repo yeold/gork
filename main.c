@@ -5,7 +5,7 @@
  * plaintext HTTP relay, executing tool calls locally.  Transport is relay.c
  * (lifted from testing/relaytest.c); JSON is vendored cJSON.
  *
- * Target: gcc 2.95 / 3.2, glibc 2.1+, Linux 2.2+.  Strict C89.
+ * Target: gcc 2.95 / 3.2, glibc 2.1+, Linux 2.2+, Solaris.  Strict C89.
  *
  * Usage:
  *   ./gork ["your task"]

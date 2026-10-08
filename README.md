@@ -155,7 +155,7 @@ decline (the model is told and adapts), `a` allow that tool for the rest of
 the session. Reads never ask.
 
 Keys: Enter send, PgUp/PgDn scroll, Ctrl-U clear the line, Esc abort the
-running task, Ctrl-D or `/quit` exit. `/new` clears the conversation. A task
+running task, Ctrl-D (on an empty line) or `/quit` exit. `/new` clears the conversation. A task
 that fails (network, API error) is dropped from the conversation so the next
 message starts clean; an aborted one is kept, so you can redirect it.
 
@@ -217,7 +217,7 @@ skipped.
 | `model` | `AGENT_MODEL` | `claude-opus-5` | Model id |
 | `host` | `AGENT_HOST` | `api.anthropic.com` | `Host:` header value |
 | `path` | `AGENT_PATH` | `/v1/messages` | Request path |
-| `allow` | -- | *(none)* | Extra directories the file tools may read and write, `:`-separated |
+| `allow` | -- | *(none)* | Extra directories the file tools may read and write, `:`-separated (up to 8) |
 | `max_turns` | `AGENT_MAX_TURNS` | `24` | Tool round-trips per task before gork gives up |
 | `retries` | `AGENT_RETRIES` | `2` | Extra attempts for a request that hits a network error, 429 or 5xx (0..10) |
 | `context_window` | `AGENT_CONTEXT_WINDOW` | `200000` | Tokens the model can take; set it to the loaded context length for a local model |
@@ -295,7 +295,8 @@ some servers list enough to overflow the model's context on their own.
 
 A server that fails to start or doesn't answer within 30 s is reported and
 skipped; the others still load. A call that takes longer than `timeout`
-(120 s) fails with an error the model sees. Server stderr is discarded unless
+(120 s) fails with an error the model sees, and output past 64 KiB is cut
+off. Server stderr is discarded unless
 `GORK_TRACE` is set, so its logging doesn't flood the TUI.
 
 HTTP servers (`"url": ...`) are skipped: they are mostly TLS-only, which old
@@ -319,7 +320,7 @@ directories from the config: paths are resolved through symlinks and `..`,
 and anything landing outside is refused. An `allow` directory that doesn't
 exist stops gork at startup, and the model is told which extra directories
 it has. `list_dir` never follows symlinks and doesn't descend into hidden
-directories, and stops after 2000 entries. `read_file` may also read inside
+directories, and stops at 8 levels deep or 2000 entries. `read_file` may also read inside
 `~/.gork/skills`, so a skill's
 extra files are reachable; nothing can write there.
 
@@ -334,9 +335,11 @@ to 64 KiB.
 
 `run_command` cannot be confined -- the shell reaches whatever your user can --
 so in batch mode it is only offered when `GORK_ALLOW_RUN` is set. The TUI
-always offers it, because it asks before every command. Its stdin is `/dev/null`,
-output is capped at 64 KiB, and a nonzero exit is flagged as an error to the
-model.
+always offers it, because it asks before every command. Its stdin is
+`/dev/null`, so a command that reads stdin fails instead of hanging; one that
+prompts on `/dev/tty` (ssh, ftp, sudo passwords) still reaches you, since the
+TUI hands the terminal back while the command runs. Output is capped at
+64 KiB, and a nonzero exit is flagged as an error to the model.
 
 ## Layout
 
@@ -349,6 +352,9 @@ model.
 | [configure.ac](configure.ac), [Makefile.am](Makefile.am) | Build: curses detection, compiler flags, sources |
 | [cJSON/](cJSON/) | Vendored JSON parser |
 | [testing/](testing/) | Fakes and checks |
+| [gork.spec](gork.spec), [debian/](debian/) | RPM and deb packaging |
+| [Jenkinsfile](Jenkinsfile), [release.sh](release.sh) | CI: tarball and packages; tag builds publish releases |
+| [images/](images/) | Icon, installed to the hicolor theme |
 
 ## The loop
 
@@ -432,7 +438,5 @@ minimal echo server), and `req.json` (a sample request body).
   unchunked. A server that chunks anyway is detected and reported by name
   rather than failing as a JSON error; decoding it would be ~30 lines in
   `relay.c`.
-- **No context compaction.** A long enough conversation will eventually
-  exceed the context window.
 - `relaytest.c` still carries its own copy of the transport rather than
   linking `relay.c`.
