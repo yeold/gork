@@ -51,7 +51,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include <dirent.h>
+#include <signal.h>
+#include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -763,79 +766,152 @@ static char *tool_edit_file(cJSON *input, int *is_err)
     return kstrdup("edited: replaced 1 occurrence");
 }
 
+/* Set when the user presses Esc; the running task stops at the next safe
+   point, and every tool call still pending is declined. */
+static int aborted;
+
 /*
  * Runs anything the model asks, as the user running gork -- which is why
  * it is only offered when GORK_ALLOW_RUN is set.  No path confinement is
  * possible here; the shell can reach whatever the user can.
- * ponytail: no timeout, a command that never exits hangs gork.  Add
- * fork + alarm + kill if models start doing that.
+ *
+ * The command gets its own process group, so a timeout kills everything it
+ * started, and becomes the terminal's foreground job: its /dev/tty prompts
+ * (ssh, ftp, sudo) still work, and the interrupt key -- Esc in the TUI, see
+ * tui_suspend(), Ctrl-C in batch mode -- hits the command, not gork.
  */
 static char *tool_run_command(cJSON *input, int *is_err)
 {
-    cJSON      *cmd;
-    FILE       *p;
-    struct buf  b;
-    char       *line, msg[256];
-    int         rc, status;
+    cJSON          *cmd;
+    struct buf      b;
+    struct timeval  tv;
+    fd_set          rs;
+    char            chunk[4096], msg[256];
+    int             out[2], tty, fg = 0, status, n, trunc = 0, timed_out = 0;
+    long            left;
+    time_t          deadline;
+    pid_t           pid;
+    void          (*old)(int);
 
     *is_err = 1;
 
     cmd = cJSON_GetObjectItem(input, "command");
     if (!cJSON_IsString(cmd))
         return kstrdup("error: missing or non-string parameter \"command\"");
-
-    /* Subshell so the redirects cover the whole command; the newline stops a
-       trailing # comment eating the ')'.  stdin is /dev/null so a command
-       that reads stdin fails instead of hanging; prompts on /dev/tty (ssh,
-       ftp passwords) still reach the user, see tui_suspend(). */
-    line = (char *) malloc(strlen(cmd->valuestring) + 32);
-    if (line == NULL) return NULL;
-    sprintf(line, "(%s\n) </dev/null 2>&1", cmd->valuestring);
+    if (buf_init(&b) != 0) return NULL;
 
     fprintf(stderr, "[run] %s\n", cmd->valuestring);
     tui_drain();
+    tty = open("/dev/tty", O_RDWR);
+    if (tty >= 0 && tcgetpgrp(tty) == getpgrp()) fg = 1;
+    if (pipe(out) != 0) {
+        sprintf(msg, "error: cannot start shell: %s", strerror(errno));
+        goto fail;
+    }
     tui_suspend();
-    p = popen(line, "r");
-    free(line);
-    if (p == NULL) {
+    pid = fork();
+    if (pid == 0) {
+        /* stdin is /dev/null so a command that reads stdin fails instead of
+           hanging; prompts go through /dev/tty instead. */
+        setpgid(0, 0);
+        if (fg) {
+            signal(SIGTTOU, SIG_IGN);   /* we are background until this */
+            tcsetpgrp(tty, getpid());
+            signal(SIGTTOU, SIG_DFL);
+        }
+        if ((n = open("/dev/null", O_RDONLY)) >= 0) dup2(n, 0);
+        dup2(out[1], 1);
+        dup2(out[1], 2);
+        close(out[0]);
+        close(out[1]);
+        execl("/bin/sh", "sh", "-c", cmd->valuestring, (char *) NULL);
+        _exit(127);
+    }
+    close(out[1]);
+    if (pid < 0) {
+        close(out[0]);
         tui_resume();
         sprintf(msg, "error: cannot start shell: %s", strerror(errno));
-        return kstrdup(msg);
+        goto fail;
+    }
+    setpgid(pid, pid);                  /* either of us may get there first */
+    if (fg) {
+        old = signal(SIGTTOU, SIG_IGN);
+        tcsetpgrp(tty, pid);
+        signal(SIGTTOU, old);
     }
 
-    if (buf_init(&b) != 0) {
-        pclose(p);
-        tui_resume();
-        return NULL;
+    /* Read to EOF or the deadline.  Past the cap, output is drained and
+       dropped, so the command still runs to its end. */
+    deadline = time(NULL) + relay_timeout;
+    for (;;) {
+        left = (long) (deadline - time(NULL));
+        if (left <= 0) {
+            timed_out = 1;
+            break;
+        }
+        FD_ZERO(&rs);
+        FD_SET(out[0], &rs);
+        tv.tv_sec  = left;
+        tv.tv_usec = 0;
+        n = select(out[0] + 1, &rs, NULL, NULL, &tv);
+        if (n < 0 && errno != EINTR) break;
+        if (n <= 0) continue;
+        n = read(out[0], chunk, sizeof chunk);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) break;
+        if (!trunc && buf_add(&b, chunk, (size_t) n) != 0) {
+            killpg(pid, SIGKILL);
+            trunc = -1;
+            break;
+        }
+        if (b.len > TOOL_RUN_MAX) trunc = 1;
     }
-    rc = read_stream(p, &b, TOOL_RUN_MAX);
-    status = pclose(p);         /* past the cap the child dies on SIGPIPE */
+    if (timed_out) killpg(pid, SIGKILL);
+    close(out[0]);
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+        ;
+    if (fg) {
+        old = signal(SIGTTOU, SIG_IGN);
+        tcsetpgrp(tty, getpgrp());
+        signal(SIGTTOU, old);
+    }
+    if (tty >= 0) close(tty);
     tui_resume();
-    if (rc < 0) {
+    if (trunc < 0) {
         buf_free(&b);
         return NULL;
     }
-    if (rc > 0) {
+    if (trunc) {
         b.len = TOOL_RUN_MAX;
         b.p[b.len] = '\0';
     }
 
-    if (status == -1)
-        sprintf(msg, "%s[status unknown: %s]", rc ? "\n[output truncated]\n" : "",
-                strerror(errno));
+    if (timed_out)
+        sprintf(msg, "%s[timed out after %d s, killed]",
+                trunc ? "\n[output truncated]\n" : "", relay_timeout);
     else if (WIFEXITED(status))
-        sprintf(msg, "%s[exit %d]", rc ? "\n[output truncated]\n" : "",
+        sprintf(msg, "%s[exit %d]", trunc ? "\n[output truncated]\n" : "",
                 WEXITSTATUS(status));
-    else
+    else if (WTERMSIG(status) == SIGINT && fg) {
+        sprintf(msg, "%s[interrupted by the user]",
+                trunc ? "\n[output truncated]\n" : "");
+        aborted = 1;
+    } else
         sprintf(msg, "%s[killed by signal %d]",
-                rc ? "\n[output truncated]\n" : "", WTERMSIG(status));
+                trunc ? "\n[output truncated]\n" : "", WTERMSIG(status));
 
     if (buf_add(&b, msg, strlen(msg)) != 0) {
         buf_free(&b);
         return NULL;
     }
-    *is_err = !(status != -1 && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    *is_err = !(!timed_out && WIFEXITED(status) && WEXITSTATUS(status) == 0);
     return b.p;
+
+fail:
+    if (tty >= 0) close(tty);
+    buf_free(&b);
+    return kstrdup(msg);
 }
 
 static int cmp_names(const void *a, const void *b)
@@ -1120,10 +1196,6 @@ static int tool_asks(const struct tool *t)
     return !(trust_edits &&
              (t->fn == tool_write_file || t->fn == tool_edit_file));
 }
-
-/* Set when the user presses Esc; the running task stops at the next safe
-   point, and every tool call still pending is declined. */
-static int aborted;
 
 static int check_abort(void)
 {

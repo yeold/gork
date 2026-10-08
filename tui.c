@@ -20,6 +20,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <termios.h>
 #include <curses.h>
 
 #include "relay.h"              /* struct buf */
@@ -354,13 +355,24 @@ int tui_confirm(const char *title, const char *detail)
 
 /* Hand the terminal back in shell modes (canonical, echo, CR -> NL) so a
    command that prompts on /dev/tty -- ssh, ftp, sudo -- can read a line.
-   The TUI stays on screen; tui_resume() repaints over whatever was typed. */
+   Esc becomes the interrupt key, so the terminal itself sends SIGINT to the
+   command and gork never reads keys a prompt is waiting for.  The TUI stays
+   on screen; tui_resume() repaints over whatever was typed and restores the
+   modes, the interrupt key included.
+   ponytail: arrow keys start with Esc too, so they interrupt here; a key
+   reader that tells them apart would have to steal the prompts' input. */
 void tui_suspend(void)
 {
+    struct termios t;
+
     if (!active) return;
-    hint_text = "running command ... (answer any prompt it shows, then Enter)";
+    hint_text = "running command ... (answer any prompt it shows; Esc aborts)";
     draw();
     reset_shell_mode();
+    if (tcgetattr(0, &t) == 0) {
+        t.c_cc[VINTR] = 27;
+        tcsetattr(0, TCSANOW, &t);
+    }
 }
 
 void tui_resume(void)

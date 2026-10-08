@@ -880,6 +880,102 @@ def check_tui_tty_prompt():
     print("ok: run_command can prompt on /dev/tty, /effort")
 
 
+def check_run_timeout_and_esc():
+    """run_command dies at `timeout`, background children included, and
+    Esc in the TUI interrupts it and aborts the task."""
+    turns = []
+    command = ["sleep 30 & echo $! >bg.pid; sleep 30"]
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            turns.append(json.loads(self.rfile.read(int(self.headers["content-length"]))))
+            if len(turns) == 1:
+                reply(self, {"id": "m", "stop_reason": "tool_use", "content": [
+                    {"type": "tool_use", "id": "t1", "name": "run_command",
+                     "input": {"command": command[0]}}]})
+            else:
+                reply(self, {"id": "m", "stop_reason": "end_turn",
+                             "content": [{"type": "text", "text": "done"}]})
+
+        def log_message(self, *a):
+            pass
+
+    srv = serve(H, 8098)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            start = time.time()
+            proc = run_gork(8098, "go", cwd=tmp, GORK_ALLOW_RUN="1",
+                            AGENT_TIMEOUT="1")
+            assert time.time() - start < 10, "timeout not enforced"
+            assert proc.returncode == 0, proc.stderr
+            res = turns[1]["messages"][-1]["content"][0]
+            assert res.get("is_error") and "timed out after 1 s" in json.dumps(res), res
+            with open(os.path.join(tmp, "bg.pid")) as f:
+                bg = int(f.read())
+            time.sleep(0.2)
+            try:
+                os.kill(bg, 0)
+                assert False, "background child survived the timeout"
+            except ProcessLookupError:
+                pass
+
+        # Esc while the command runs, in the TUI.
+        del turns[:]
+        command[0] = "sleep 30"
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = os.path.realpath(tmp)
+            os.makedirs(os.path.join(tmp, ".gork"))
+            with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+                f.write(f"trust {tmp}\n")
+            with open(os.path.join(tmp, "k.conf"), "w") as f:
+                f.write("relay = 127.0.0.1:8098\n")
+            pid, fd = pty.fork()
+            if pid == 0:
+                os.chdir(tmp)
+                os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                                  GORK_ALLOW_RUN="1",
+                                  GORK_CONFIG=os.path.join(tmp, "k.conf"))
+                os.execv(BINARY, [BINARY])
+
+            out, step, deadline = b"", 0, time.time() + 15
+            while time.time() < deadline and step < 5:
+                r, _, _ = select.select([fd], [], [], 0.1)
+                if r:
+                    try:
+                        out += os.read(fd, 4096)
+                    except OSError:
+                        break
+                if step == 0 and b"Enter send" in out:
+                    os.write(fd, b"go\r")
+                    step = 1
+                elif step == 1 and b"Allow" in out:
+                    os.write(fd, b"y")
+                    step = 2
+                elif step == 2 and b"Esc aborts" in out:
+                    time.sleep(0.3)
+                    os.write(fd, b"\x1b")
+                    step = 3
+                elif step == 3 and b"gork: aborted" in out:
+                    os.write(fd, b"again\r")
+                    step = 4
+                elif step == 4 and b"done" in out:
+                    os.write(fd, b"/quit\r")
+                    step = 5
+            if step < 5:
+                os.kill(pid, 9)
+            _, status = os.waitpid(pid, 0)
+    finally:
+        srv.shutdown()
+
+    assert step == 5, (step, out.decode(errors="replace")[-2000:])
+    assert os.waitstatus_to_exitcode(status) == 0
+    assert "interrupted by the user" in json.dumps(turns[-1]["messages"]), turns[-1]
+
+    print("ok: run_command timeout, Esc interrupts it")
+
+
 check_tool_loop()
 check_rules_and_tools()
 check_local_no_key()
@@ -894,4 +990,5 @@ check_chunked()
 check_auto_compact()
 check_tui_abort()
 check_tui_tty_prompt()
+check_run_timeout_and_esc()
 print("all checks passed")

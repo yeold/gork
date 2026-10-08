@@ -160,8 +160,8 @@ that fails (network, API error) is dropped from the conversation so the next
 message starts clean; an aborted one is kept, so you can redirect it.
 
 Esc stops waiting for the model at once, and at an approval prompt it
-declines and stops. A command or MCP call that is already running finishes
-first.
+declines and stops. A running command is interrupted; an MCP call that is
+already running finishes first.
 
 The status bar shows how full the context is (`ctx 42k/200k (21%)`), from
 the token counts the server reports with each reply. `/compact` replaces the
@@ -222,7 +222,7 @@ skipped.
 | `retries` | `AGENT_RETRIES` | `2` | Extra attempts for a request that hits a network error, 429 or 5xx (0..10) |
 | `context_window` | `AGENT_CONTEXT_WINDOW` | `200000` | Tokens the model can take; set it to the loaded context length for a local model |
 | `auto_compact` | `AGENT_AUTO_COMPACT` | `80` | Compact once the context passes this percentage of `context_window` (0 = never, max 99) |
-| `timeout` | `AGENT_TIMEOUT` | `120` | Seconds one API request or MCP tool call may take before it fails |
+| `timeout` | `AGENT_TIMEOUT` | `120` | Seconds one API request, MCP tool call or `run_command` may take before it fails |
 | `default_effort` | `AGENT_DEFAULT_EFFORT` | *(unset: model default)* | Reasoning effort at startup: `low`, `medium`, `high`, `xhigh` or `max`, sent as `output_config.effort`; `/effort` changes it in the TUI |
 
 A set environment variable beats the file, and gork says so at startup (e.g. `model meta/muse-glimmer from AGENT_MODEL overrides ~/.gork.conf`), since a stale `export` in an old shell is easy to forget. If the file holds `api_key` and
@@ -341,6 +341,12 @@ prompts on `/dev/tty` (ssh, ftp, sudo passwords) still reaches you, since the
 TUI hands the terminal back while the command runs. Output is capped at
 64 KiB, and a nonzero exit is flagged as an error to the model.
 
+A command that runs past `timeout` is killed, along with everything it
+started (it runs in its own process group). Esc in the TUI, or Ctrl-C in
+batch mode, interrupts the command and aborts the task. While a command runs,
+Esc is the terminal's interrupt key, so arrow keys typed at a prompt
+interrupt it too.
+
 ## Layout
 
 | Path | What |
@@ -423,9 +429,8 @@ minimal echo server), and `req.json` (a sample request body).
 
 ## Known gaps
 
-- **`run_command` has no timeout.** A command that never exits hangs gork.
-- **Esc can't stop a running command.** It waits for the command or MCP
-  call to finish, then aborts.
+- **Esc can't stop a running MCP call.** It waits for the call to finish
+  (or hit `timeout`), then aborts.
 - **Basic line editor.** No cursor movement, history, or multi-line input.
 - **The TUI is not covered by `looptest.py`.** It was checked by hand under
   tmux.
