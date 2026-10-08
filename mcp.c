@@ -288,8 +288,16 @@ static int spawn(struct server *s, cJSON *cfg)
         close(to[1]);
         close(from[0]);
         close(from[1]);
-        cJSON_ArrayForEach(a, env)
-            if (cJSON_IsString(a)) setenv(a->string, a->valuestring, 1);
+        /* putenv, not setenv: Solaris before 10 has no setenv.  The
+           strings are never freed; exec replaces the image anyway. */
+        cJSON_ArrayForEach(a, env) {
+            char *kv;
+            if (!cJSON_IsString(a)) continue;
+            kv = malloc(strlen(a->string) + strlen(a->valuestring) + 2);
+            if (kv == NULL) continue;
+            sprintf(kv, "%s=%s", a->string, a->valuestring);
+            putenv(kv);
+        }
         execvp(argv[0], argv);
         _exit(127);
     }

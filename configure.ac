@@ -12,10 +12,13 @@ if test ! -f /usr/include/curses.h && test -f "$HOME/local/include/curses.h"; th
 fi
 
 AC_CHECK_HEADER([curses.h], [], [AC_MSG_ERROR([curses.h not found; install ncurses headers])])
-# ncurses on Linux/FreeBSD/OpenBSD, plain curses on NetBSD.
+# ncurses on Linux/FreeBSD/OpenBSD, plain curses on NetBSD and Solaris.
 # `./configure LIBS=-lncursesw` for UTF-8 terminals.
 AC_SEARCH_LIBS([initscr], [ncurses curses], [], [AC_MSG_ERROR([no curses library found])])
 AC_SEARCH_LIBS([fabs], [m])
+# Solaris keeps sockets and the resolver out of libc.
+AC_SEARCH_LIBS([gethostbyname], [nsl])
+AC_SEARCH_LIBS([socket], [socket])
 
 # -W, not -Wextra: the spelling gcc 3.2 (SUSE 8.1) knows.
 if test "$GCC" = yes; then
