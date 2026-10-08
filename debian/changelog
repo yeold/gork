@@ -1,3 +1,9 @@
+gork (0.2.1) unstable; urgency=medium
+
+  * Build on Solaris: link -lsocket -lnsl, use putenv instead of setenv.
+
+ -- Yeold <isac.selea@gmail.com>  Thu, 08 Oct 2026 21:14:53 +0200
+
 gork (0.2) unstable; urgency=medium
 
   * Add a timeout setting for API requests and MCP tool calls.
