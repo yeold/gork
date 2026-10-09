@@ -1,4 +1,4 @@
-AC_INIT([gork], [0.2.2])
+AC_INIT([gork], [0.3])
 AC_CONFIG_SRCDIR([main.c])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 AC_PROG_CC
@@ -16,9 +16,9 @@ AC_CHECK_HEADER([curses.h], [], [AC_MSG_ERROR([curses.h not found; install ncurs
 # `./configure LIBS=-lncursesw` for UTF-8 terminals.
 AC_SEARCH_LIBS([initscr], [ncurses curses], [], [AC_MSG_ERROR([no curses library found])])
 AC_SEARCH_LIBS([fabs], [m])
-# Solaris keeps sockets and the resolver out of libc.
-AC_SEARCH_LIBS([gethostbyname], [nsl])
-AC_SEARCH_LIBS([socket], [socket])
+# Solaris keeps sockets and the resolver out of libc, Haiku in libnetwork.
+AC_SEARCH_LIBS([gethostbyname], [nsl network])
+AC_SEARCH_LIBS([socket], [socket network])
 
 # -W, not -Wextra: the spelling gcc 3.2 (SUSE 8.1) knows.
 if test "$GCC" = yes; then

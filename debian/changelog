@@ -1,3 +1,13 @@
+gork (0.3) unstable; urgency=medium
+
+  * Build on Haiku: configure finds sockets and the resolver in libnetwork
+    (curses from the ncurses6_devel package).
+  * Verified on NetBSD 10.1 (x86_64): a fresh clone builds and installs
+    with autoreconf -i, ./configure, make and make install.
+  * Releases now carry their changelog entry as release notes.
+
+ -- Yeold <isac.selea@gmail.com>  Fri, 09 Oct 2026 08:28:24 +0200
+
 gork (0.2.2) unstable; urgency=medium
 
   * run_command honours the timeout setting and kills everything it started.

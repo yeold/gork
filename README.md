@@ -6,7 +6,8 @@ gork runs an agent's tool-use loop -- send a task, get tool calls back,
 execute them locally, feed the results in, repeat -- in strict C89 with no
 dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.95 /
 3.2, glibc 2.1+, and Linux 2.2+, and also builds on Solaris (configure
-adds `-lsocket -lnsl` and uses the system curses).
+adds `-lsocket -lnsl` and uses the system curses) and Haiku (`-lnetwork`,
+with the `ncurses6_devel` package).
 
 It talks to any server that speaks the Messages API format: Anthropic's own
 API, or a local model behind LM Studio or a similar compatible server (see
