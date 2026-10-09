@@ -23,7 +23,7 @@ create() { jq -nc --arg tag "$TAG" --arg body "$notes" \
 release_id() {
     r=$($1 "$2/releases/tags/$TAG" 2>/dev/null) ||
         r=$($1 -X POST -H 'Content-Type: application/json' "$2/releases" -d "$3")
-    echo "$r" | jq -r .id
+    printf '%s\n' "$r" | jq -r .id   # dash's echo would expand the \n in notes
 }
 
 # The tag lives on GitHub, which Jenkins builds from.  Forgejo's history has
