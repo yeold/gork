@@ -65,7 +65,9 @@ and `-lm`. configure looks for `-lncurses` first, then plain `-lcurses`
 with `./configure LIBS=-lncursesw` so non-ASCII text renders.
 
 The generated Makefile is plain portable make, so the BSDs' own `make` should
-do. Verified on NetBSD 10.1 (x86_64).
+do. Verified on NetBSD 10.1 (x86_64): a fresh clone builds and installs
+with `autoreconf -i`, `./configure`, `make` and `make install`, no extra
+setup.
 
 ### No curses headers
 
