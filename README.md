@@ -4,8 +4,8 @@ A general-purpose AI agent harness for machines that predate TLS.
 
 gork runs an agent's tool-use loop -- send a task, get tool calls back,
 execute them locally, feed the results in, repeat -- in strict C89 with no
-dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.95 /
-3.2, glibc 2.1+, and Linux 2.2+, and also builds on Solaris (configure
+dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.7.2+,
+libc 5.4 or glibc 2.0+, and Linux 2.0+, and also builds on Solaris (configure
 adds `-lsocket -lnsl` and uses the system curses) and Haiku (`-lnetwork`,
 with the `ncurses6_devel` package).
 
@@ -92,6 +92,20 @@ system has no `curses.h`. Anywhere else, point it there by hand:
 ```
 
 Verified on SuSE 8.1 (gcc 3.2, glibc 2.2, Linux 2.4).
+
+### Oldest systems
+
+The oldest system gork is verified on is Debian 1.3 "bo" from 1997
+(gcc 2.7.2.1, libc 5.4.33, ncurses 1.9.9e, Linux 2.0.33): it builds from the
+release tarball, and batch mode and the TUI both work, driven against a
+local model. Debian 2.1 (gcc 2.7.2.3, glibc 2.0.7, ncurses 4.2) and Debian
+2.2 (gcc 2.95.2, glibc 2.1.3, ncurses 5.0) build and run too.
+
+On anything this old, build from the tarball: its `configure` runs under
+bash 2.0, but autoconf 2.13 and automake 1.4 cannot regenerate it from a git
+checkout. gcc 2.7.2 says `unrecognized option -std=gnu89` on every file;
+that is harmless. [testing/oldvm.sh](testing/oldvm.sh) sets up the Debian
+1.3 machine in QEMU (see [Testing](#testing)).
 
 ## Run
 
@@ -424,6 +438,11 @@ Stands up a fake API, drives gork through a full `tool_use` round-trip, and
 asserts the wire shape: headers, tool declaration, the verbatim assistant
 echo, and one correctly-matched `tool_result` in a single user turn. This is
 the check that fails if the loop breaks.
+
+`testing/oldvm.sh build` makes a Debian 1.3 (1997: Linux 2.0.33, libc5,
+gcc 2.7.2.1) disk image for QEMU, and `testing/oldvm.sh run` boots it with
+the current tree as a tarball on `/dev/hdb`; `./build.sh` inside builds it.
+The header of the script has the details.
 
 `testing/fakemcp.py` is the stdio MCP server the MCP check runs against.
 [testing/](testing/) also holds the milestone-0 pieces: `relaytest.c` (a
