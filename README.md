@@ -14,6 +14,26 @@ API, or a local model behind LM Studio or a similar compatible server (see
 [Local models](#local-models)). It speaks plaintext HTTP/1.0 only;
 reaching an HTTPS endpoint is the relay's job, not gork's.
 
+## Contents
+
+- [Why a relay](#why-a-relay)
+- [Build](#build)
+  - [No curses headers](#no-curses-headers)
+  - [Oldest systems](#oldest-systems)
+- [Run](#run)
+  - [Interactive](#interactive)
+  - [Local models](#local-models)
+  - [Config](#config)
+  - [Rules](#rules)
+  - [Skills](#skills)
+  - [MCP servers](#mcp-servers)
+  - [Tools](#tools)
+- [Layout](#layout)
+- [The loop](#the-loop)
+- [Adding a tool](#adding-a-tool)
+- [Testing](#testing)
+- [Known gaps](#known-gaps)
+
 ## Why a relay
 
 Modern TLS is not reachable from the machines gork is for: no usable OpenSSL,
