@@ -356,6 +356,27 @@ def check_list_dir():
     print("ok: list_dir")
 
 
+def reap(pid, fd):
+    """Wait for gork to exit while still reading its pty.  On the way out it
+    waits for its output to drain, and a BSD pty never drains into a master
+    nobody reads (Linux does not block there)."""
+    while True:
+        done, status = os.waitpid(pid, os.WNOHANG)
+        if done:
+            return status
+        if select.select([fd], [], [], 0.1)[0]:
+            try:
+                os.read(fd, 4096)
+            except OSError:
+                pass
+
+
+def idle_after(out, marker):
+    """Has the TUI gone back to its input prompt since it showed `marker`?
+    Keys typed while a task is still running are dropped, so /quit must wait."""
+    return marker in out and b"Enter send" in out[out.rindex(marker):]
+
+
 # --------------------------------------------------------------- trust
 
 def interact(cwd, home, keys):
@@ -389,7 +410,7 @@ def interact(cwd, home, keys):
         if b"Enter send" in out and not sent_quit:
             os.write(fd, b"/quit\r")
             sent_quit = True
-    _, status = os.waitpid(pid, 0)
+    status = reap(pid, fd)
     return os.waitstatus_to_exitcode(status), out.decode(errors="replace")
 
 
@@ -787,13 +808,13 @@ def check_tui_abort():
                 step = 3
             elif step == 3 and b"fine" in out:
                 step = 4
-            elif step == 4 and b"42k/200k (21%)" in out:
+            elif step == 4 and idle_after(out, b"42k/200k (21%)"):
                 os.write(fd, b"/quit\r")
                 step = 5
         release.set()
         if step < 5:
             os.kill(pid, 9)
-        _, status = os.waitpid(pid, 0)
+        status = reap(pid, fd)
     srv.shutdown()
 
     text = out.decode(errors="replace")
@@ -819,7 +840,7 @@ def check_tui_tty_prompt():
             if len(turns) == 1:
                 reply(self, {"id": "m", "stop_reason": "tool_use", "content": [
                     {"type": "tool_use", "id": "t1", "name": "run_command", "input": {
-                        "command": "printf Pw: >/dev/tty; read -r x </dev/tty; echo got:$x"}}]})
+                        "command": "printf 'P''w:' >/dev/tty; read -r x </dev/tty; echo got:$x"}}]})
             else:
                 reply(self, {"id": "m", "stop_reason": "end_turn",
                              "content": [{"type": "text", "text": "done"}]})
@@ -860,16 +881,16 @@ def check_tui_tty_prompt():
             elif step == 1 and b"Allow" in out:
                 os.write(fd, b"y")
                 step = 2
-            elif step == 2 and b"Pw:" in out.split(b"running command")[-1]:
+            elif step == 2 and b"Pw:" in out:   # only the command prints it joined up
                 time.sleep(0.3)     # a human pause; bytes landing right on
                 os.write(fd, b"secret\r")  # the mode switch skip ICRNL
                 step = 3
-            elif step == 3 and b"done" in out:
+            elif step == 3 and idle_after(out, b"done"):
                 os.write(fd, b"/quit\r")
                 step = 5
         if step < 5:
             os.kill(pid, 9)
-        _, status = os.waitpid(pid, 0)
+        status = reap(pid, fd)
     srv.shutdown()
 
     assert step == 5, (step, out.decode(errors="replace")[-2000:])
@@ -923,7 +944,9 @@ def check_run_timeout_and_esc():
 
         # Esc while the command runs, in the TUI.
         del turns[:]
-        command[0] = "sleep 30"
+        # The marker (shown split in the TUI, printed joined) says the command
+        # is really running; "Esc aborts" alone appears before it starts.
+        command[0] = "printf 'UP''NOW' >/dev/tty; sleep 30"
         with tempfile.TemporaryDirectory() as tmp:
             tmp = os.path.realpath(tmp)
             os.makedirs(os.path.join(tmp, ".gork"))
@@ -953,19 +976,19 @@ def check_run_timeout_and_esc():
                 elif step == 1 and b"Allow" in out:
                     os.write(fd, b"y")
                     step = 2
-                elif step == 2 and b"Esc aborts" in out:
+                elif step == 2 and b"UPNOW" in out:
                     time.sleep(0.3)
                     os.write(fd, b"\x1b")
                     step = 3
                 elif step == 3 and b"gork: aborted" in out:
                     os.write(fd, b"again\r")
                     step = 4
-                elif step == 4 and b"done" in out:
+                elif step == 4 and idle_after(out, b"done"):
                     os.write(fd, b"/quit\r")
                     step = 5
             if step < 5:
                 os.kill(pid, 9)
-            _, status = os.waitpid(pid, 0)
+            status = reap(pid, fd)
     finally:
         srv.shutdown()
 

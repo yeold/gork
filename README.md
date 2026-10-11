@@ -4,10 +4,10 @@ A general-purpose AI agent harness for machines that predate TLS.
 
 gork runs an agent's tool-use loop -- send a task, get tool calls back,
 execute them locally, feed the results in, repeat -- in strict C89 with no
-dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.7.2+,
-libc 5.4 or glibc 2.0+, and Linux 2.0+, and also builds on Solaris (configure
-adds `-lsocket -lnsl` and uses the system curses) and Haiku (`-lnetwork`,
-with the `ncurses6_devel` package).
+dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.5.8+,
+libc 4.5 or glibc 2.0+, and Linux 1.0+, and also builds on FreeBSD, OpenBSD,
+NetBSD, Solaris and illumos (configure adds `-lsocket -lnsl` and uses the
+system curses) and Haiku (`-lnetwork`, with the `ncurses6_devel` package).
 
 It talks to any server that speaks the Messages API format: Anthropic's own
 API, or a local model behind LM Studio or a similar compatible server (see
@@ -88,7 +88,10 @@ with `./configure LIBS=-lncursesw` so non-ASCII text renders.
 The generated Makefile is plain portable make, so the BSDs' own `make` should
 do. Verified on NetBSD 10.1 (x86_64): a fresh clone builds and installs
 with `autoreconf -i`, `./configure`, `make` and `make install`, no extra
-setup.
+setup. FreeBSD 15.1 and OpenBSD 7.9 (both clang 19) build from the tarball
+and pass the whole test suite, as does OmniOS r151058 (illumos, gcc 14) with
+either the system curses or, given `CPPFLAGS=-I/usr/include/ncurses`,
+ncurses. Oracle Solaris itself is untested.
 
 ### No curses headers
 
@@ -115,11 +118,27 @@ Verified on SuSE 8.1 (gcc 3.2, glibc 2.2, Linux 2.4).
 
 ### Oldest systems
 
-The oldest system gork is verified on is Debian 1.3 "bo" from 1997
-(gcc 2.7.2.1, libc 5.4.33, ncurses 1.9.9e, Linux 2.0.33): it builds from the
-release tarball, and batch mode and the TUI both work, driven against a
-local model. Debian 2.1 (gcc 2.7.2.3, glibc 2.0.7, ncurses 4.2) and Debian
-2.2 (gcc 2.95.2, glibc 2.1.3, ncurses 5.0) build and run too.
+The oldest system gork is verified on is Slackware 2.0.0 from June 1994
+(gcc 2.5.8, a.out libc 4.5.26, ncurses 1.8.5, Linux 1.0.9): batch mode and
+the TUI both work. `configure` is no use there -- that kernel reads the
+clock as 1926, so make sees files from the future and reruns it forever --
+but one command builds it:
+
+```sh
+gcc -O -I/usr/include/ncurses -o gork main.c relay.c tui.c mcp.c \
+    cJSON/cJSON.c -lncurses -lm
+```
+
+Slackware 3.0 (1995: gcc 2.7.0, libc 5.0.9, ncurses 1.9.4, Linux 1.2.13)
+builds the usual way with `./configure CPPFLAGS=-I/usr/include/ncurses`;
+the `curses.h` in `/usr/include` is BSD curses. Debian 1.3 "bo" (1997:
+gcc 2.7.2.1, libc 5.4.33, ncurses 1.9.9e, Linux 2.0.33) needs no flags, and
+is also verified against a local model. Debian 2.1 (gcc 2.7.2.3, glibc
+2.0.7, ncurses 4.2) and Debian 2.2 (gcc 2.95.2, glibc 2.1.3, ncurses 5.0)
+build and run too.
+
+Slackware 1.01 (1993: libc 4.4.1) is past the limit: its libc has no
+`realpath` and its ncurses no `has_colors`.
 
 On anything this old, build from the tarball: its `configure` runs under
 bash 2.0, but autoconf 2.13 and automake 1.4 cannot regenerate it from a git

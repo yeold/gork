@@ -5,7 +5,8 @@
  * plaintext HTTP relay, executing tool calls locally.  Transport is relay.c
  * (lifted from testing/relaytest.c); JSON is vendored cJSON.
  *
- * Target: gcc 2.7.2+, libc 5.4 or glibc 2.0+, Linux 2.0+, Solaris.
+ * Target: gcc 2.5.8+, libc 4.5 or glibc 2.0+, Linux 1.0+, the BSDs,
+ * Solaris and illumos.
  * Strict C89.
  *
  * Usage:

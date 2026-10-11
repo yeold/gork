@@ -100,6 +100,15 @@ static int line_rows(size_t i, int w)
     return lines[i].len == 0 ? 1 : (int) ((lines[i].len + w - 1) / w);
 }
 
+/* Text at a position, by move + waddnstr only.  Old ncurses lacks addnstr
+   (1.8.5) and mvhline (1.9.4), and the mvaddnstr macro of the 1993 one
+   does not parse. */
+static void put(int y, int x, const char *s, int n)
+{
+    move(y, x);
+    waddnstr(stdscr, (char *) s, n);
+}
+
 static void draw(void)
 {
     int    w = COLS, avail = LINES - 3, total = 0, first, g, k, rows, off;
@@ -109,8 +118,9 @@ static void draw(void)
     erase();
 
     attrset(A_REVERSE);
-    mvhline(0, 0, ' ', w);
-    mvaddnstr(0, 0, status_text, w);
+    move(0, 0);
+    hline(' ', w);
+    put(0, 0, status_text, w);
 
     for (i = 0; i < nlines; i++) total += line_rows(i, w);
     if (scroll_rows > total - avail) scroll_rows = total - avail;
@@ -127,12 +137,12 @@ static void draw(void)
         attrset(style_attr[lines[i].style]);
         for (k = 0; k < rows; k++, g++) {
             if (g < first || g >= first + avail) continue;
-            mvaddnstr(1 + g - first, 0, lines[i].text + (size_t) k * w, w);
+            put(1 + g - first, 0, lines[i].text + (size_t) k * w, w);
         }
     }
 
     attrset(A_DIM);
-    mvaddnstr(LINES - 2, 0, hint_text, w);
+    put(LINES - 2, 0, hint_text, w);
     if (scroll_rows > 0) mvaddstr(LINES - 2, w - 10, "[scrolled]");
 
     /* Input: show the tail if it is wider than the screen.  One column is
@@ -141,7 +151,7 @@ static void draw(void)
     mvaddstr(LINES - 1, 0, "> ");
     attrset(A_NORMAL);
     off = (int) input_len > w - 3 ? (int) input_len - (w - 3) : 0;
-    addnstr(input + off, w - 3);
+    put(LINES - 1, 2, input + off, w - 3);
     refresh();
 }
 
@@ -392,7 +402,13 @@ int tui_poll_abort(void)
     tui_drain();
     nodelay(stdscr, TRUE);
     while ((ch = getch()) != ERR) {
-        if (ch == 27) esc = 1;
+        if (ch == 27) {
+            /* Stop here and empty the queue: 64-bit Solaris curses leaves
+               a -1 in it after a lone Esc and crashes on the next getch. */
+            esc = 1;
+            flushinp();
+            break;
+        }
         scroll_key(ch);         /* anything else typed now is dropped */
     }
     nodelay(stdscr, FALSE);

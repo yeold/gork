@@ -11,20 +11,30 @@ if test ! -f /usr/include/curses.h && test -f "$HOME/local/include/curses.h"; th
   LDFLAGS="$LDFLAGS -L$HOME/local/lib"
 fi
 
-AC_CHECK_HEADER([curses.h], [], [AC_MSG_ERROR([curses.h not found; install ncurses headers])])
-# ncurses on Linux/FreeBSD/OpenBSD, plain curses on NetBSD and Solaris.
-# `./configure LIBS=-lncursesw` for UTF-8 terminals.
-AC_SEARCH_LIBS([initscr], [ncurses curses], [], [AC_MSG_ERROR([no curses library found])])
-AC_SEARCH_LIBS([fabs], [m])
-# Solaris keeps sockets and the resolver out of libc, Haiku in libnetwork.
-AC_SEARCH_LIBS([gethostbyname], [nsl network])
-AC_SEARCH_LIBS([socket], [socket network])
-
 # -W, not -Wextra: the spelling gcc 3.2 (SUSE 8.1) knows.
 if test "$GCC" = yes; then
   AM_CFLAGS="-std=gnu89 -pedantic -Wall -W"
 fi
 AC_SUBST([AM_CFLAGS])
+# Run the checks as C89 too: new autoconf puts -std=gnu23 in CC, and the
+# Solaris curses.h (typedef char bool) does not compile as C23.
+save_CFLAGS=$CFLAGS
+CFLAGS="$CFLAGS $AM_CFLAGS"
+
+AC_CHECK_HEADER([curses.h], [], [AC_MSG_ERROR([curses.h not found; install ncurses headers])])
+# ncurses on Linux/FreeBSD/OpenBSD, plain curses on NetBSD and Solaris.
+# `./configure LIBS=-lncursesw` for UTF-8 terminals.
+# A System V curses.h (it renames initscr) needs libcurses even where a
+# libncurses is installed too, as on illumos.
+AC_CHECK_DECL([initscr32], [gork_curses="curses ncurses"], [gork_curses="ncurses curses"],
+              [[#include <curses.h>]])
+AC_SEARCH_LIBS([initscr], [$gork_curses], [], [AC_MSG_ERROR([no curses library found])])
+AC_SEARCH_LIBS([fabs], [m])
+# Solaris keeps sockets and the resolver out of libc, Haiku in libnetwork.
+AC_SEARCH_LIBS([gethostbyname], [nsl network])
+AC_SEARCH_LIBS([socket], [socket network])
+
+CFLAGS=$save_CFLAGS
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
