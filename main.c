@@ -65,6 +65,15 @@
 #include "mcp.h"
 #include "cJSON/cJSON.h"
 
+/* DOS (DJGPP) has 8.3 file names: no leading dot, one extension. */
+#ifdef __MSDOS__
+#define DOT_GORK  "_gork"
+#define CONF_NAME "gork.cnf"
+#else
+#define DOT_GORK  ".gork"
+#define CONF_NAME ".gork.conf"
+#endif
+
 #define DEFAULT_MODEL "claude-opus-5"
 
 /* max_tokens caps thinking AND response text together.  Thinking is on by
@@ -225,7 +234,7 @@ static int load_config(void)
         }
         strcpy(path, named);
     } else if (home != NULL && strlen(home) < sizeof path - 16) {
-        sprintf(path, "%s/.gork.conf", home);
+        sprintf(path, "%s/" CONF_NAME, home);
         named = NULL;
     } else {
         return 0;
@@ -268,7 +277,9 @@ static int load_config(void)
         }
     }
 
-    /* The key is a secret: refuse a file others can read, as ssh does. */
+    /* The key is a secret: refuse a file others can read, as ssh does.
+       DOS has no file owners; every file reads as 0644 there. */
+#ifndef __MSDOS__
     if (cfg_file[CFG_KEY] != NULL && fstat(fileno(f), &st) == 0 &&
         (st.st_mode & 077) != 0) {
         fprintf(stderr, "gork: %s holds api_key but others can read it; "
@@ -276,6 +287,9 @@ static int load_config(void)
         fclose(f);
         return -1;
     }
+#else
+    (void) st;
+#endif
 
     fclose(f);
     return 0;
@@ -398,7 +412,15 @@ static const char *save_file(const char *real, const char *data, size_t n)
 
     if (strlen(real) + 11 >= sizeof tmp) return "path too long";
     strcpy(tmp, real);
+#ifdef __MSDOS__
+    {   /* one extension only: NAME.EXT is written as NAME.g$$ */
+        char *dot = strrchr(tmp, '.'), *sl = strrchr(tmp, '/');
+        if (dot != NULL && (sl == NULL || dot > sl)) *dot = '\0';
+        strcat(tmp, ".g$$");
+    }
+#else
     strcat(tmp, ".gork-tmp");
+#endif
 
     /* O_EXCL after removing any leftover, so a planted symlink at the temp
        name is replaced rather than followed out of the sandbox. */
@@ -782,6 +804,82 @@ static int aborted;
  * (ssh, ftp, sudo) still work, and the interrupt key -- Esc in the TUI, see
  * tui_suspend(), Ctrl-C in batch mode -- hits the command, not gork.
  */
+#ifdef __MSDOS__
+/* DOS runs one program at a time, so there is no pipe to read while the
+   command runs: its output goes to a temporary file, and there is no
+   timeout and no interrupt.  The command line is COMMAND.COM's. */
+static char *tool_run_command(cJSON *input, int *is_err)
+{
+    cJSON      *cmd;
+    struct buf  b;
+    char        chunk[4096], msg[64], out[L_tmpnam];
+    FILE       *f;
+    size_t      n;
+    int         status, trunc = 0, fd, o1, o2;
+
+    *is_err = 1;
+
+    cmd = cJSON_GetObjectItem(input, "command");
+    if (!cJSON_IsString(cmd))
+        return kstrdup("error: missing or non-string parameter \"command\"");
+    if (tmpnam(out) == NULL || buf_init(&b) != 0) return NULL;
+
+    fprintf(stderr, "[run] %s\n", cmd->valuestring);
+    tui_drain();
+    fflush(stdout);
+    fflush(stderr);
+    /* Point 1 and 2 at the file ourselves: system() takes one redirection
+       at most and has no 2>&1. */
+    fd = open(out, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    o1 = dup(1);
+    o2 = dup(2);
+    if (fd < 0 || o1 < 0 || o2 < 0) {
+        if (fd >= 0) close(fd);
+        if (o1 >= 0) close(o1);
+        if (o2 >= 0) close(o2);
+        buf_free(&b);
+        return kstrdup("error: cannot start command");
+    }
+    tui_suspend();
+    dup2(fd, 1);
+    dup2(fd, 2);
+    close(fd);
+    status = system(cmd->valuestring);
+    dup2(o1, 1);
+    dup2(o2, 2);
+    close(o1);
+    close(o2);
+    tui_resume();
+
+    if ((f = fopen(out, "r")) != NULL) {    /* text mode: no CRs */
+        while ((n = fread(chunk, 1, sizeof chunk, f)) > 0) {
+            if (b.len > TOOL_RUN_MAX) {
+                trunc = 1;
+                break;
+            }
+            if (buf_add(&b, chunk, n) != 0) {
+                fclose(f);
+                remove(out);
+                buf_free(&b);
+                return NULL;
+            }
+        }
+        fclose(f);
+    }
+    remove(out);
+    if (trunc) {
+        b.len = TOOL_RUN_MAX;
+        b.p[b.len] = '\0';
+    }
+    sprintf(msg, "%s[exit %d]", trunc ? "\n[output truncated]\n" : "", status);
+    if (buf_add(&b, msg, strlen(msg)) != 0) {
+        buf_free(&b);
+        return NULL;
+    }
+    *is_err = status != 0;
+    return b.p;
+}
+#else
 static char *tool_run_command(cJSON *input, int *is_err)
 {
     cJSON          *cmd;
@@ -915,6 +1013,7 @@ fail:
     buf_free(&b);
     return kstrdup(msg);
 }
+#endif
 
 static int cmp_names(const void *a, const void *b)
 {
@@ -1132,7 +1231,12 @@ static const struct tool TOOLS[] = {
       "{\"type\":\"object\","
        "\"properties\":{"
          "\"command\":{\"type\":\"string\","
+#ifdef __MSDOS__
+                      "\"description\":\"Command line for DOS "
+                      "(COMMAND.COM).\"}},"
+#else
                       "\"description\":\"Command line for /bin/sh.\"}},"
+#endif
        "\"required\":[\"command\"]}",
       tool_run_command },
     { "skill",
@@ -2006,7 +2110,7 @@ int main(int argc, char **argv)
     /* Interactive only: a task on the command line is consent already. */
     if (argc == 1 && home != NULL && strlen(home) < sizeof trust_path - 32) {
         strcpy(trust_path, home);
-        strcat(trust_path, "/.gork/trusted");
+        strcat(trust_path, "/" DOT_GORK "/trusted");
         lvl = trust_level(trust_path);
         if (lvl == 0) lvl = ask_trust(trust_path, home);
         if (lvl == 0) return 1;
@@ -2037,16 +2141,16 @@ int main(int argc, char **argv)
     }
     c.have_rules = rules.len > 0;
 
-    scan_skills(".gork/skills");
+    scan_skills(DOT_GORK "/skills");
     c.mcp_config = NULL;
     if (home != NULL && strlen(home) < sizeof mcp_path - 32) {
         strcpy(mcp_path, home);
-        strcat(mcp_path, "/.gork/mcp.json");
+        strcat(mcp_path, "/" DOT_GORK "/mcp.json");
         c.mcp_config = mcp_path;
     }
     if (home != NULL && strlen(home) < sizeof user_skills - 16) {
         strcpy(skills_path, home);
-        strcat(skills_path, "/.gork/skills");
+        strcat(skills_path, "/" DOT_GORK "/skills");
         if (realpath(skills_path, user_skills) != NULL)
             scan_skills(user_skills);
         else

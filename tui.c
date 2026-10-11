@@ -40,6 +40,10 @@ struct line {
 
 static int          active;
 static int          cap_rfd = -1, saved_out = -1, saved_err = -1;
+#ifdef __MSDOS__
+static char         cap_name[L_tmpnam];     /* DOS cannot unlink it open */
+static long         cap_off;                /* how far it has been read */
+#endif
 static struct buf   partial;            /* captured output not yet a line */
 static struct line *lines;
 static size_t       nlines, cap_lines;
@@ -171,7 +175,11 @@ static void on_signal(int sig)
 
 int tui_init(const char *status)
 {
+#ifdef __MSDOS__
+    char *name = cap_name;
+#else
     char  name[] = "/tmp/gorkXXXXXX";
+#endif
     int   fd;
     FILE *tty;
 
@@ -182,10 +190,17 @@ int tui_init(const char *status)
     setvbuf(stdout, NULL, _IOLBF, 0);   /* before anything is printed */
 
     if (buf_init(&partial) != 0) return -1;
+#ifdef __MSDOS__
+    fd = tmpnam(name) != NULL ? open(name, O_WRONLY | O_CREAT | O_EXCL, 0600)
+                              : -1;
+#else
     fd = mkstemp(name);
+#endif
     if (fd < 0) return -1;
     cap_rfd = open(name, O_RDONLY);     /* own offset, independent of writers */
+#ifndef __MSDOS__
     unlink(name);
+#endif
 
     saved_out = dup(1);
     saved_err = dup(2);
@@ -236,6 +251,10 @@ void tui_end(void)
     fflush(stderr);
     dup2(saved_out, 1);
     dup2(saved_err, 2);
+#ifdef __MSDOS__
+    close(cap_rfd);
+    remove(cap_name);
+#endif
 }
 
 void tui_drain(void)
@@ -248,8 +267,19 @@ void tui_drain(void)
     if (!active) return;
     fflush(stdout);
 
+#ifdef __MSDOS__
+    /* A second handle does not see what the first appends until the file
+       is committed and opened again. */
+    fsync(1);
+    close(cap_rfd);
+    cap_rfd = open(cap_name, O_RDONLY);
+    lseek(cap_rfd, cap_off, SEEK_SET);
+#endif
     while ((n = read(cap_rfd, chunk, sizeof chunk)) > 0)
         if (buf_add(&partial, chunk, (size_t) n) != 0) break;
+#ifdef __MSDOS__
+    cap_off = lseek(cap_rfd, 0L, SEEK_CUR);
+#endif
 
     start = partial.p;
     while ((nl = (char *) memchr(start, '\n',

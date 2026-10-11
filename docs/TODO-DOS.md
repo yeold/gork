@@ -1,7 +1,10 @@
 # TODO: gork on DOS
 
-Status: investigated, not ported. gork cross-compiles for DOS today and the
-binary starts, but it cannot yet complete a request or run a tool.
+Status: port started on the `dos` branch. Built with `Makefile.dj`,
+`gork.exe` completes a tool-use round trip on FreeDOS 1.3 in QEMU (NE2000
+packet driver, Watt-32) in batch mode and in the TUI, with `write_file` and
+with `run_command`. The items still open are below; the findings are from
+before the port and explain why each change was needed.
 
 ## Findings
 
@@ -45,9 +48,9 @@ What a small probe program showed about DJGPP at run time, in DOSBox:
 
 Build
 
-- [ ] Guard the two missing names for DJGPP (`#ifdef __DJGPP__`, or a
+- [x] Guard the two missing names for DJGPP (`#ifdef __DJGPP__`, or a
       `configure`-free `Makefile.dj`): no `SIGTTOU`, no `killpg`.
-- [ ] Add a `Makefile.dj` (or a documented one-line command) for the cross
+- [x] Add a `Makefile.dj` (or a documented one-line command) for the cross
       compiler and for DJGPP running on DOS itself; `configure` is not an
       option there.
 - [ ] Say in `docs/BUILD.md` which PDCurses and Watt-32 packages to unpack
@@ -55,26 +58,26 @@ Build
 
 Network
 
-- [ ] Stand up a test machine: FreeDOS in QEMU with an emulated NE2000 and
+- [x] Stand up a test machine: FreeDOS in QEMU with an emulated NE2000 and
       its packet driver, `WATTCP.CFG` with `my_ip = dhcp`, the fake API on
       the host at 10.0.2.2. DOSBox as shipped has no packet driver.
-- [ ] Check `relay.c` against Watt-32: `connect` with the `alarm` timeout,
-      `select` and `close` on a socket (Watt-32 also has its own `select_s`
-      and `close_s`; whether the plain calls work was not checked), and
-      name lookup through `gethostbyname`.
-- [ ] Run a plain request (no tools) end to end.
+- [x] Check `relay.c` against Watt-32: `connect` with the `alarm` timeout,
+      `select` and `close` on a socket. No change was needed for a relay
+      given by address; name lookup through `gethostbyname` and the
+      timeout path are still untested.
+- [x] Run a plain request (no tools) end to end.
 
 Files and configuration
 
-- [ ] Config file: fall back to a name that is valid on 8.3 file systems
-      when `HOME` is unset, for example `GORK.CNF` next to `gork.exe`, and
-      likewise for `~/.gork` (`trusted`, `skills`, `mcp.json`).
-- [ ] Skip the `api_key` permission check on DOS, where every file reads as
+- [ ] Config file: the names are now `gork.cnf` and `_gork` on DOS, but
+      still under `HOME`, which DOS does not set. Fall back to the directory
+      of `gork.exe`. Until then, set `HOME` or `GORK_CONFIG`.
+- [x] Skip the `api_key` permission check on DOS, where every file reads as
       `0644`.
-- [ ] `write_file`/`edit_file` write `NAME.gork-tmp` and rename it; pick a
+- [x] `write_file`/`edit_file` write `NAME.gork-tmp` and rename it; pick a
       temporary name that fits 8.3 (`main.c`, around the `.gork-tmp` line).
-- [ ] `GORK.md` and `.gork/skills` in the working directory: decide the 8.3
-      spellings (`GORK.MD` already fits; `.gork` does not).
+- [ ] `GORK.md` and `_gork/skills` in the working directory: untested, and
+      the trust prompt still says `.gork/skills`.
 - [ ] Path confinement: confirm with tests that `C:\DIR\..\X`, another
       drive letter (`D:`), and upper/lower case cannot step outside the
       working directory. `realpath` normalises the first; the others are
@@ -82,20 +85,21 @@ Files and configuration
 
 Tools
 
-- [ ] `run_command` without `fork`: run the command with `system()` or
+- [x] `run_command` without `fork`: run the command with `system()` or
       `spawn*()`, output redirected to a temporary file, then read the file.
       DOS runs one program at a time, so there is no timeout, no kill, and
       no Esc while a command runs. Say so in the tool description.
-- [ ] Command syntax is `COMMAND.COM`'s, not `/bin/sh`'s: change the tool
+- [x] Command syntax is `COMMAND.COM`'s, not `/bin/sh`'s: change the tool
       description the model sees ("Command line for /bin/sh").
 - [ ] MCP: stdio servers need two programs running at once. Compile MCP out
       on DOS and report that `mcp.json` is ignored.
 
 TUI
 
-- [ ] `tui.c` captures stdout in `/tmp/gorkXXXXXX` and unlinks it while
+- [x] `tui.c` captures stdout in `/tmp/gorkXXXXXX` and unlinks it while
       open. Use `TMPDIR`/`TEMP`, and delete the file at exit instead: DOS
       cannot remove an open file.
+- [ ] The screen is not cleared when the TUI exits.
 - [ ] Check the PDCurses calls gork uses (`newterm`, `keypad`, `nodelay`,
       `has_colors`, `reset_shell_mode`/`reset_prog_mode`) and the
       `tcgetattr`/`tcsetattr` use in `tui_suspend`. Esc as the interrupt key
