@@ -19,8 +19,6 @@ reaching an HTTPS endpoint is the relay's job, not gork's.
 
 - [Why a relay](#why-a-relay)
 - [Build](#build)
-  - [No curses headers](#no-curses-headers)
-  - [Oldest systems](#oldest-systems)
   - [Tested systems](#tested-systems)
 - [Run](#run)
   - [Interactive](#interactive)
@@ -69,7 +67,7 @@ make
 ```
 
 From a git checkout, generate `configure` first (needs autoconf and
-automake; the ones SuSE 8.1 ships are new enough):
+automake):
 
 ```sh
 autoreconf -i
@@ -78,102 +76,13 @@ make
 ```
 
 Produces `./gork`; `make install` puts it in `/usr/local/bin` (change with
-`./configure --prefix=...`). To build on a box with no autotools at all, run
-`make dist` on a machine that has them and copy over the resulting
-`gork-<version>.tar.gz` -- it ships a ready-made `configure`.
+`./configure --prefix=...`). cJSON is vendored in [cJSON/](cJSON/); the only
+link dependencies are curses and `-lm`. On a UTF-8 terminal, configure with
+`./configure LIBS=-lncursesw` so non-ASCII text renders.
 
-cJSON is vendored in [cJSON/](cJSON/); the only link dependencies are curses
-and `-lm`. configure looks for `-lncurses` first, then plain `-lcurses`
-(NetBSD's own curses). ncurses 5.x is fine. On a UTF-8 terminal, configure
-with `./configure LIBS=-lncursesw` so non-ASCII text renders.
-
-The generated Makefile is plain portable make, so the BSDs' own `make` should
-do. Verified on NetBSD 10.1 (x86_64): a fresh clone builds and installs
-with `autoreconf -i`, `./configure`, `make` and `make install`, no extra
-setup. FreeBSD 15.1 and OpenBSD 7.9 (both clang 19) build from the tarball
-and pass the whole test suite, as does OmniOS r151058 (illumos, gcc 14) with
-either the system curses or, given `CPPFLAGS=-I/usr/include/ncurses`,
-ncurses. OpenSolaris build 134 (2010, gcc 3.4.3), the last one from Sun,
-builds with a plain `./configure` too, and so do Solaris 10 5/08 with the
-gcc in `/usr/sfw/bin` (put that and `/usr/ccs/bin` on `PATH`), Solaris 2.6
-5/98 with the Sunfreeware gcc 2.8.1, and Solaris 2.5.1 with gcc 2.7.2 and
-the system make. Solaris 2.4 x86 could not be tested: its kernel panics at
-boot in QEMU.
-
-### No curses headers
-
-No ncurses headers (e.g. SuSE 8.1 without `ncurses-devel`)? Build a static
-ncurses into your home directory -- gork then needs only libc at runtime:
-
-```sh
-# in an unpacked ncurses-5.9 source tree
-./configure --prefix=$HOME/local --without-shared --without-cxx \
-    --without-ada --without-progs --without-tests --without-manpages \
-    --enable-overwrite --with-terminfo-dirs=/usr/share/terminfo \
-    --with-default-terminfo-dir=/usr/share/terminfo
-make libs && make install.libs install.includes
-```
-
-Then build gork as usual: configure picks up `~/local` by itself when the
-system has no `curses.h`. Anywhere else, point it there by hand:
-
-```sh
-./configure CPPFLAGS=-I/path/include LDFLAGS=-L/path/lib
-```
-
-Verified on SuSE 8.1 (gcc 3.2, glibc 2.2, Linux 2.4).
-
-### Oldest systems
-
-The oldest system gork is verified on is Slackware 2.0.0 from June 1994
-(gcc 2.5.8, a.out libc 4.5.26, ncurses 1.8.5, Linux 1.0.9): batch mode and
-the TUI both work. `configure` is no use there -- that kernel reads the
-clock as 1926, so make sees files from the future and reruns it forever --
-but one command builds it:
-
-```sh
-gcc -O -I/usr/include/ncurses -o gork main.c relay.c tui.c mcp.c \
-    cJSON/cJSON.c -lncurses -lm
-```
-
-Slackware 3.0 (1995: gcc 2.7.0, libc 5.0.9, ncurses 1.9.4, Linux 1.2.13)
-builds the usual way with `./configure CPPFLAGS=-I/usr/include/ncurses`;
-the `curses.h` in `/usr/include` is BSD curses. Debian 1.3 "bo" (1997:
-gcc 2.7.2.1, libc 5.4.33, ncurses 1.9.9e, Linux 2.0.33) needs no flags, and
-is also verified against a local model. Debian 2.1 (gcc 2.7.2.3, glibc
-2.0.7, ncurses 4.2) and Debian 2.2 (gcc 2.95.2, glibc 2.1.3, ncurses 5.0)
-build and run too.
-
-Slackware 1.01 (1993: libc 4.4.1) is past the limit: its libc has no
-`realpath` and its ncurses no `has_colors`.
-
-The first releases of the BSDs on 4.4BSD-Lite work as well: NetBSD 1.0
-(1994), FreeBSD 2.0 (1994) and OpenBSD 2.0 (1996, its first release on CD).
-Their `/bin/sh` cannot run `configure`, so compile by hand:
-
-```sh
-# FreeBSD 2.0, 2.0.5: curses.h is BSD curses, ncurses is in ncurses.h
-mkdir inc && ln -s /usr/include/ncurses.h inc/curses.h
-gcc -O -Iinc -o gork main.c relay.c tui.c mcp.c cJSON/cJSON.c \
-    -lncurses -lmytinfo -lm
-
-# OpenBSD 2.0: libcurses is ncurses already
-gcc -O -o gork main.c relay.c tui.c mcp.c cJSON/cJSON.c \
-    -lcurses -ltermlib -lm
-
-# NetBSD 1.0: BSD curses only; ncurses 4.2 builds and installs with
-# ./configure --prefix=/usr/local --without-cxx --without-ada
-gcc -O -I/usr/local/include -o gork main.c relay.c tui.c mcp.c \
-    cJSON/cJSON.c -L/usr/local/lib -lncurses -lm
-```
-
-FreeBSD 1.x, on the older Net/2 code, has no `realpath` in libc either.
-
-On anything this old, build from the tarball: its `configure` runs under
-bash 2.0, but autoconf 2.13 and automake 1.4 cannot regenerate it from a git
-checkout. gcc 2.7.2 says `unrecognized option -std=gnu89` on every file;
-that is harmless. [testing/oldvm.sh](testing/oldvm.sh) sets up the Debian
-1.3 machine in QEMU (see [Testing](#testing)).
+[docs/BUILD.md](docs/BUILD.md) has the instructions for each operating
+system: packages to install, flags, the one-line compiler command for
+systems too old to run `configure`, and what to do without curses headers.
 
 ### Tested systems
 
@@ -195,7 +104,7 @@ openSUSE, Debian 2.2, FreeBSD 15.1, OpenBSD 7.9 and OmniOS pass all of
 
 Everything but SuSE 8.1, Haiku, NetBSD 10.1 and openSUSE ran in QEMU or,
 for Debian 2.1 and 2.2, in Docker. The oldest Linux and BSD systems are
-compiled by hand; see [Oldest systems](#oldest-systems).
+compiled by hand; see [docs/BUILD.md](docs/BUILD.md).
 
 ## Run
 
@@ -464,6 +373,7 @@ interrupt it too.
 | [mcp.c](mcp.c), [mcp.h](mcp.h) | MCP client: stdio servers, JSON-RPC, tool calls |
 | [configure.ac](configure.ac), [Makefile.am](Makefile.am) | Build: curses detection, compiler flags, sources |
 | [cJSON/](cJSON/) | Vendored JSON parser |
+| [docs/BUILD.md](docs/BUILD.md) | Build instructions per operating system |
 | [testing/](testing/) | Fakes and checks |
 | [gork.spec](gork.spec), [debian/](debian/) | RPM and deb packaging |
 | [Jenkinsfile](Jenkinsfile), [release.sh](release.sh) | CI: tarball and packages; tag builds publish releases |
