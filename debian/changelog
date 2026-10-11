@@ -1,3 +1,19 @@
+gork (0.5) unstable; urgency=medium
+
+  * Experimental DOS build: gork.exe for 386+ machines (DJGPP, PDCurses,
+    Watt-32), shipped as gork-0.5-dos.zip with CWSDPMI.  Batch mode, the
+    TUI, file tools and run_command work on FreeDOS; MCP servers do not
+    exist there.  docs/TODO-DOS.md lists what is left.
+  * Builds on the first 4.4BSD-based releases without edits: relay.c
+    includes <sys/types.h> first.  Verified by hand compile on NetBSD 1.0,
+    FreeBSD 2.0 and OpenBSD 2.0.
+  * Verified on Solaris 2.5.1, 2.6 and 10 and on OpenSolaris build 134,
+    all with a plain ./configure.
+  * New docs/BUILD.md with build instructions per operating system; the
+    README keeps a one-row-per-family table of tested systems.
+
+ -- Yeold <isac.selea@gmail.com>  Sun, 11 Oct 2026 20:53:18 +0200
+
 gork (0.4) unstable; urgency=medium
 
   * Runs on much older systems: the floor is now gcc 2.4.5, libc 4.5 and
