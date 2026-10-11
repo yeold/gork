@@ -20,3 +20,4 @@ missing
 .dirstamp
 gork-*.tar.gz
 gork.exe
+out/

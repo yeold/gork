@@ -410,7 +410,11 @@ void tui_suspend(void)
     struct termios t;
 
     if (!active) return;
+#ifdef __MSDOS__
+    hint_text = "running command ... (DOS cannot interrupt it)";
+#else
     hint_text = "running command ... (answer any prompt it shows; Esc aborts)";
+#endif
     draw();
     reset_shell_mode();
     if (tcgetattr(0, &t) == 0) {

@@ -69,7 +69,13 @@
 #ifdef __MSDOS__
 #define DOT_GORK  "_gork"
 #define CONF_NAME "gork.cnf"
+/* Text mode for the files the model reads and writes: it sees and sends
+   bare newlines, the files keep their CR LF. */
+#define RB "r"
+#define WB "w"
 #else
+#define RB "rb"
+#define WB "wb"
 #define DOT_GORK  ".gork"
 #define CONF_NAME ".gork.conf"
 #endif
@@ -426,7 +432,7 @@ static const char *save_file(const char *real, const char *data, size_t n)
        name is replaced rather than followed out of the sandbox. */
     remove(tmp);
     fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0666);
-    f  = fd >= 0 ? fdopen(fd, "wb") : NULL;
+    f  = fd >= 0 ? fdopen(fd, WB) : NULL;
     if (f == NULL) {
         e = errno;
         if (fd >= 0) close(fd);
@@ -667,7 +673,7 @@ static char *tool_read_file(cJSON *input, int *is_err)
         sprintf(msg, "error: %.200s", why);
         return kstrdup(msg);
     }
-    f = fopen(real, "rb");
+    f = fopen(real, RB);
     if (f == NULL) {
         sprintf(msg, "error: cannot open file: %s", strerror(errno));
         return kstrdup(msg);
@@ -742,7 +748,7 @@ static char *tool_edit_file(cJSON *input, int *is_err)
         sprintf(msg, "error: %.200s", why);
         return kstrdup(msg);
     }
-    f = fopen(real, "rb");
+    f = fopen(real, RB);
     if (f == NULL) {
         sprintf(msg, "error: cannot open file: %s", strerror(errno));
         return kstrdup(msg);
@@ -1152,7 +1158,7 @@ static char *tool_skill(cJSON *input, int *is_err)
     if (i == nskills) return kstrdup("error: no such skill");
 
     sprintf(path, "%s/SKILL.md", skills[i].dir);
-    f = fopen(path, "rb");
+    f = fopen(path, RB);
     if (f == NULL) {
         sprintf(path, "error: cannot open SKILL.md: %s", strerror(errno));
         return kstrdup(path);
@@ -2139,7 +2145,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "gork: out of memory\n");
         return 1;
     }
-    f = fopen(RULES_FILE, "rb");
+    f = fopen(RULES_FILE, RB);
     if (f == NULL && errno != ENOENT) {
         fprintf(stderr, "gork: cannot read %s: %s\n", RULES_FILE,
                 strerror(errno));

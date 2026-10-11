@@ -8,7 +8,8 @@ dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.4.5+,
 libc 4.5 or glibc 2.0+, and Linux 1.0+, and also builds on FreeBSD 2.0+,
 OpenBSD 2.0+, NetBSD 1.0+, Solaris 2.5.1+ and illumos (configure adds
 `-lsocket -lnsl` and uses the system curses) and Haiku (`-lnetwork`, with
-the `ncurses6_devel` package).
+the `ncurses6_devel` package). There is an experimental DOS build as well;
+see [docs/BUILD.md](docs/BUILD.md#dos).
 
 It talks to any server that speaks the Messages API format: Anthropic's own
 API, or a local model behind LM Studio or a similar compatible server (see
@@ -101,6 +102,7 @@ openSUSE, Debian 2.2, FreeBSD 15.1, OpenBSD 7.9 and OmniOS pass all of
 | Solaris | 2.5.1 (1996, gcc 2.7.2) | 2.6, 10 | 2.4: its kernel panics at boot in QEMU, so untested |
 | illumos | OpenSolaris build 134 (2010, gcc 3.4.3) | OmniOS r151058, with the system curses or ncurses | |
 | Haiku | R1/beta6 | | |
+| DOS (experimental) | FreeDOS 1.3 with DJGPP, PDCurses and Watt-32, 386 or better | | 16-bit real mode: requests do not fit in 640 K |
 
 Everything but SuSE 8.1, Haiku, NetBSD 10.1 and openSUSE ran in QEMU or,
 for Debian 2.1 and 2.2, in Docker. The oldest Linux and BSD systems are
@@ -443,6 +445,10 @@ the check that fails if the loop breaks.
 gcc 2.7.2.1) disk image for QEMU, and `testing/oldvm.sh run` boots it with
 the current tree as a tarball on `/dev/hdb`; `./build.sh` inside builds it.
 The header of the script has the details.
+
+`testing/dostest.py` does the same for DOS: it boots FreeDOS in QEMU, runs
+the `gork.exe` that `sh dosbuild.sh` built, and checks a round trip, path
+confinement, `run_command`, the timeout and the TUI.
 
 `testing/fakemcp.py` is the stdio MCP server the MCP check runs against.
 [testing/](testing/) also holds the milestone-0 pieces: `relaytest.c` (a

@@ -1,6 +1,7 @@
 # TODO: operating systems still to test
 
-None of these has been tried. The notes are expectations, from what gork
+None of these has been tried. DOS, once on this list, now works: see
+[TODO-DOS.md](TODO-DOS.md). The notes are expectations, from what gork
 needs (a C89 compiler, curses, BSD sockets, `fork`/`pipe`/`select`,
 `realpath`) and from what broke on the systems in the
 [README table](../README.md#tested-systems). Grouped by expected effort.
@@ -67,7 +68,8 @@ reachable from C. These have them and are not listed above.
 1. Minix 3, macOS, Cygwin, musl: cheap, and likely to pass unchanged.
 2. AIX and HP-UX in QEMU: System V variety beyond Solaris, and both emulate.
 3. OS/2 with EMX, then native Windows (NT and 9x): the Windows work overlaps
-   the DOS port (branch `dos`, `docs/TODO-DOS.md` there).
+   the DOS port, which is done (see [TODO-DOS.md](TODO-DOS.md)): its
+   `#ifdef __MSDOS__` changes show what a system without `fork` needs.
 4. IRIX, NeXTSTEP, SunOS 4, Minix 2: these depend on hardware or slow
    emulators.
 5. Plan 9: batch mode only as a first goal.

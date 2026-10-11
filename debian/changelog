@@ -1,3 +1,16 @@
+gork (0.5.1) unstable; urgency=medium
+
+  * DOS: edit_file now works across lines.  DOS text files end lines with
+    CR LF while the model sends bare newlines, so a multi-line edit never
+    matched; the file tools use text mode there now.
+  * DOS: while a command runs, the TUI says it cannot be interrupted
+    instead of offering Esc.
+  * New testing/dostest.py: boots FreeDOS in QEMU and checks gork.exe
+    against a fake API (round trip, path confinement, edit_file,
+    run_command, timeout, TUI).
+
+ -- Yeold <isac.selea@gmail.com>  Sun, 11 Oct 2026 21:21:06 +0200
+
 gork (0.5) unstable; urgency=medium
 
   * Experimental DOS build: gork.exe for 386+ machines (DJGPP, PDCurses,

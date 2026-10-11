@@ -254,6 +254,8 @@ make -f Makefile.dj CC=i586-pc-msdosdjgpp-gcc PDCURSES=/path/to/pdcurses \
     WATT=/path/to/watt/net/watt
 ```
 
+`python3 testing/dostest.py` then checks that zip on FreeDOS in QEMU.
+
 To run it, the machine needs:
 
 - `CWSDPMI.EXE` beside `gork.exe` (it is in the zip);

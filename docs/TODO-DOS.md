@@ -1,10 +1,10 @@
 # TODO: gork on DOS
 
-Status: port started on the `dos` branch. Built with `Makefile.dj`,
-`gork.exe` completes a tool-use round trip on FreeDOS 1.3 in QEMU (NE2000
-packet driver, Watt-32) in batch mode and in the TUI, with `write_file` and
-with `run_command`. The items still open are below; the findings are from
-before the port and explain why each change was needed.
+Status: working, experimental. `gork.exe` (built by `dosbuild.sh`, shipped
+as `gork-<version>-dos.zip` since 0.5) passes `testing/dostest.py` on
+FreeDOS 1.3 in QEMU: batch mode, the TUI, file tools, `run_command`, path
+confinement and timeouts. What is still open is at the end of the list; the
+findings are from before the port and explain why each change was needed.
 
 ## Findings
 
@@ -75,7 +75,8 @@ Files and configuration
       `0644`.
 - [x] `write_file`/`edit_file` write `NAME.gork-tmp` and rename it; pick a
       temporary name that fits 8.3 (`main.c`, around the `.gork-tmp` line).
-- [ ] `GORK.md` and `_gork/skills` in the working directory: untested.
+- [x] `GORK.md` and `_gork/skills` in the working directory reach the
+      model.
 - [x] Path confinement: `c:\x`, `..\x`, `C:/W/../X`, `\x` and `a:\x` are
       all refused from `C:\W`; `in.txt` and `C:\W\IN.TXT` are read.
 
@@ -95,15 +96,26 @@ TUI
       open. Use `TMPDIR`/`TEMP`, and delete the file at exit instead: DOS
       cannot remove an open file.
 - [x] The screen is cleared when the TUI exits.
-- [ ] Esc aborts a waiting request and the trust prompt works. Still to
-      check: Esc while a command runs (termios `VINTR` does nothing on DOS).
-- [ ] Key codes: Enter and Esc work; Backspace and PgUp/PgDn are untested.
+- [x] Esc aborts a waiting request and the trust prompt works. A running
+      command cannot be interrupted on DOS; the hint line says so.
+- [x] Key codes: Enter, Backspace, PgUp/PgDn and Esc work.
 
 Testing and release
 
-- [ ] `testing/looptest.py` cannot run on DOS. The checks so far were
-      driven by hand in FreeDOS under QEMU; write the steps down or script
-      them.
+- [x] `testing/dostest.py` boots FreeDOS in QEMU and checks a batch round
+      trip, path confinement, `run_command`, the timeout and the TUI.
+- [x] A session against a real model (LM Studio on the host): batch tasks
+      with `list_dir`, `read_file`, `edit_file`, `write_file` and
+      `run_command`, and a TUI session with approvals, `/compact`,
+      `/effort`, `/new`, scrolling and Esc.
+- [x] Tool files are opened in text mode on DOS, so the model sees bare
+      newlines and `edit_file` matches across lines of a CR LF file.
+- [ ] Not covered: long output, a second drive in `allow`, and real
+      hardware (only QEMU so far).
+- [ ] Run `dostest.py` in Jenkins after the `dos` stage (the agent needs
+      qemu and mtools).
+- [ ] MCP code is still compiled into `gork.exe`; leaving it out would
+      save space.
 - [x] Regression: the Unix build is unchanged and passes the suite.
 - [x] `dosbuild.sh` cross-builds `gork-<version>-dos.zip` (gork.exe,
       CWSDPMI) and the Jenkinsfile has a `dos` stage that runs it. On a tag
