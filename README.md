@@ -6,7 +6,7 @@ gork runs an agent's tool-use loop -- send a task, get tool calls back,
 execute them locally, feed the results in, repeat -- in strict C89 with no
 dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.4.5+,
 libc 4.5 or glibc 2.0+, and Linux 1.0+, and also builds on FreeBSD 2.0+,
-OpenBSD 2.0+, NetBSD 1.0+, Solaris 2.6+ and illumos (configure adds
+OpenBSD 2.0+, NetBSD 1.0+, Solaris 2.5.1+ and illumos (configure adds
 `-lsocket -lnsl` and uses the system curses) and Haiku (`-lnetwork`, with
 the `ncurses6_devel` package).
 
@@ -95,8 +95,10 @@ and pass the whole test suite, as does OmniOS r151058 (illumos, gcc 14) with
 either the system curses or, given `CPPFLAGS=-I/usr/include/ncurses`,
 ncurses. OpenSolaris build 134 (2010, gcc 3.4.3), the last one from Sun,
 builds with a plain `./configure` too, and so do Solaris 10 5/08 with the
-gcc in `/usr/sfw/bin` (put that and `/usr/ccs/bin` on `PATH`) and Solaris
-2.6 5/98 with the Sunfreeware gcc 2.8.1 and make in `/usr/local/bin`.
+gcc in `/usr/sfw/bin` (put that and `/usr/ccs/bin` on `PATH`), Solaris 2.6
+5/98 with the Sunfreeware gcc 2.8.1, and Solaris 2.5.1 with gcc 2.7.2 and
+the system make. Solaris 2.4 x86 could not be tested: its kernel panics at
+boot in QEMU.
 
 ### No curses headers
 
@@ -197,6 +199,7 @@ hand.
 | FreeBSD 15.1 | 2026 | clang 19.1.7 | | ncurses | `configure` | suite |
 | OpenBSD 7.9 | 2026 | clang 19.1.7 | | ncurses | `configure` | suite |
 | NetBSD 10.1 | 2024 | | | NetBSD curses | `autoreconf -i`, `configure` | builds and installs |
+| Solaris 2.5.1 (SunOS 5.5.1) | 1996 | gcc 2.7.2 | | System V curses | `configure` | batch + TUI, against a fake API on loopback |
 | Solaris 2.6 5/98 (SunOS 5.6) | 1998 | gcc 2.8.1 (Sunfreeware) | | System V curses | `configure` | batch + TUI, against a fake API on loopback |
 | Solaris 10 5/08 (SunOS 5.10) | 2008 | gcc 3.4.3 | | System V curses | `configure` | batch + TUI |
 | OpenSolaris build 134 (SunOS 5.11) | 2010 | gcc 3.4.3 | | System V curses | `configure` | batch + TUI |
