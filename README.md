@@ -177,40 +177,25 @@ that is harmless. [testing/oldvm.sh](testing/oldvm.sh) sets up the Debian
 
 ### Tested systems
 
-"Suite" is all 15 checks of `testing/looptest.py`, run on the system itself
-unless noted; "batch + TUI" is a tool-use round trip in both modes, driven by
-hand.
+One row per family: the oldest release gork is verified on, what else was
+tried, and where it stops. "Works" means it builds and runs; nearly all were
+checked with a tool-use round trip in batch mode and in the TUI, and
+openSUSE, Debian 2.2, FreeBSD 15.1, OpenBSD 7.9 and OmniOS pass all of
+`testing/looptest.py`.
 
-| System | Year | Compiler | libc | curses | Build | Result |
-|---|---|---|---|---|---|---|
-| Slackware 1.01 (Linux 0.99pl12) | 1993 | gcc 2.4.5 | libc 4.4.1 | ncurses | by hand | does not link: no `realpath`, no `has_colors` |
-| Slackware 1.1.2 (Linux 0.99pl15) | 1994 | gcc 2.5.8 | libc 4.5.19 | ncurses | by hand | builds, TUI starts; no network in the test VM |
-| Slackware 2.0.0 (Linux 1.0.9) | 1994 | gcc 2.5.8 | libc 4.5.26 | ncurses 1.8.5 | by hand | batch + TUI |
-| Slackware 3.0 (Linux 1.2.13) | 1995 | gcc 2.7.0 | libc 5.0.9 | ncurses 1.9.4 | `configure CPPFLAGS=-I/usr/include/ncurses` | batch + TUI |
-| Debian 1.3 (Linux 2.0.33) | 1997 | gcc 2.7.2.1 | libc 5.4.33 | ncurses 1.9.9e | `configure` | batch + TUI, also against a local model |
-| Debian 2.1 (Docker) | 1999 | gcc 2.7.2.3 | glibc 2.0.7 | ncurses 4.2 | `configure` | builds; first 6 checks and TUI start |
-| Debian 2.2 (Docker) | 2000 | gcc 2.95.2 | glibc 2.1.3 | ncurses 5.0 | `configure` | suite, static binary run on a modern kernel |
-| SuSE 8.1 (Linux 2.4) | 2002 | gcc 3.2 | glibc 2.2 | ncurses 5.9 in `~/local` | `configure` | builds and runs |
-| FreeBSD 1.0, 1.1.5.1 | 1993-94 | gcc 2.4.5 | Net/2 libc | BSD curses | | cannot link: no `realpath` (libc inspected, not booted) |
-| NetBSD 1.0 | 1994 | gcc 2.4.5 | | ncurses 4.2, added | by hand | batch + TUI |
-| FreeBSD 2.0 | 1994 | gcc 2.6.2 | | ncurses (base) | by hand | batch + TUI |
-| FreeBSD 2.0.5 | 1995 | gcc 2.6.3 | | ncurses (base) | by hand | batch + TUI |
-| OpenBSD 2.0 | 1996 | gcc 2.7.2.1 | | ncurses (base) | by hand | batch + TUI |
-| FreeBSD 15.1 | 2026 | clang 19.1.7 | | ncurses | `configure` | suite |
-| OpenBSD 7.9 | 2026 | clang 19.1.7 | | ncurses | `configure` | suite |
-| NetBSD 10.1 | 2024 | | | NetBSD curses | `autoreconf -i`, `configure` | builds and installs |
-| Solaris 2.5.1 (SunOS 5.5.1) | 1996 | gcc 2.7.2 | | System V curses | `configure` | batch + TUI, against a fake API on loopback |
-| Solaris 2.6 5/98 (SunOS 5.6) | 1998 | gcc 2.8.1 (Sunfreeware) | | System V curses | `configure` | batch + TUI, against a fake API on loopback |
-| Solaris 10 5/08 (SunOS 5.10) | 2008 | gcc 3.4.3 | | System V curses | `configure` | batch + TUI |
-| OpenSolaris build 134 (SunOS 5.11) | 2010 | gcc 3.4.3 | | System V curses | `configure` | batch + TUI |
-| OmniOS r151058 (illumos) | 2026 | gcc 14.3 | | System V curses | `configure` | suite |
-| OmniOS r151058 (illumos) | 2026 | gcc 14.3 | | ncurses 6.6 | `configure CPPFLAGS=-I/usr/include/ncurses` | suite |
-| Haiku R1/beta6 | | | | ncurses 6 (`ncurses6_devel`) | `configure` | confirmed working |
-| openSUSE Tumbleweed (Linux 7.2) | 2026 | gcc 16.2 | glibc | ncurses 6 | `autoreconf -i`, `configure` | suite |
+| Family | Oldest that works | Also works | Does not work |
+|---|---|---|---|
+| Linux | Slackware 2.0.0 (1994: Linux 1.0.9, gcc 2.5.8, libc 4.5.26, ncurses 1.8.5) | Slackware 3.0, Debian 1.3, 2.1 and 2.2, SuSE 8.1, openSUSE Tumbleweed (gcc 16) | Slackware 1.01 (libc 4.4.1): no `realpath`, no `has_colors` |
+| FreeBSD | 2.0 (1994, gcc 2.6.2) | 2.0.5, 15.1 | 1.0 and 1.1.5.1: no `realpath` in libc |
+| NetBSD | 1.0 (1994, gcc 2.4.5), with ncurses 4.2 added | 10.1 | |
+| OpenBSD | 2.0 (1996, gcc 2.7.2.1) | 7.9 | |
+| Solaris | 2.5.1 (1996, gcc 2.7.2) | 2.6, 10 | 2.4: its kernel panics at boot in QEMU, so untested |
+| illumos | OpenSolaris build 134 (2010, gcc 3.4.3) | OmniOS r151058, with the system curses or ncurses | |
+| Haiku | R1/beta6 | | |
 
-The Slackware, Debian 1.3, BSD and OmniOS runs are in QEMU. The old BSDs
-are installed without their installers, from the release sets; they reach
-the host through an emulated NE2000.
+Everything but SuSE 8.1, Haiku, NetBSD 10.1 and openSUSE ran in QEMU or,
+for Debian 2.1 and 2.2, in Docker. The oldest Linux and BSD systems are
+compiled by hand; see [Oldest systems](#oldest-systems).
 
 ## Run
 
