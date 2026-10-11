@@ -1577,7 +1577,7 @@ static int ask_trust(const char *file, const char *home)
 
     fprintf(stderr,
         "gork will work in %s\n"
-        "It reads files here, takes GORK.md and .gork/skills as "
+        "It reads files here, takes GORK.md and " DOT_GORK "/skills as "
         "instructions,\nand -- when you approve -- changes files and runs "
         "commands.\n", work_root);
     if (strcmp(work_root, "/") == 0 ||
@@ -2042,6 +2042,21 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: %s [\"task\"]\n", argv[0]);
         return 2;
     }
+#ifdef __MSDOS__
+    /* DOS sets no HOME: use the directory gork.exe is in. */
+    if (getenv("HOME") == NULL && strlen(argv[0]) < PATH_MAX) {
+        static char h[PATH_MAX + 8];
+        char       *p;
+
+        sprintf(h, "HOME=%s", argv[0]);
+        for (p = h + strlen(h); p > h + 5 && *p != '/' && *p != '\\'; p--)
+            ;
+        if (p > h + 5) {
+            p[p[-1] == ':'] = '\0';    /* "c:" is that drive's cwd: keep the / */
+            putenv(h);
+        }
+    }
+#endif
     if (load_config() != 0) return 2;
 
     relay = cfg(CFG_RELAY);
@@ -2146,7 +2161,9 @@ int main(int argc, char **argv)
     if (home != NULL && strlen(home) < sizeof mcp_path - 32) {
         strcpy(mcp_path, home);
         strcat(mcp_path, "/" DOT_GORK "/mcp.json");
+#ifndef __MSDOS__       /* no fork there, so no servers to start */
         c.mcp_config = mcp_path;
+#endif
     }
     if (home != NULL && strlen(home) < sizeof user_skills - 16) {
         strcpy(skills_path, home);

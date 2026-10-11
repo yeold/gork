@@ -12,6 +12,7 @@ release named; the table of what was tested is in the
 - [Solaris](#solaris)
 - [illumos](#illumos)
 - [Haiku](#haiku)
+- [DOS](#dos)
 - [No curses headers](#no-curses-headers)
 
 ## Everywhere
@@ -230,6 +231,40 @@ make
 Install the `ncurses6_devel` package, then build as under
 [Everywhere](#everywhere). `configure` finds sockets and the resolver in
 `libnetwork`. Confirmed on R1/beta6.
+
+## DOS
+
+Experimental; [TODO-DOS.md](TODO-DOS.md) has what works and what is left.
+32-bit protected mode only: a 386 or better, built with
+[DJGPP](https://www.delorie.com/djgpp/), with PDCurses for the screen and
+Watt-32 for TCP/IP. Tested on FreeDOS 1.3.
+
+On Linux, `dosbuild.sh` downloads a DJGPP cross compiler and both libraries
+and leaves `gork-<version>-dos.zip` in `out/`:
+
+```sh
+sh dosbuild.sh
+```
+
+With a DJGPP you already have, on DOS or as a cross compiler, unpack
+`pdcur39a.zip` and `wat3211b.zip` from DJGPP's `v2tk` directory and run:
+
+```sh
+make -f Makefile.dj CC=i586-pc-msdosdjgpp-gcc PDCURSES=/path/to/pdcurses \
+    WATT=/path/to/watt/net/watt
+```
+
+To run it, the machine needs:
+
+- `CWSDPMI.EXE` beside `gork.exe` (it is in the zip);
+- a packet driver for the network card, loaded first;
+- a `WATTCP.CFG` with the address settings, found through the `WATTCP.CFG`
+  environment variable or in the current directory;
+- `gork.cnf` beside `gork.exe`, or wherever `HOME` or `GORK_CONFIG` point.
+
+DOS differences: file names are 8.3, so the config is `gork.cnf` and the
+directory is `_gork`; `run_command` takes `COMMAND.COM` syntax and cannot be
+timed out or interrupted; MCP servers are not available.
 
 ## No curses headers
 

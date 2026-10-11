@@ -53,8 +53,8 @@ Build
 - [x] Add a `Makefile.dj` (or a documented one-line command) for the cross
       compiler and for DJGPP running on DOS itself; `configure` is not an
       option there.
-- [ ] Say in `docs/BUILD.md` which PDCurses and Watt-32 packages to unpack
-      and that `CWSDPMI.EXE` must sit next to `gork.exe`.
+- [x] `docs/BUILD.md` has a DOS section: packages, `Makefile.dj`, what to
+      put beside `gork.exe`.
 
 Network
 
@@ -63,25 +63,21 @@ Network
       the host at 10.0.2.2. DOSBox as shipped has no packet driver.
 - [x] Check `relay.c` against Watt-32: `connect` with the `alarm` timeout,
       `select` and `close` on a socket. No change was needed for a relay
-      given by address; name lookup through `gethostbyname` and the
-      timeout path are still untested.
+      given by address or by name. The timeout needed one: a `SIGALRM`
+      inside Watt-32 aborts the program, so DOS polls a deadline instead.
 - [x] Run a plain request (no tools) end to end.
 
 Files and configuration
 
-- [ ] Config file: the names are now `gork.cnf` and `_gork` on DOS, but
-      still under `HOME`, which DOS does not set. Fall back to the directory
-      of `gork.exe`. Until then, set `HOME` or `GORK_CONFIG`.
+- [x] Config file and `_gork` directory: `gork.cnf` and `_gork`, under
+      `HOME`, or in the directory of `gork.exe` when `HOME` is unset.
 - [x] Skip the `api_key` permission check on DOS, where every file reads as
       `0644`.
 - [x] `write_file`/`edit_file` write `NAME.gork-tmp` and rename it; pick a
       temporary name that fits 8.3 (`main.c`, around the `.gork-tmp` line).
-- [ ] `GORK.md` and `_gork/skills` in the working directory: untested, and
-      the trust prompt still says `.gork/skills`.
-- [ ] Path confinement: confirm with tests that `C:\DIR\..\X`, another
-      drive letter (`D:`), and upper/lower case cannot step outside the
-      working directory. `realpath` normalises the first; the others are
-      untested.
+- [ ] `GORK.md` and `_gork/skills` in the working directory: untested.
+- [x] Path confinement: `c:\x`, `..\x`, `C:/W/../X`, `\x` and `a:\x` are
+      all refused from `C:\W`; `in.txt` and `C:\W\IN.TXT` are read.
 
 Tools
 
@@ -91,28 +87,24 @@ Tools
       no Esc while a command runs. Say so in the tool description.
 - [x] Command syntax is `COMMAND.COM`'s, not `/bin/sh`'s: change the tool
       description the model sees ("Command line for /bin/sh").
-- [ ] MCP: stdio servers need two programs running at once. Compile MCP out
-      on DOS and report that `mcp.json` is ignored.
+- [x] MCP: `mcp.json` is not read on DOS. The code is still compiled in.
 
 TUI
 
 - [x] `tui.c` captures stdout in `/tmp/gorkXXXXXX` and unlinks it while
       open. Use `TMPDIR`/`TEMP`, and delete the file at exit instead: DOS
       cannot remove an open file.
-- [ ] The screen is not cleared when the TUI exits.
-- [ ] Check the PDCurses calls gork uses (`newterm`, `keypad`, `nodelay`,
-      `has_colors`, `reset_shell_mode`/`reset_prog_mode`) and the
-      `tcgetattr`/`tcsetattr` use in `tui_suspend`. Esc as the interrupt key
-      relies on termios `VINTR`, which DOS does not have.
-- [ ] Key codes: Enter, Backspace, PgUp/PgDn and Esc as PDCurses reports
-      them on a PC keyboard.
+- [x] The screen is cleared when the TUI exits.
+- [ ] Esc aborts a waiting request and the trust prompt works. Still to
+      check: Esc while a command runs (termios `VINTR` does nothing on DOS).
+- [ ] Key codes: Enter and Esc work; Backspace and PgUp/PgDn are untested.
 
 Testing and release
 
-- [ ] `testing/looptest.py` cannot run on DOS. Drive batch and TUI round
-      trips by hand, as on the oldest Unix systems, and write the steps
-      down.
-- [ ] Regression: none of this may change the Unix build; rerun the suite.
+- [ ] `testing/looptest.py` cannot run on DOS. The checks so far were
+      driven by hand in FreeDOS under QEMU; write the steps down or script
+      them.
+- [x] Regression: the Unix build is unchanged and passes the suite.
 - [x] `dosbuild.sh` cross-builds `gork-<version>-dos.zip` (gork.exe,
       CWSDPMI) and the Jenkinsfile has a `dos` stage that runs it. On a tag
       build the zip is published with the other release files.

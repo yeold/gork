@@ -19,6 +19,15 @@
 
 #include "relay.h"
 
+#ifdef __MSDOS__
+/* A SIGALRM that lands inside Watt-32 aborts the program, so on DOS the
+   timeout is a deadline that read_to_eof polls.  Only the read is covered;
+   Watt-32 times out its own connect. */
+#include <time.h>
+static time_t deadline;
+#define alarm(s) (deadline = (s) ? time(NULL) + (s) : 0)
+#endif
+
 #define BUF_INITIAL 8192
 #define READ_CHUNK 4096
 
@@ -154,14 +163,24 @@ static int read_to_eof(int fd, struct buf *b) {
 
   for (;;) {
     /* Wake every 200 ms so the user can abort a slow reply. */
-    if (relay_abort != NULL) {
+#ifndef __MSDOS__
+    if (relay_abort != NULL)
+#endif
+    {
       FD_ZERO(&rd);
       FD_SET(fd, &rd);
       tv.tv_sec = 0;
       tv.tv_usec = 200000;
       r = select(fd + 1, &rd, NULL, NULL, &tv);
       if (r == 0) {
-        if (relay_abort())
+#ifdef __MSDOS__
+        if (deadline != 0 && time(NULL) >= deadline) {
+          fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
+                  (unsigned long)b->len);
+          return -1;
+        }
+#endif
+        if (relay_abort != NULL && relay_abort())
           return -2;
         continue;
       }

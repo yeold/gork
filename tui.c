@@ -246,6 +246,10 @@ void tui_end(void)
 {
     if (!active) return;
     active = 0;
+#ifdef __MSDOS__            /* no alternate screen to switch back from */
+    clear();
+    refresh();
+#endif
     endwin();
     fflush(stdout);
     fflush(stderr);
