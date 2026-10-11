@@ -4,6 +4,7 @@
  * Target: gcc 2.95 / 3.2, glibc 2.1+, Linux 2.2+. Strict C89.
  */
 
+#include <sys/types.h>          /* first: 4.4BSD <netinet/in.h> needs it */
 #include <ctype.h>
 #include <errno.h>
 #include <netdb.h>
@@ -14,7 +15,6 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include "relay.h"

@@ -4,10 +4,11 @@ A general-purpose AI agent harness for machines that predate TLS.
 
 gork runs an agent's tool-use loop -- send a task, get tool calls back,
 execute them locally, feed the results in, repeat -- in strict C89 with no
-dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.5.8+,
-libc 4.5 or glibc 2.0+, and Linux 1.0+, and also builds on FreeBSD, OpenBSD,
-NetBSD, Solaris and illumos (configure adds `-lsocket -lnsl` and uses the
-system curses) and Haiku (`-lnetwork`, with the `ncurses6_devel` package).
+dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.4.5+,
+libc 4.5 or glibc 2.0+, and Linux 1.0+, and also builds on FreeBSD 2.0+,
+OpenBSD 2.0+, NetBSD 1.0+, Solaris and illumos (configure adds
+`-lsocket -lnsl` and uses the system curses) and Haiku (`-lnetwork`, with
+the `ncurses6_devel` package).
 
 It talks to any server that speaks the Messages API format: Anthropic's own
 API, or a local model behind LM Studio or a similar compatible server (see
@@ -92,7 +93,8 @@ with `autoreconf -i`, `./configure`, `make` and `make install`, no extra
 setup. FreeBSD 15.1 and OpenBSD 7.9 (both clang 19) build from the tarball
 and pass the whole test suite, as does OmniOS r151058 (illumos, gcc 14) with
 either the system curses or, given `CPPFLAGS=-I/usr/include/ncurses`,
-ncurses. Oracle Solaris itself is untested.
+ncurses. OpenSolaris build 134 (2010, gcc 3.4.3), the last one from Sun,
+builds with a plain `./configure` too. Solaris proper is untested.
 
 ### No curses headers
 
@@ -141,6 +143,28 @@ build and run too.
 Slackware 1.01 (1993: libc 4.4.1) is past the limit: its libc has no
 `realpath` and its ncurses no `has_colors`.
 
+The first releases of the BSDs on 4.4BSD-Lite work as well: NetBSD 1.0
+(1994), FreeBSD 2.0 (1994) and OpenBSD 2.0 (1996, its first release on CD).
+Their `/bin/sh` cannot run `configure`, so compile by hand:
+
+```sh
+# FreeBSD 2.0, 2.0.5: curses.h is BSD curses, ncurses is in ncurses.h
+mkdir inc && ln -s /usr/include/ncurses.h inc/curses.h
+gcc -O -Iinc -o gork main.c relay.c tui.c mcp.c cJSON/cJSON.c \
+    -lncurses -lmytinfo -lm
+
+# OpenBSD 2.0: libcurses is ncurses already
+gcc -O -o gork main.c relay.c tui.c mcp.c cJSON/cJSON.c \
+    -lcurses -ltermlib -lm
+
+# NetBSD 1.0: BSD curses only; ncurses 4.2 builds and installs with
+# ./configure --prefix=/usr/local --without-cxx --without-ada
+gcc -O -I/usr/local/include -o gork main.c relay.c tui.c mcp.c \
+    cJSON/cJSON.c -L/usr/local/lib -lncurses -lm
+```
+
+FreeBSD 1.x, on the older Net/2 code, has no `realpath` in libc either.
+
 On anything this old, build from the tarball: its `configure` runs under
 bash 2.0, but autoconf 2.13 and automake 1.4 cannot regenerate it from a git
 checkout. gcc 2.7.2 says `unrecognized option -std=gnu89` on every file;
@@ -163,14 +187,23 @@ hand.
 | Debian 2.1 (Docker) | 1999 | gcc 2.7.2.3 | glibc 2.0.7 | ncurses 4.2 | `configure` | builds; first 6 checks and TUI start |
 | Debian 2.2 (Docker) | 2000 | gcc 2.95.2 | glibc 2.1.3 | ncurses 5.0 | `configure` | suite, static binary run on a modern kernel |
 | SuSE 8.1 (Linux 2.4) | 2002 | gcc 3.2 | glibc 2.2 | ncurses 5.9 in `~/local` | `configure` | builds and runs |
+| FreeBSD 1.0, 1.1.5.1 | 1993-94 | gcc 2.4.5 | Net/2 libc | BSD curses | | cannot link: no `realpath` (libc inspected, not booted) |
+| NetBSD 1.0 | 1994 | gcc 2.4.5 | | ncurses 4.2, added | by hand | batch + TUI |
+| FreeBSD 2.0 | 1994 | gcc 2.6.2 | | ncurses (base) | by hand | batch + TUI |
+| FreeBSD 2.0.5 | 1995 | gcc 2.6.3 | | ncurses (base) | by hand | batch + TUI |
+| OpenBSD 2.0 | 1996 | gcc 2.7.2.1 | | ncurses (base) | by hand | batch + TUI |
 | FreeBSD 15.1 | 2026 | clang 19.1.7 | | ncurses | `configure` | suite |
 | OpenBSD 7.9 | 2026 | clang 19.1.7 | | ncurses | `configure` | suite |
 | NetBSD 10.1 | 2024 | | | NetBSD curses | `autoreconf -i`, `configure` | builds and installs |
+| OpenSolaris build 134 (SunOS 5.11) | 2010 | gcc 3.4.3 | | System V curses | `configure` | batch + TUI |
 | OmniOS r151058 (illumos) | 2026 | gcc 14.3 | | System V curses | `configure` | suite |
 | OmniOS r151058 (illumos) | 2026 | gcc 14.3 | | ncurses 6.6 | `configure CPPFLAGS=-I/usr/include/ncurses` | suite |
+| Haiku R1/beta6 | | | | ncurses 6 (`ncurses6_devel`) | `configure` | confirmed working |
 | openSUSE Tumbleweed (Linux 7.2) | 2026 | gcc 16.2 | glibc | ncurses 6 | `autoreconf -i`, `configure` | suite |
 
-The Slackware, Debian 1.3, BSD and OmniOS runs are in QEMU.
+The Slackware, Debian 1.3, BSD and OmniOS runs are in QEMU. The old BSDs
+are installed without their installers, from the release sets; they reach
+the host through an emulated NE2000.
 
 ## Run
 

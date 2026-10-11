@@ -1,3 +1,20 @@
+gork (0.4) unstable; urgency=medium
+
+  * Runs on much older systems: the floor is now gcc 2.4.5, libc 4.5 and
+    Linux 1.0 (verified on Slackware 2.0.0 from 1994), down from gcc 2.95
+    and glibc 2.1.  The TUI uses only curses calls that ncurses 1.8.5 has.
+  * Builds on the first 4.4BSD-based releases: NetBSD 1.0, FreeBSD 2.0 and
+    OpenBSD 2.0; README has the one-line build commands.
+  * illumos and OpenSolaris: configure accepts the System V curses.h and
+    links the matching libcurses; pressing Esc while waiting for the model
+    no longer crashes with the 64-bit system curses.
+  * Full test suite passes on FreeBSD 15.1, OpenBSD 7.9 and OmniOS; the
+    suite itself no longer depends on timing.
+  * README: table of tested systems and a table of contents;
+    testing/oldvm.sh builds a Debian 1.3 machine for QEMU.
+
+ -- Yeold <isac.selea@gmail.com>  Sun, 11 Oct 2026 15:04:14 +0200
+
 gork (0.3) unstable; urgency=medium
 
   * Build on Haiku: configure finds sockets and the resolver in libnetwork
