@@ -20,6 +20,7 @@ reaching an HTTPS endpoint is the relay's job, not gork's.
 - [Build](#build)
   - [No curses headers](#no-curses-headers)
   - [Oldest systems](#oldest-systems)
+  - [Tested systems](#tested-systems)
 - [Run](#run)
   - [Interactive](#interactive)
   - [Local models](#local-models)
@@ -145,6 +146,31 @@ bash 2.0, but autoconf 2.13 and automake 1.4 cannot regenerate it from a git
 checkout. gcc 2.7.2 says `unrecognized option -std=gnu89` on every file;
 that is harmless. [testing/oldvm.sh](testing/oldvm.sh) sets up the Debian
 1.3 machine in QEMU (see [Testing](#testing)).
+
+### Tested systems
+
+"Suite" is all 15 checks of `testing/looptest.py`, run on the system itself
+unless noted; "batch + TUI" is a tool-use round trip in both modes, driven by
+hand.
+
+| System | Year | Compiler | libc | curses | Build | Result |
+|---|---|---|---|---|---|---|
+| Slackware 1.01 (Linux 0.99pl12) | 1993 | gcc 2.4.5 | libc 4.4.1 | ncurses | by hand | does not link: no `realpath`, no `has_colors` |
+| Slackware 1.1.2 (Linux 0.99pl15) | 1994 | gcc 2.5.8 | libc 4.5.19 | ncurses | by hand | builds, TUI starts; no network in the test VM |
+| Slackware 2.0.0 (Linux 1.0.9) | 1994 | gcc 2.5.8 | libc 4.5.26 | ncurses 1.8.5 | by hand | batch + TUI |
+| Slackware 3.0 (Linux 1.2.13) | 1995 | gcc 2.7.0 | libc 5.0.9 | ncurses 1.9.4 | `configure CPPFLAGS=-I/usr/include/ncurses` | batch + TUI |
+| Debian 1.3 (Linux 2.0.33) | 1997 | gcc 2.7.2.1 | libc 5.4.33 | ncurses 1.9.9e | `configure` | batch + TUI, also against a local model |
+| Debian 2.1 (Docker) | 1999 | gcc 2.7.2.3 | glibc 2.0.7 | ncurses 4.2 | `configure` | builds; first 6 checks and TUI start |
+| Debian 2.2 (Docker) | 2000 | gcc 2.95.2 | glibc 2.1.3 | ncurses 5.0 | `configure` | suite, static binary run on a modern kernel |
+| SuSE 8.1 (Linux 2.4) | 2002 | gcc 3.2 | glibc 2.2 | ncurses 5.9 in `~/local` | `configure` | builds and runs |
+| FreeBSD 15.1 | 2026 | clang 19.1.7 | | ncurses | `configure` | suite |
+| OpenBSD 7.9 | 2026 | clang 19.1.7 | | ncurses | `configure` | suite |
+| NetBSD 10.1 | 2024 | | | NetBSD curses | `autoreconf -i`, `configure` | builds and installs |
+| OmniOS r151058 (illumos) | 2026 | gcc 14.3 | | System V curses | `configure` | suite |
+| OmniOS r151058 (illumos) | 2026 | gcc 14.3 | | ncurses 6.6 | `configure CPPFLAGS=-I/usr/include/ncurses` | suite |
+| openSUSE Tumbleweed (Linux 7.2) | 2026 | gcc 16.2 | glibc | ncurses 6 | `autoreconf -i`, `configure` | suite |
+
+The Slackware, Debian 1.3, BSD and OmniOS runs are in QEMU.
 
 ## Run
 
