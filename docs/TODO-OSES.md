@@ -40,8 +40,8 @@ needs (a C89 compiler, curses, BSD sockets, `fork`/`pipe`/`select`,
 |---|---|
 | Plan 9, 9front | APE gives a C89 compiler, `fork` and BSD-style sockets, but there is no curses and no termios. Batch mode is plausible through APE; the TUI would have to be rewritten for the Plan 9 console. Runs well in QEMU. |
 | Visopsys | Its own C library and process model. Find out first whether user programs get sockets; expect to rewrite transport, command execution and the TUI. |
-| TempleOS | No networking, by design, and programs are HolyC, not C. A relay over the serial port is the only plausible transport, and the source would have to be translated. A stunt rather than a target. |
-| CP/M, classic Mac OS, Atari TOS, RISC OS | Same territory as TempleOS: no process model or no sockets that gork could use as it is. |
+| ZealOS, Shrine | The TempleOS forks that add a TCP/IP stack (both are meant to run in a VM with an emulated PCnet card), which plain TempleOS lacks by design. Programs are still HolyC (ZealC on ZealOS), not C, with no libc, no curses and no processes in the Unix sense: the transport could use their socket calls, but the source would have to be translated and the TUI redrawn with their text output. Check first which of the two has the more complete TCP client API. |
+| CP/M, classic Mac OS, Atari TOS, RISC OS | Harder still: no process model or no sockets that gork could use as it is. |
 
 ## More systems with a TCP/IP stack
 
@@ -71,4 +71,4 @@ reachable from C. These have them and are not listed above.
 4. IRIX, NeXTSTEP, SunOS 4, Minix 2: these depend on hardware or slow
    emulators.
 5. Plan 9: batch mode only as a first goal.
-6. Visopsys, TempleOS: only for their own sake.
+6. Visopsys, ZealOS or Shrine: only for their own sake.
