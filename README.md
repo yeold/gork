@@ -140,6 +140,7 @@ and run a task:
 
 Agent text goes to stdout; tool calls and diagnostics go to stderr, so
 `./gork ... 2>/dev/null` gives you just the answer.
+`./gork --version` prints the version and exits.
 
 ### Interactive
 
@@ -235,7 +236,7 @@ skipped.
 | `model` | `AGENT_MODEL` | `claude-opus-5` | Model id |
 | `host` | `AGENT_HOST` | `api.anthropic.com` | `Host:` header value |
 | `path` | `AGENT_PATH` | `/v1/messages` | Request path |
-| `allow` | -- | *(none)* | Extra directories the file tools may read and write, `:`-separated (up to 8) |
+| `allow` | -- | *(none)* | Extra directories the file tools may read and write, `:`-separated (`;` on DOS; up to 8) |
 | `max_turns` | `AGENT_MAX_TURNS` | `24` | Tool round-trips per task before gork gives up |
 | `retries` | `AGENT_RETRIES` | `2` | Extra attempts for a request that hits a network error, 429 or 5xx (0..10) |
 | `context_window` | `AGENT_CONTEXT_WINDOW` | `200000` | Tokens the model can take; set it to the loaded context length for a local model |
@@ -448,7 +449,9 @@ The header of the script has the details.
 
 `testing/dostest.py` does the same for DOS: it boots FreeDOS in QEMU, runs
 the `gork.exe` that `sh dosbuild.sh` built, and checks a round trip, path
-confinement, `run_command`, the timeout and the TUI.
+confinement, an `allow` directory on a second drive, `edit_file`,
+`run_command`, long output, the timeout and the TUI. Jenkins runs it on
+every build.
 
 `testing/fakemcp.py` is the stdio MCP server the MCP check runs against.
 [testing/](testing/) also holds the milestone-0 pieces: `relaytest.c` (a

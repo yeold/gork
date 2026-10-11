@@ -16,8 +16,24 @@ fj() { curl -fsS -H "Authorization: token $FORGEJO_TOKEN" "$@"; }
 # Release notes: the top debian/changelog entry, bullets as Markdown.
 notes=$(awk 'NR <= 2 { next } /^ -- / { exit } { print }' debian/changelog |
         sed 's/^  \* /- /; s/^    /  /')
+# Everything before 1.0 is a beta, published as a pre-release.
 create() { jq -nc --arg tag "$TAG" --arg body "$notes" \
-    "{tag_name: \$tag, name: (\"gork \" + \$tag), body: \$body} $1"; }
+    "{tag_name: \$tag, name: (\"gork \" + \$tag), body: \$body,
+      prerelease: (\$tag | startswith(\"v0.\"))} $1"; }
+
+# beta gh|fj API: mark every v0.* release that is not one yet as a
+# pre-release -- those from before this was done, and one that already
+# existed when this build ran.
+beta() {
+    $1 "$2/releases?per_page=100&limit=50" |
+    jq -r '.[] | select((.tag_name | startswith("v0.")) and (.prerelease | not))
+               | "\(.id) \(.tag_name)"' |
+    while read -r id tag; do
+        echo "beta: $tag"
+        $1 -X PATCH -H 'Content-Type: application/json' \
+            "$2/releases/$id" -d '{"prerelease": true}' >/dev/null
+    done
+}
 
 # release_id gh|fj API CREATE_JSON: id of release $TAG, created if missing.
 release_id() {
@@ -40,6 +56,9 @@ for f in "$DIR"/*; do
     echo "forgejo: $(basename "$f")"
     fj -F "attachment=@$f" "$FJ/releases/$id/assets?name=$(basename "$f")" >/dev/null
 done
+
+beta gh "$GH"
+beta fj "$FJ"
 
 # Forgejo package registry: apt and dnf repos, plus the tarball as a generic
 # package.  Built on debian:stable, so the debs go in the "stable" suite.

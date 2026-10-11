@@ -110,13 +110,10 @@ Testing and release
       `/effort`, `/new`, scrolling and Esc.
 - [x] Tool files are opened in text mode on DOS, so the model sees bare
       newlines and `edit_file` matches across lines of a CR LF file.
-- [ ] Not covered: long output, a second drive in `allow`, and real
-      hardware (only QEMU so far).
-- [ ] Run `dostest.py` in Jenkins after the `dos` stage (the agent needs
-      qemu and mtools).
-- [ ] MCP code is still compiled into `gork.exe`; leaving it out would
-      save space.
-- [x] Regression: the Unix build is unchanged and passes the suite.
-- [x] `dosbuild.sh` cross-builds `gork-<version>-dos.zip` (gork.exe,
-      CWSDPMI) and the Jenkinsfile has a `dos` stage that runs it. On a tag
-      build the zip is published with the other release files.
+- [x] Long output is cut at the cap and says so; an `allow` directory on
+      a second drive works (the list is `;`-separated on DOS).
+- [x] Jenkins runs `dostest.py` after building the zip, in a container
+      with qemu and mtools.
+- [x] `mcp.c` is left out of `gork.exe`.
+- [ ] Real hardware. Everything above ran in QEMU with an emulated NE2000;
+      a real 386 or 486 with a real packet driver has not been tried.

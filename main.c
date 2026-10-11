@@ -11,6 +11,7 @@
  *
  * Usage:
  *   ./gork ["your task"]
+ *   ./gork --version
  *
  * With a task: run it, print the answer on stdout, exit (batch mode).
  * Without:     interactive TUI (tui.c) that asks before writes and commands.
@@ -65,15 +66,31 @@
 #include "mcp.h"
 #include "cJSON/cJSON.h"
 
+/* configure passes VERSION; this is for builds by hand and Makefile.dj.
+   Bumped with configure.ac at each release. */
+#ifndef VERSION
+#define VERSION "0.6"
+#endif
+
 /* DOS (DJGPP) has 8.3 file names: no leading dot, one extension. */
 #ifdef __MSDOS__
 #define DOT_GORK  "_gork"
 #define CONF_NAME "gork.cnf"
+#define ALLOW_SEP ";"           /* ':' belongs to the drive letter */
+/* No fork, so no MCP servers: mcp.c is left out of the build. */
+#define mcp_start(path)          ((void) (path))
+#define mcp_stop()               ((void) 0)
+#define mcp_tool_count()         0
+#define mcp_add_tools(tools)     0
+#define mcp_find(name)           (-1)
+#define mcp_always(i)            ((int *) 0)
+#define mcp_call(i, input, err)  ((char *) 0)
 /* Text mode for the files the model reads and writes: it sees and sends
    bare newlines, the files keep their CR LF. */
 #define RB "r"
 #define WB "w"
 #else
+#define ALLOW_SEP ":"
 #define RB "rb"
 #define WB "wb"
 #define DOT_GORK  ".gork"
@@ -336,7 +353,8 @@ static int load_allow(const char *list)
         return -1;
     }
     strcpy(copy, list);
-    for (p = strtok(copy, ":"); p != NULL; p = strtok(NULL, ":")) {
+    for (p = strtok(copy, ALLOW_SEP); p != NULL;
+         p = strtok(NULL, ALLOW_SEP)) {
         p = trim(p);
         if (*p == '\0') continue;
         if (nallow == MAX_ALLOW) {
@@ -2044,8 +2062,12 @@ int main(int argc, char **argv)
     char        trust_path[PATH_MAX];
     int         done, lvl;
 
+    if (argc == 2 && strcmp(argv[1], "--version") == 0) {
+        printf("gork %s\n", VERSION);
+        return 0;
+    }
     if (argc > 2) {
-        fprintf(stderr, "usage: %s [\"task\"]\n", argv[0]);
+        fprintf(stderr, "usage: %s [\"task\" | --version]\n", argv[0]);
         return 2;
     }
 #ifdef __MSDOS__
@@ -2167,9 +2189,7 @@ int main(int argc, char **argv)
     if (home != NULL && strlen(home) < sizeof mcp_path - 32) {
         strcpy(mcp_path, home);
         strcat(mcp_path, "/" DOT_GORK "/mcp.json");
-#ifndef __MSDOS__       /* no fork there, so no servers to start */
         c.mcp_config = mcp_path;
-#endif
     }
     if (home != NULL && strlen(home) < sizeof user_skills - 16) {
         strcpy(skills_path, home);

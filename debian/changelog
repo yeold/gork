@@ -1,3 +1,18 @@
+gork (0.6) unstable; urgency=medium
+
+  * gork --version prints the version and exits.
+  * DOS: allow directories on other drives work; the list is separated
+    by ';' there, since ':' is part of the drive letter.
+  * DOS: gork.exe no longer carries the MCP client, which cannot work
+    without fork.
+  * DOS: checked against a real model (LM Studio) as well as the fake API,
+    and Jenkins now runs testing/dostest.py -- FreeDOS in QEMU -- on every
+    build.  Only real hardware is untested.
+  * Releases before 1.0 are betas: they are published as pre-releases,
+    which GitHub and Forgejo can hide.
+
+ -- Yeold <isac.selea@gmail.com>  Sun, 11 Oct 2026 21:33:00 +0200
+
 gork (0.5.1) unstable; urgency=medium
 
   * DOS: edit_file now works across lines.  DOS text files end lines with

@@ -108,10 +108,13 @@ def build_images(zip_path):
         "WATTCP.CFG": "my_ip = 10.0.2.15\nnetmask = 255.255.255.0\n"
                       "gateway = 10.0.2.2\nnameserver = 10.0.2.3\n",
         "GORK.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
-                    "timeout = 6\nretries = 0\n" % PORT,
+                    "timeout = 6\nretries = 0\n"
+                    "allow = d:/shared;c:/tmp\n" % PORT,
         "SECRET.TXT": "secret\n",
         "W/GORK.MD": "Always answer in haiku.\n",
         "W/IN.TXT": "inside\n",
+        "W/BIG.TXT": "0123456789abcdef0123456789abcdef0123456789abcdef\n"
+                     * 2000,
         "W/TWO.TXT": "one\ntwo\nthree\n",
         "W/_GORK/SKILLS/DEPLOY/SKILL.MD":
             "---\nname: deploy\ndescription: Ship it.\n---\nSteps.\n",
@@ -139,19 +142,32 @@ def build_images(zip_path):
             f.write(body)
         sh("mcopy", "-o", "-i", boot, path, "::" + name)
 
-    disk = os.path.join(VM, "disk.img")
-    sectors, start = 64 * 2048, 2048
-    with open(disk, "wb") as f:
-        f.truncate(sectors * 512)
-        f.seek(446)                     # one bootable FAT16 partition
-        f.write(struct.pack("<B3sB3sII", 0x80, bytes([32, 33, 0]), 6,
-                            bytes([254, 63, 7]), start, sectors - start))
-        f.write(bytes(48) + b"\x55\xaa")
-    part = "%s@@%d" % (disk, start * 512)
-    sh("mformat", "-i", part, "-T", str(sectors - start), "-h", "16",
-       "-s", "63", "-H", str(start), "::")
-    sh("mcopy", "-s", "-i", part, *glob.glob(os.path.join(c, "*")), "::")
-    return boot, disk
+    def fat_disk(name, mb, tree):
+        """A disk image with one bootable FAT16 partition holding `tree`."""
+        disk = os.path.join(VM, name)
+        sectors, start = mb * 2048, 2048
+        with open(disk, "wb") as f:
+            f.truncate(sectors * 512)
+            f.seek(446)
+            f.write(struct.pack("<B3sB3sII", 0x80, bytes([32, 33, 0]), 6,
+                                bytes([254, 63, 7]), start, sectors - start))
+            f.write(bytes(48) + b"\x55\xaa")
+        part = "%s@@%d" % (disk, start * 512)
+        sh("mformat", "-i", part, "-T", str(sectors - start), "-h", "16",
+           "-s", "63", "-H", str(start), "::")
+        sh("mcopy", "-s", "-i", part, *glob.glob(os.path.join(tree, "*")),
+           "::")
+        return disk
+
+    d = os.path.join(VM, "d")           # D:, for the allow directories
+    shutil.rmtree(d, ignore_errors=True)
+    for name in ("SHARED/OK.TXT", "OTHER/NO.TXT"):
+        os.makedirs(os.path.join(d, os.path.dirname(name)))
+        with open(os.path.join(d, name), "w", newline="\r\n") as f:
+            f.write("on d\n")
+    disk = fat_disk("disk.img", 64, c)
+    disk2 = fat_disk("disk2.img", 16, d)
+    return boot, disk, disk2
 
 
 KEYS = {" ": "spc", "\n": "ret", "-": "minus", "=": "equal", ".": "dot",
@@ -162,7 +178,7 @@ SHIFT = {":": "semicolon", '"': "apostrophe", "_": "minus", ">": "dot",
 
 
 class Guest:
-    def __init__(self, boot, disk):
+    def __init__(self, boot, disk, disk2):
         self.sock_path = os.path.join(VM, "mon.sock")
         if os.path.exists(self.sock_path):
             os.remove(self.sock_path)
@@ -172,6 +188,7 @@ class Guest:
              "-monitor", "unix:%s,server,nowait" % self.sock_path,
              "-drive", "file=%s,format=raw,if=floppy" % boot,
              "-drive", "file=%s,format=raw,if=ide,index=0" % disk,
+             "-drive", "file=%s,format=raw,if=ide,index=1" % disk2,
              "-netdev", "user,id=n0",
              "-device", "ne2k_isa,netdev=n0,iobase=0x300,irq=5"])
         for _ in range(50):
@@ -300,6 +317,39 @@ def check_edit(g):
     print("ok: edit_file on a CR LF file")
 
 
+def check_allow(g):
+    """An allow directory on another drive is reachable, its sibling is not;
+    the list is ';'-separated, since ':' belongs to the drive letter."""
+    cases = [("read_file", {"path": "d:\\shared\\ok.txt"}, "on d"),
+             ("write_file", {"path": "D:/SHARED/NEW.TXT", "content": "n\n"},
+              "wrote"),
+             ("read_file", {"path": "d:\\other\\no.txt"}, "outside"),
+             ("read_file", {"path": "d:\\shared\\..\\other\\no.txt"},
+              "outside")]
+    for name, inp, want in cases:
+        del requests[:]
+        script[:] = [tool(name, **inp), text("done")]
+        g.run("..\\gork t")
+        r = results()[0]
+        assert want in r["content"], (inp, r)
+        assert bool(r.get("is_error")) == (want == "outside"), (inp, r)
+    print("ok: allow directory on a second drive")
+
+
+def check_long(g):
+    """Output past the cap is cut off and says so; a file too big to inline
+    is refused."""
+    del requests[:]
+    script[:] = [tool("run_command", command="type big.txt"),
+                 tool("read_file", path="big.txt"), text("done")]
+    g.run("..\\gork t", 120)
+    run, read = results()
+    assert "[output truncated]" in run["content"], run["content"][-200:]
+    assert len(run["content"]) < 70000, len(run["content"])
+    assert read.get("is_error"), read["content"][:200]
+    print("ok: long output")
+
+
 def check_run(g):
     """run_command returns the output and the exit status."""
     del requests[:]
@@ -357,15 +407,17 @@ def main():
     if zip_path is None:
         sys.exit("no gork-*-dos.zip; run `sh dosbuild.sh` first")
     fetch()
-    boot, disk = build_images(os.path.abspath(zip_path))
+    boot, disk, disk2 = build_images(os.path.abspath(zip_path))
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    g = Guest(boot, disk)
+    g = Guest(boot, disk, disk2)
     try:
         g.wait(r"C:\\W>$", 90)
         check_batch(g)
         check_confinement(g)
         check_edit(g)
+        check_allow(g)
+        check_long(g)
         check_run(g)
         check_timeout(g)
         check_tui(g)

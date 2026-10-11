@@ -265,8 +265,10 @@ To run it, the machine needs:
 - `gork.cnf` beside `gork.exe`, or wherever `HOME` or `GORK_CONFIG` point.
 
 DOS differences: file names are 8.3, so the config is `gork.cnf` and the
-directory is `_gork`; `run_command` takes `COMMAND.COM` syntax and cannot be
-timed out or interrupted; MCP servers are not available.
+directory is `_gork`; `allow` directories are separated by `;`, as `:`
+belongs to the drive letter; text files keep their CR LF line ends while the
+model sees plain newlines; `run_command` takes `COMMAND.COM` syntax and
+cannot be timed out or interrupted; MCP servers are not available.
 
 ## No curses headers
 

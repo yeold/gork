@@ -3,7 +3,7 @@
 Usage:  python3 testing/looptest.py ./gork
 Exits 0 only if every check passes.  Fails loudly on anything else.
 """
-import http.server, json, os, pty, select, subprocess, sys, tempfile, threading, time
+import http.server, json, os, pty, re, select, subprocess, sys, tempfile, threading, time
 
 BINARY = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "./gork")
 
@@ -999,6 +999,9 @@ def check_run_timeout_and_esc():
     print("ok: run_command timeout, Esc interrupts it")
 
 
+out = subprocess.run([BINARY, "--version"], capture_output=True, text=True)
+assert out.returncode == 0 and re.match(r"gork \d+\.\d+", out.stdout), out
+print("ok: --version")
 check_tool_loop()
 check_rules_and_tools()
 check_local_no_key()
