@@ -1,4 +1,5 @@
-// Source tarball, then RPMs and debs built from it, each in a throwaway
+// Source tarball, then RPMs and debs built from it and a DOS zip
+// cross-built from the tree (dosbuild.sh), each in a throwaway
 // container via plain `docker run` (no Docker Pipeline plugin needed).
 // Containers build as root in their own /tmp and only copy finished
 // packages into out/, chowned back to the Jenkins user.
@@ -28,6 +29,17 @@ pipeline {
                                 dnf -yq install rpm-build gcc make ncurses-devel
                                 rpmbuild -ta /out/gork-*.tar.gz --define "_topdir /tmp/rpm"
                                 cp /tmp/rpm/SRPMS/*.rpm /tmp/rpm/RPMS/*/*.rpm /out/ && chown -R '"$(id -u):$(id -g)"' /out'
+                        '''
+                    }
+                }
+                stage('dos') {
+                    steps {
+                        sh '''
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl ca-certificates bzip2 unzip zip make >/dev/null
+                                cp -r /src /tmp/src && cd /tmp/src
+                                sh dosbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
                         '''
                     }
                 }

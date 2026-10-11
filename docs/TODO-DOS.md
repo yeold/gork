@@ -113,5 +113,6 @@ Testing and release
       trips by hand, as on the oldest Unix systems, and write the steps
       down.
 - [ ] Regression: none of this may change the Unix build; rerun the suite.
-- [ ] Decide whether `gork.exe` becomes a release artifact (a `dos` stage in
-      the Jenkinsfile using the cross compiler).
+- [x] `dosbuild.sh` cross-builds `gork-<version>-dos.zip` (gork.exe,
+      CWSDPMI) and the Jenkinsfile has a `dos` stage that runs it. On a tag
+      build the zip is published with the other release files.
