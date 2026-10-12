@@ -351,14 +351,20 @@ screen and Winsock 1.1 for TCP/IP. It is one program for both lines of
 Windows, 9x and NT: it imports only functions that Windows 95 already has,
 from `kernel32`, `user32`, `advapi32`, `wsock32` and `msvcrt.dll`.
 
-Tested on Windows 98 Second Edition (in QEMU, on an emulated Pentium and
-Pentium II): batch mode, every file tool, `run_command` through
-`COMMAND.COM`, and the TUI with its approvals, all by hand against a fake
-API. `testing/wintest.py` runs the batch-mode checks under Wine 10
-(Jenkins) and on the Windows of GitHub's runners, and the release zip of
-0.9~beta is reported working on Windows 11, TUI included. Not tried: Windows 95,
-NT 3.51 and 4, 2000, XP. Windows 95 needs `msvcrt.dll`, which the first
-release lacks (Internet Explorer 4 or an application brings it).
+Tested on Windows 95 OSR2 (4.00.1111) and Windows 98 Second Edition, in
+QEMU on an emulated Pentium: batch mode, every file tool, `run_command`
+through `COMMAND.COM`, and the TUI, all by hand against a fake API.
+`testing/wintest.py` runs the batch-mode checks under Wine 10 (Jenkins)
+and on the Windows of GitHub's runners, and the release zip of 0.9~beta is
+reported working on Windows 11, TUI included. Not tried: the first
+Windows 95, NT 3.51 and 4, 2000, XP.
+
+**Windows 95 has no `msvcrt.dll`**, and gork.exe will not start without
+it ("A required .DLL file, MSVCRT.DLL, was not found"). Put a copy beside
+`gork.exe` or in `C:\WINDOWS\SYSTEM`; the one from Windows 98 works, and
+Internet Explorer 4 and many applications install one. Windows 95 also
+installs no TCP/IP by itself: add the protocol in the Network control
+panel.
 
 It is compiled for the 486, but two instructions of MinGW's start-up code,
 which Debian ships built for the Pentium Pro, remain; a Pentium did not
@@ -393,7 +399,11 @@ files are written with CR LF line ends, also where they had plain newlines
 before, while the model sees plain newlines; `run_command` takes `cmd.exe`
 syntax (`COMMAND.COM` on Windows 9x) and cannot be timed out or
 interrupted; MCP servers are not available; the config file's permissions
-are not checked. Junctions and 8.3 short names are not resolved, so a
+are not checked. Text is converted between UTF-8, which the model speaks,
+and the code pages of Windows: replies are shown in the console's code
+page (a character it lacks becomes its nearest, or `?`), and what you
+type, the task on the command line and the output of commands go to the
+model as UTF-8. Files are not converted. Junctions and 8.3 short names are not resolved, so a
 junction inside the working directory leads the file tools out of it.
 
 ## No curses headers

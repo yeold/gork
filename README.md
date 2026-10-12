@@ -1,28 +1,74 @@
 # <img src="images/gork.png" width="64" alt=""> gork
 
-A general-purpose AI agent harness for machines that predate TLS.
+A lightweight AI agent harness for old and obscure operating systems.
 
-gork runs an agent's tool-use loop -- send a task, get tool calls back,
-execute them locally, feed the results in, repeat -- in strict C89 with no
-dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.4.5+,
-libc 4.5 or glibc 2.0+, and Linux 1.0+, and also builds on FreeBSD 2.0+,
-OpenBSD 2.0+, NetBSD 1.0+, Solaris 2.5.1+ and illumos (configure adds
-`-lsocket -lnsl` and uses the system curses) and Haiku (`-lnetwork`, with
-the `ncurses6_devel` package). There are experimental DOS and Windows builds as well;
-see [docs/BUILD.md](docs/BUILD.md#dos).
+gork is an AI agent for the machines everything else has left behind. It
+runs the usual tool-use loop -- send a task, get tool calls back, execute
+them locally, feed the results in, repeat -- on systems from 1994 to today:
+Linux 1.0, the first BSDs, Solaris 2.5.1, MS-DOS, Windows 95, Minix,
+GNU/Hurd and Haiku, and just as well on a current Linux, macOS or
+Windows 11. One source for all of them, with a batch mode and a
+full-screen interactive one. The [table below](#tested-systems) says what
+it has been run on.
+
+It is small: about 4,600 lines of strict C89 and a binary of about 100 KB
+(x86-64 Linux, stripped), with no dependencies beyond libc, a curses library and the vendored cJSON.
+It builds with gcc 2.4.5, with a single compiler command where `configure`
+cannot run, and asks the system for little: TCP sockets, a terminal, a
+file system. No TLS, no threads, no C99.
 
 It talks to any server that speaks the Messages API format: Anthropic's own
 API, or a local model behind LM Studio or a similar compatible server (see
 [Local models](#local-models)). With `protocol = openai` it speaks the
 OpenAI chat completions format instead; that is untested against a real
-server. It speaks plaintext HTTP/1.0 only;
-reaching an HTTPS endpoint is the relay's job, not gork's.
+server. It speaks plaintext HTTP/1.0 only; reaching an HTTPS endpoint is
+the job of a [relay](#why-a-relay), not gork's.
+
+## Tested systems
+
+One row per family: the oldest release gork is verified on, what else was
+tried, and where it stops. "Works" means it builds and runs; nearly all were
+checked with a tool-use round trip in batch mode and in the TUI, and
+openSUSE, Alpine, Debian 2.2, FreeBSD 15.1, OpenBSD 7.9, OmniOS,
+GNU/Hurd, DragonFly, MidnightBSD, NetBSD 11.0, macOS and Cygwin pass all
+of `testing/looptest.py`.
+
+| Family | Oldest that works | Also works | Does not work |
+|---|---|---|---|
+| Linux | Slackware 2.0.0 (1994: Linux 1.0.9, gcc 2.5.8, libc 4.5.26, ncurses 1.8.5) | Slackware 3.0, Debian 1.3, 2.1 and 2.2, SuSE 8.1, openSUSE Tumbleweed (gcc 16), Alpine 3.24 (musl), uClibc (static, gcc 15) | Slackware 1.01 (libc 4.4.1): no `realpath`, no `has_colors` |
+| FreeBSD | 2.0 (1994, gcc 2.6.2) | 2.0.5, 15.1 | 1.0 and 1.1.5.1: no `realpath` in libc |
+| NetBSD | 1.0 (1994, gcc 2.4.5), with ncurses 4.2 added | 10.1, 11.0 | |
+| OpenBSD | 2.0 (1996, gcc 2.7.2.1) | 7.9 | |
+| DragonFly BSD | 6.4.2 (gcc 8.3) | | |
+| MidnightBSD | 4.0.8 (clang 19) | | |
+| Solaris | 2.5.1 (1996, gcc 2.7.2) | 2.6, 10 | 2.4: its kernel panics at boot in QEMU, so untested |
+| illumos | OpenSolaris build 134 (2010, gcc 3.4.3) | OmniOS r151058, with the system curses or ncurses | |
+| Minix | 3.3.0 (2014, clang 3.4) | | |
+| GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
+| Haiku | R1/beta6 | | |
+| macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
+| Windows (native, experimental) | Windows 95 OSR2 (1996), with `msvcrt.dll` beside it: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows 98 SE, Windows 11, Windows Server 2025, Wine 10 | The first Windows 95, NT 4, 2000, XP: untested |
+| Windows (Cygwin) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | |
+| DOS (experimental) | MS-DOS 6.22 (1994), with DJGPP, PDCurses and Watt-32, 386 or better | DR-DOS 7.03, FreeDOS 1.3 | 16-bit real mode: requests do not fit in 640 K |
+
+Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
+and i386 passes the whole suite: cross-built with Debian 13's toolchains
+and run under QEMU's user-mode emulation. OpenBSD 7.9 on SPARC64 (64-bit
+big-endian, gcc 4.2.1) builds and passes the twelve checks that need no
+pseudo-terminal; the TUI could not be run there.
+
+Everything but SuSE 8.1, Haiku, NetBSD 10.1, openSUSE and Windows 11 ran
+in QEMU or, for Debian 2.1 and 2.2, in Docker; macOS and Cygwin run on
+GitHub Actions (`.github/workflows/build.yml`), batch mode and the suite
+only. The oldest Linux and BSD systems are compiled by hand.
+[docs/BUILD.md](docs/BUILD.md) has the instructions for every system
+here, and [docs/TODO-OSES.md](docs/TODO-OSES.md) the ones still to try.
 
 ## Contents
 
+- [Tested systems](#tested-systems)
 - [Why a relay](#why-a-relay)
 - [Build](#build)
-  - [Tested systems](#tested-systems)
 - [Run](#run)
   - [Interactive](#interactive)
   - [Local models](#local-models)
@@ -86,44 +132,6 @@ link dependencies are curses and `-lm`. On a UTF-8 terminal, configure with
 [docs/BUILD.md](docs/BUILD.md) has the instructions for each operating
 system: packages to install, flags, the one-line compiler command for
 systems too old to run `configure`, and what to do without curses headers.
-
-### Tested systems
-
-One row per family: the oldest release gork is verified on, what else was
-tried, and where it stops. "Works" means it builds and runs; nearly all were
-checked with a tool-use round trip in batch mode and in the TUI, and
-openSUSE, Alpine, Debian 2.2, FreeBSD 15.1, OpenBSD 7.9, OmniOS,
-GNU/Hurd, DragonFly, MidnightBSD, NetBSD 11.0, macOS and Cygwin pass all
-of `testing/looptest.py`.
-
-| Family | Oldest that works | Also works | Does not work |
-|---|---|---|---|
-| Linux | Slackware 2.0.0 (1994: Linux 1.0.9, gcc 2.5.8, libc 4.5.26, ncurses 1.8.5) | Slackware 3.0, Debian 1.3, 2.1 and 2.2, SuSE 8.1, openSUSE Tumbleweed (gcc 16), Alpine 3.24 (musl), uClibc (static, gcc 15) | Slackware 1.01 (libc 4.4.1): no `realpath`, no `has_colors` |
-| FreeBSD | 2.0 (1994, gcc 2.6.2) | 2.0.5, 15.1 | 1.0 and 1.1.5.1: no `realpath` in libc |
-| NetBSD | 1.0 (1994, gcc 2.4.5), with ncurses 4.2 added | 10.1, 11.0 | |
-| OpenBSD | 2.0 (1996, gcc 2.7.2.1) | 7.9 | |
-| DragonFly BSD | 6.4.2 (gcc 8.3) | | |
-| MidnightBSD | 4.0.8 (clang 19) | | |
-| Solaris | 2.5.1 (1996, gcc 2.7.2) | 2.6, 10 | 2.4: its kernel panics at boot in QEMU, so untested |
-| illumos | OpenSolaris build 134 (2010, gcc 3.4.3) | OmniOS r151058, with the system curses or ncurses | |
-| Minix | 3.3.0 (2014, clang 3.4) | | |
-| GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
-| Haiku | R1/beta6 | | |
-| macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
-| Windows (native, experimental) | Windows 98 SE (1999), on a Pentium: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows 11, Windows Server 2025, Wine 10 | Windows 95, NT 4, 2000, XP: untested |
-| Windows (Cygwin) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | |
-| DOS (experimental) | MS-DOS 6.22 (1994), with DJGPP, PDCurses and Watt-32, 386 or better | DR-DOS 7.03, FreeDOS 1.3 | 16-bit real mode: requests do not fit in 640 K |
-
-Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
-and i386 passes the whole suite: cross-built with Debian 13's toolchains
-and run under QEMU's user-mode emulation. OpenBSD 7.9 on SPARC64 (64-bit
-big-endian, gcc 4.2.1) builds and passes the twelve checks that need no
-pseudo-terminal; the TUI could not be run there.
-
-Everything but SuSE 8.1, Haiku, NetBSD 10.1 and openSUSE ran in QEMU or,
-for Debian 2.1 and 2.2, in Docker; macOS and Cygwin run on GitHub Actions
-(`.github/workflows/build.yml`), batch mode and the suite only. The oldest Linux and BSD systems are
-compiled by hand; see [docs/BUILD.md](docs/BUILD.md).
 
 ## Run
 

@@ -79,6 +79,10 @@ static void add_line(int style, const char *text, size_t len)
     for (i = 0; i < len; i++)
         t[i] = ((unsigned char) text[i] < 32) ? ' ' : text[i];
     t[len] = '\0';
+#ifdef _WIN32
+    len = win_utf8_to_console(t, len, 1);
+    t[len] = '\0';
+#endif
 
     lines[nlines].style = style;
     lines[nlines].text  = t;
@@ -367,6 +371,19 @@ char *tui_read_line(void)
             input[0]  = '\0';
             hint_text = HINT_BUSY;
             draw();
+#ifdef _WIN32
+            {   /* typed in the console's code page; the API wants UTF-8 */
+                static char utf8[3 * sizeof input];
+                char       *u = win_input_to_utf8(echo + 2, 1);
+
+                if (u != NULL && strlen(u) < sizeof utf8) {
+                    strcpy(utf8, u);
+                    free(u);
+                    return utf8;
+                }
+                free(u);
+            }
+#endif
             return echo + 2;
         case KEY_BACKSPACE: case 127: case 8:
             /* drop a whole UTF-8 sequence, not half of one */

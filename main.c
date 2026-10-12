@@ -1,5 +1,6 @@
 /*
- * gork -- a Claude agent harness for machines that predate TLS.
+ * gork -- a lightweight AI agent harness for old and obscure operating
+ * systems, most of which predate TLS.
  *
  * Runs the Messages API tool-use loop against api.anthropic.com through a
  * plaintext HTTP relay, executing tool calls locally.  Transport is relay.c
@@ -976,6 +977,21 @@ static char *tool_run_command(cJSON *input, int *is_err)
         b.len = TOOL_RUN_MAX;
         b.p[b.len] = '\0';
     }
+#ifdef _WIN32
+    {   /* commands write the OEM code page; the API takes only UTF-8 */
+        char *u = win_output_to_utf8(b.p);
+
+        if (u != NULL) {
+            b.len = 0;
+            if (buf_add(&b, u, strlen(u)) != 0) {
+                free(u);
+                buf_free(&b);
+                return NULL;
+            }
+            free(u);
+        }
+    }
+#endif
     sprintf(msg, "%s[exit %d]", trunc ? "\n[output truncated]\n" : "", status);
     if (buf_add(&b, msg, strlen(msg)) != 0) {
         buf_free(&b);
@@ -1546,6 +1562,16 @@ static int print_text_blocks(cJSON *content)
             continue;
         text = cJSON_GetObjectItem(block, "text");
         if (cJSON_IsString(text)) {
+#ifdef _WIN32   /* a console shows its code page, not UTF-8; the TUI's
+                   capture file and a redirected stdout get it as it is */
+            char *shown = isatty(1) ? kstrdup(text->valuestring) : NULL;
+
+            if (shown != NULL) {
+                shown[win_utf8_to_console(shown, strlen(shown), 0)] = '\0';
+                printf("%s\n", shown);
+                free(shown);
+            } else
+#endif
             printf("%s\n", text->valuestring);
             n++;
         }
@@ -2556,9 +2582,15 @@ int main(int argc, char **argv)
     if (argc == 1) {
         done = interactive(&c) == 0;
     } else {
+        const char *task = argv[1];
+#ifdef _WIN32   /* the command line is in the ANSI code page */
+        char       *utf8 = win_input_to_utf8(task, 0);
+
+        if (utf8 != NULL) task = utf8;  /* ponytail: never freed */
+#endif
         messages = cJSON_CreateArray();
         if (messages == NULL ||
-            append_text_message(messages, "user", argv[1]) != 0) {
+            append_text_message(messages, "user", task) != 0) {
             fprintf(stderr, "gork: out of memory\n");
             cJSON_Delete(messages);
             free(rules.p);

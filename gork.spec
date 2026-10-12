@@ -1,7 +1,7 @@
 Name:           gork
 Version:        0.10~beta
 Release:        1%{?dist}
-Summary:        AI agent harness for machines that predate TLS
+Summary:        Lightweight AI agent harness for old and obscure operating systems
 # ponytail: placeholder until gork picks a license (cJSON is MIT)
 License:        unspecified
 URL:            https://github.com/yeold/gork
@@ -9,8 +9,10 @@ Source0:        %{name}-%{version}.tar.gz
 BuildRequires:  gcc make ncurses-devel
 
 %description
-gork runs an agent's tool-use loop in strict C89 with no dependencies beyond
-libc, curses and vendored cJSON, talking plaintext HTTP/1.0 to a TLS relay.
+gork runs an AI agent's tool-use loop on systems from 1994 to today: old
+Linux, BSD and Solaris releases, DOS and Windows 95 as well as current ones.
+It is small, strict C89 with no dependencies beyond libc, curses and the
+vendored cJSON, and talks plaintext HTTP/1.0 to a TLS relay.
 
 %prep
 %autosetup

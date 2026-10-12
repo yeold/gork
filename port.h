@@ -30,6 +30,20 @@ int   win_home(char *out, size_t size);
    at its capture file. */
 void  win_own_console(void);
 
+/* The API speaks UTF-8, a Windows console its code page.
+   win_utf8_to_console(): rewrite s[0..len) in place for display in the
+   console's code page (best fit, `?` where there is none; bytes that are
+   not UTF-8 stay) and return the new length, never more than len.  `cells`
+   is nonzero for curses, which writes one byte per cell, so that a console
+   set to UTF-8 gets plain ASCII; printf to such a console needs nothing.
+   win_input_to_utf8(): text the user typed at the console (`typed`) or
+   gave on the command line, as UTF-8.  win_output_to_utf8(): a command's
+   output, taken to be in the OEM code page unless it is valid UTF-8.
+   Both return malloc'd text, or NULL if `s` can stay as it is. */
+size_t win_utf8_to_console(char *s, size_t len, int cells);
+char  *win_input_to_utf8(const char *s, int typed);
+char  *win_output_to_utf8(const char *s);
+
 #define TMPNAM_MAX     260
 #define tmpnam         win_tmpnam
 #define realpath       win_realpath

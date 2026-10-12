@@ -198,6 +198,44 @@ def check_home():
     print("ok: config from %USERPROFILE%")
 
 
+def check_text():
+    """A task with a non-ASCII letter reaches the API as UTF-8; the reply's
+    UTF-8 comes back untouched when stdout is not a console."""
+    seen = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            seen.append(self.rfile.read(int(self.headers["content-length"])))
+            reply(self, {"id": "m", "stop_reason": "end_turn",
+                         "content": [{"type": "text", "text": "na\u00efve \u2014 yes"}]})
+
+        def log_message(self, *a):
+            pass
+
+    with tempfile.TemporaryDirectory() as tmp:
+        srv = serve(H, 8106)
+        try:
+            env = dict(os.environ, AGENT_HOST="fake.local", WINEDEBUG="-all",
+                       LC_ALL="C.UTF-8")
+            env.pop("HOME", None)
+            conf = os.path.join(tmp, "c.conf")
+            with open(conf, "w") as f:
+                f.write("relay = 127.0.0.1:8106\n")
+            env["GORK_CONFIG"] = win(conf)
+            proc = subprocess.run(CMD + ["caf\u00e9?"], cwd=tmp, capture_output=True,
+                                  timeout=120, env=env)
+        finally:
+            srv.shutdown()
+    assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr}"
+    task = json.loads(seen[0].decode("utf-8"))["messages"][0]["content"]
+    assert task == "caf\u00e9?", ascii(task)
+    assert "na\u00efve \u2014 yes".encode("utf-8") in proc.stdout, proc.stdout
+
+    print("ok: non-ASCII task and reply")
+
+
 def check_timeout():
     """A server that never answers: the polled deadline ends the request."""
     class H(http.server.BaseHTTPRequestHandler):
@@ -232,5 +270,6 @@ print("ok: --version")
 check_files()
 check_run_command()
 check_home()
+check_text()
 check_timeout()
 print("all Windows checks passed")

@@ -9,6 +9,10 @@ build on each system), README "Tested systems" (results table).
 
 ## Current state (2026-10-12)
 
+- **No release until the user says so.** The next one is v1.0, a full
+  release and not a beta (the user's instruction of 2026-10-12, after
+  v0.10-beta). Commits and pushes to the branches go on as before.
+
 - Released: v0.10-beta (version in the TUI's bar and window title;
   v0.9-beta had the native Windows build and the macOS packages,
   v0.8-beta `protocol = openai`, macOS and Cygwin). Naming
@@ -61,11 +65,10 @@ build on each system), README "Tested systems" (results table).
 
 ## What to do next
 
-1. Windows: 98 SE is done by hand (below), and the user reported
+1. Windows: 95 OSR2 and 98 SE are done by hand (below), and the user reported
    `gork.exe` from the v0.9-beta zip working on Windows 11, the TUI too
    (2026-10-12; whether `run_command` was used from it is not known).
-   Left: Windows 95, NT 4, 2000
-   and XP; an automated TUI check (Wine draws it through a pseudo-terminal
+   Left: NT 4, 2000 and XP; an automated TUI check (Wine draws it through a pseudo-terminal
    one character at a time, which was only read by hand); and the Windows
    98 run itself is not scripted, so Jenkins does not repeat it.
 2. `protocol = openai` is untested: try it against a real server (Ollama
@@ -82,6 +85,42 @@ build on each system), README "Tested systems" (results table).
 6. Not attempted, and why: NeXTSTEP, SunOS 4, UnixWare/OpenServer, QNX,
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
+
+## Windows 95 OSR2 in QEMU (2026-10-12)
+
+Result: the released v0.10-beta `gork.exe` works on Windows 95 OSR2
+(`ver`: 4.00.1111), once `msvcrt.dll` is beside it: `--version`, the same
+batch round trip as on 98 (ten tool calls, `run_command` through
+`COMMAND.COM`), and the TUI with a reply, the version in its bar and in
+the window title. Without `msvcrt.dll`: "A required .DLL file,
+MSVCRT.DLL, was not found" (the copy used came from the Windows 98 SE
+install). No other import is missing. The first Windows 95 (4.00.950)
+was not tried: its ISO on archive.org comes without a key.
+
+How, for a repeat. Same container, volume and tools as for 98, in
+`/vm/95`; scripts `prep95.py`, `run95.sh`, `stop95.sh` beside the others.
+
+- Media: archive.org item `win-95-osr-2` (SHA1 `9df2bed9...`), key on the
+  item's page. The CD does not boot; the Windows 98 startup floppy from
+  the 98 run starts Setup. **No `sys c:` from that floppy**: Setup keeps
+  the IO.SYS it finds, and the result boots as "Windows 98".
+- `MSBATCH.INF` is mostly ignored. By hand: Alt-Y for the licence; at the
+  key screen Enter on "Re-enter", then all 17 digits in one go (the three
+  boxes act as one field); the network adapter: Alt-M, `n` four times,
+  Down (Novell/Anthem), Alt-D, Down (NE2000 Compatible), Enter.
+- After the file copy Setup reboots: start QEMU from the disk then
+  (`run95.sh -boot order=c`), or `-boot once=a` runs Setup again.
+- "While initializing device IOS: Windows protection error" at full
+  speed: Windows 95's fault on fast CPUs. `ICOUNT=3 run95.sh` (QEMU
+  `-icount shift=3`, 125 million instructions a second) gets past it and
+  is needed on every boot. Everything is slow then: minutes per boot.
+- Network: an ISA NE2000 (`ne2k_isa`), no PCI needed. Windows sets the
+  driver to I/O 0x200 and IRQ 3, so the emulated card is put there; then
+  in Device Manager the card shows "Code 27" until its Resources tab gets
+  "Set Configuration Manually", OK, and a shutdown. TCP/IP was installed
+  by Setup here (`MSBATCH.INF` did that much).
+- `floppy/T95.BAT` and `T95B.BAT` are the batch runs; `c-installed.img`
+  is the finished disk.
 
 ## Windows 98 SE in QEMU (2026-10-12)
 
