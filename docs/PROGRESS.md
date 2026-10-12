@@ -31,10 +31,12 @@ build on each system), README "Tested systems" (results table).
   versions and has nine checks), and the results of the overnight run
   below.
 - New in v0.8-beta: `protocol = openai` (chat completions: llama.cpp,
-  Ollama, OpenAI and the like), marked untested in the README. The conversation stays in
+  Ollama, OpenAI and the like). The conversation stays in
   Messages API form; `to_openai()` and `from_openai()` in `main.c`
-  translate the request and the reply inside `post()`. Checked against the
-  fake server in `looptest.py` only: no real server has been tried. The
+  translate the request and the reply inside `post()`. The user confirmed
+  it working against a real server speaking that format (2026-10-12;
+  which server is not recorded here); here it only ever met the fake
+  server in `looptest.py`. The
   DOS build has it and passes its nine checks (Jenkins, v0.8-beta), none
   of which uses the protocol.
 - New in v0.9-beta: macOS packages (`.pkg` and `.tar.gz`, universal,
@@ -71,10 +73,7 @@ build on each system), README "Tested systems" (results table).
    Left: NT 4, 2000 and XP; an automated TUI check (Wine draws it through a pseudo-terminal
    one character at a time, which was only read by hand); and the Windows
    98 run itself is not scripted, so Jenkins does not repeat it.
-2. `protocol = openai` is untested: try it against a real server (Ollama
-   or llama.cpp), then take
-   "untested" out of the README and `main.c`. macOS and Cygwin are done
-   (below).
+2. macOS and Cygwin are done (below).
 3. HP-UX: find a compiler for PA-RISC 1.1, or try 11i v2/v3 on QEMU's
    C3700. AIX 7.2 on `qemu-system-ppc64` was not started: the media is
    several GB and an install under emulation takes hours.

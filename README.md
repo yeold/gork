@@ -20,8 +20,7 @@ file system. No TLS, no threads, no C99.
 It talks to any server that speaks the Messages API format: Anthropic's own
 API, or a local model behind LM Studio or a similar compatible server (see
 [Local models](#local-models)). With `protocol = openai` it speaks the
-OpenAI chat completions format instead; that is untested against a real
-server. It speaks plaintext HTTP/1.0 only; reaching an HTTPS endpoint is
+OpenAI chat completions format instead. It speaks plaintext HTTP/1.0 only; reaching an HTTPS endpoint is
 the job of a [relay](#why-a-relay), not gork's.
 
 ## Tested systems
@@ -246,9 +245,8 @@ The same applies to any other server exposing an Anthropic-compatible
 
 For a server that only speaks the **OpenAI** chat completions format
 (llama.cpp, Ollama, vLLM, OpenAI itself and the many services shaped like
-it), add `protocol = openai`. **This is untested:** it has only been run
-against the fake server in `testing/looptest.py`, never against a real
-one, and not on DOS.
+it), add `protocol = openai`. It is confirmed working against a real
+server; it has not been tried from the DOS build.
 
 ```ini
 relay    = localhost:11434
@@ -297,7 +295,7 @@ servers, so there is no `mcp.json`.
 |---|---|---|---|
 | `relay` | -- | *(required)* | `host:port` gork connects to: the relay, or a local server |
 | `api_key` | `ANTHROPIC_API_KEY` (`OPENAI_API_KEY` with `protocol = openai`) | *(required for anthropic.com and openai.com)* | Sent as the `x-api-key` header, or as `Authorization: Bearer` with `protocol = openai` |
-| `protocol` | `AGENT_PROTOCOL` | `anthropic` | Wire format: `anthropic` (Messages API) or `openai` (chat completions, untested); see [Local models](#local-models) |
+| `protocol` | `AGENT_PROTOCOL` | `anthropic` | Wire format: `anthropic` (Messages API) or `openai` (chat completions); see [Local models](#local-models) |
 | `model` | `AGENT_MODEL` | `claude-opus-5` | Model id |
 | `host` | `AGENT_HOST` | `api.anthropic.com` | `Host:` header value |
 | `path` | `AGENT_PATH` | `/v1/messages`, or `/v1/chat/completions` with `protocol = openai` | Request path |
