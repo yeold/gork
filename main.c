@@ -173,7 +173,7 @@ static char *kstrdup(const char *s)
 /* The environment beats ~/.gork.conf, which beats the default. */
 enum { CFG_RELAY, CFG_MODEL, CFG_HOST, CFG_PATH, CFG_KEY, CFG_ALLOW,
        CFG_TURNS, CFG_RETRIES, CFG_WINDOW, CFG_COMPACT, CFG_EFFORT,
-       CFG_TIMEOUT, NCFG };
+       CFG_TIMEOUT, CFG_PROTOCOL, NCFG };
 
 static const struct {
     const char *name, *env, *fallback;
@@ -189,8 +189,19 @@ static const struct {
     { "context_window", "AGENT_CONTEXT_WINDOW", CTX_WINDOW    },
     { "auto_compact", "AGENT_AUTO_COMPACT", AUTO_COMPACT      },
     { "default_effort", "AGENT_DEFAULT_EFFORT", ""            },
-    { "timeout", "AGENT_TIMEOUT",     "120"               }
+    { "timeout", "AGENT_TIMEOUT",     "120"               },
+    { "protocol", "AGENT_PROTOCOL",   "anthropic"         }
 };
+
+/* `protocol = openai`: speak chat completions instead of the Messages API. */
+static int openai;
+
+/* The environment variable that overrides setting k.  An Anthropic key in
+   the environment must not go to somebody else's server. */
+static const char *cfg_env(int k)
+{
+    return openai && k == CFG_KEY ? "OPENAI_API_KEY" : CFG[k].env;
+}
 
 static char *cfg_file[NCFG];
 
@@ -208,10 +219,11 @@ static char  cfg_path[PATH_MAX];        /* the file cfg_file came from */
 
 static const char *cfg(int k)
 {
-    const char *v = CFG[k].env != NULL ? getenv(CFG[k].env) : NULL;
+    const char *v = cfg_env(k) != NULL ? getenv(cfg_env(k)) : NULL;
 
     if (v != NULL && *v != '\0') return v;
-    return cfg_file[k] != NULL ? cfg_file[k] : CFG[k].fallback;
+    if (cfg_file[k] != NULL) return cfg_file[k];
+    return openai && k == CFG_PATH ? "/v1/chat/completions" : CFG[k].fallback;
 }
 
 /* An environment variable quietly beating the file is confusing -- a stale
@@ -223,16 +235,16 @@ static void report_overrides(void)
     int         k;
 
     for (k = 0; k < NCFG; k++) {
-        v = CFG[k].env != NULL ? getenv(CFG[k].env) : NULL;
+        v = cfg_env(k) != NULL ? getenv(cfg_env(k)) : NULL;
         if (v == NULL || *v == '\0' || cfg_file[k] == NULL ||
             strcmp(v, cfg_file[k]) == 0)
             continue;
         if (k == CFG_KEY)               /* never print a key */
             fprintf(stderr, "gork: api_key from %s overrides %s\n",
-                    CFG[k].env, cfg_path);
+                    cfg_env(k), cfg_path);
         else
             fprintf(stderr, "gork: %s %s from %s overrides %s (%s)\n",
-                    CFG[k].name, v, CFG[k].env, cfg_path, cfg_file[k]);
+                    CFG[k].name, v, cfg_env(k), cfg_path, cfg_file[k]);
     }
 }
 
@@ -296,7 +308,8 @@ static int load_config(void)
         if (v == NULL || i == NCFG) {
             fprintf(stderr, "gork: %s:%d: expected `key = value`, key one of "
                             "relay, model, host, path, api_key, allow, max_turns, retries, "
-                            "context_window, auto_compact, default_effort, timeout\n", path, n);
+                            "context_window, auto_compact, default_effort, timeout, "
+                            "protocol\n", path, n);
             fclose(f);
             return -1;
         }
@@ -1693,6 +1706,247 @@ static long usage_of(cJSON *usage, const char *field)
     return cJSON_IsNumber(v) ? (long) v->valuedouble : 0;
 }
 
+/* ------------------------------------------------------------------ */
+/* OpenAI chat completions                                            */
+/* ------------------------------------------------------------------ */
+
+/* With `protocol = openai` the conversation is still kept in Messages API
+   form; only the request and the reply are translated, here, so the loop,
+   the tools and compacting never see the difference. */
+
+static cJSON *oa_message(cJSON *out, const char *role, const char *content)
+{
+    cJSON *m = cJSON_CreateObject();
+
+    if (m == NULL) return NULL;
+    cJSON_AddItemToArray(out, m);
+    if (cJSON_AddStringToObject(m, "role", role) == NULL ||
+        cJSON_AddStringToObject(m, "content", content) == NULL)
+        return NULL;
+    return m;
+}
+
+/* Append one Messages API message to `out` as chat messages: a tool_result
+   becomes a "tool" message of its own, a tool_use a tool_calls entry. */
+static int oa_convert(cJSON *out, cJSON *msg)
+{
+    cJSON     *role = cJSON_GetObjectItem(msg, "role");
+    cJSON     *content = cJSON_GetObjectItem(msg, "content");
+    cJSON     *b, *type, *v, *id, *m, *call, *fn, *calls = NULL;
+    struct buf txt;
+    char      *args;
+    int        asst;
+
+    if (!cJSON_IsString(role)) return 0;
+    if (cJSON_IsString(content))
+        return oa_message(out, role->valuestring,
+                          content->valuestring) != NULL ? 0 : -1;
+    asst = strcmp(role->valuestring, "assistant") == 0;
+    if (buf_init(&txt) != 0) return -1;
+
+    cJSON_ArrayForEach(b, content) {
+        type = cJSON_GetObjectItem(b, "type");
+        if (!cJSON_IsString(type)) continue;
+        if (strcmp(type->valuestring, "text") == 0) {
+            v = cJSON_GetObjectItem(b, "text");
+            if (!cJSON_IsString(v)) continue;
+            if ((txt.len > 0 && buf_add(&txt, "\n", 1) != 0) ||
+                buf_add(&txt, v->valuestring, strlen(v->valuestring)) != 0)
+                goto fail;
+        } else if (!asst && strcmp(type->valuestring, "tool_result") == 0) {
+            v  = cJSON_GetObjectItem(b, "content");
+            id = cJSON_GetObjectItem(b, "tool_use_id");
+            m  = oa_message(out, "tool",
+                            cJSON_IsString(v) ? v->valuestring : "");
+            if (m == NULL ||
+                cJSON_AddStringToObject(m, "tool_call_id", cJSON_IsString(id)
+                                        ? id->valuestring : "") == NULL)
+                goto fail;
+        } else if (asst && strcmp(type->valuestring, "tool_use") == 0) {
+            id = cJSON_GetObjectItem(b, "id");
+            v  = cJSON_GetObjectItem(b, "name");
+            if (calls == NULL && (calls = cJSON_CreateArray()) == NULL)
+                goto fail;
+            call = cJSON_CreateObject();
+            if (call == NULL) goto fail;
+            cJSON_AddItemToArray(calls, call);
+            args = cJSON_PrintUnformatted(cJSON_GetObjectItem(b, "input"));
+            fn   = cJSON_AddObjectToObject(call, "function");
+            if (fn == NULL ||
+                cJSON_AddStringToObject(call, "id", cJSON_IsString(id)
+                                        ? id->valuestring : "") == NULL ||
+                cJSON_AddStringToObject(call, "type", "function") == NULL ||
+                cJSON_AddStringToObject(fn, "name", cJSON_IsString(v)
+                                        ? v->valuestring : "") == NULL ||
+                cJSON_AddStringToObject(fn, "arguments",
+                                        args != NULL ? args : "{}") == NULL) {
+                free(args);
+                goto fail;
+            }
+            free(args);
+        }
+    }
+
+    /* Text of a user turn goes after its tool results: those have to
+       follow the assistant's tool_calls directly. */
+    if (asst || txt.len > 0) {
+        m = oa_message(out, role->valuestring, txt.p);
+        if (m == NULL) goto fail;
+        if (calls != NULL) cJSON_AddItemToObject(m, "tool_calls", calls);
+        calls = NULL;
+    }
+    buf_free(&txt);
+    return 0;
+
+fail:
+    cJSON_Delete(calls);
+    buf_free(&txt);
+    return -1;
+}
+
+/* The chat completions request for a Messages API one; NULL if out of
+   memory.  No token limit is sent: servers disagree on the name of the
+   field (max_tokens, max_completion_tokens), and all have a default. */
+static cJSON *to_openai(cJSON *req)
+{
+    cJSON *out = cJSON_CreateObject(), *msgs, *tools, *t, *w, *fn, *v;
+
+    if (out == NULL) return NULL;
+    if (cJSON_AddStringToObject(out, "model", cfg(CFG_MODEL)) == NULL ||
+        (*effort != '\0' &&
+         cJSON_AddStringToObject(out, "reasoning_effort", effort) == NULL))
+        goto fail;
+
+    msgs = cJSON_AddArrayToObject(out, "messages");
+    if (msgs == NULL) goto fail;
+    v = cJSON_GetObjectItem(req, "system");
+    if (cJSON_IsString(v) &&
+        oa_message(msgs, "system", v->valuestring) == NULL)
+        goto fail;
+    cJSON_ArrayForEach(t, cJSON_GetObjectItem(req, "messages"))
+        if (oa_convert(msgs, t) != 0) goto fail;
+
+    tools = cJSON_CreateArray();
+    if (tools == NULL) goto fail;
+    cJSON_ArrayForEach(t, cJSON_GetObjectItem(req, "tools")) {
+        w = cJSON_CreateObject();
+        if (w == NULL) break;
+        cJSON_AddItemToArray(tools, w);
+        fn = cJSON_AddObjectToObject(w, "function");
+        v  = cJSON_Duplicate(cJSON_GetObjectItem(t, "input_schema"), 1);
+        if (v != NULL) cJSON_AddItemToObject(fn, "parameters", v);
+        if (fn == NULL || v == NULL ||
+            cJSON_AddStringToObject(w, "type", "function") == NULL ||
+            !cJSON_AddItemToObject(fn, "name", cJSON_Duplicate(
+                cJSON_GetObjectItem(t, "name"), 1)) ||
+            !cJSON_AddItemToObject(fn, "description", cJSON_Duplicate(
+                cJSON_GetObjectItem(t, "description"), 1)))
+            break;
+    }
+    if (t != NULL) {                    /* left the loop early */
+        cJSON_Delete(tools);
+        goto fail;
+    }
+    if (cJSON_GetArraySize(tools) > 0)
+        cJSON_AddItemToObject(out, "tools", tools);
+    else
+        cJSON_Delete(tools);            /* an empty list is refused */
+    return out;
+
+fail:
+    cJSON_Delete(out);
+    return NULL;
+}
+
+/* Turn a chat completions reply into the Messages API reply the loop
+   expects.  Takes `oa`; returns NULL after reporting what is wrong. */
+static cJSON *from_openai(cJSON *oa)
+{
+    cJSON      *choice = cJSON_GetArrayItem(cJSON_GetObjectItem(oa, "choices"), 0);
+    cJSON      *msg = cJSON_GetObjectItem(choice, "message");
+    cJSON      *usage = cJSON_GetObjectItem(oa, "usage");
+    cJSON      *root, *content, *b, *v, *call, *fn, *in;
+    const char *stop = "end_turn";
+    char        idbuf[32];
+    int         n = 0;
+
+    if (!cJSON_IsObject(msg)) {
+        fprintf(stderr, "gork: reply had no choices[0].message\n");
+        cJSON_Delete(oa);
+        return NULL;
+    }
+    root    = cJSON_CreateObject();
+    content = root != NULL ? cJSON_AddArrayToObject(root, "content") : NULL;
+    if (content == NULL) goto oom;
+
+    v = cJSON_GetObjectItem(msg, "content");
+    if (cJSON_IsString(v) && v->valuestring[0] != '\0') {
+        b = cJSON_CreateObject();
+        if (b == NULL) goto oom;
+        cJSON_AddItemToArray(content, b);
+        if (cJSON_AddStringToObject(b, "type", "text") == NULL ||
+            cJSON_AddStringToObject(b, "text", v->valuestring) == NULL)
+            goto oom;
+    }
+
+    v = cJSON_GetObjectItem(choice, "finish_reason");
+    if (cJSON_IsString(v) && strcmp(v->valuestring, "length") == 0)
+        stop = "max_tokens";
+    else if (cJSON_IsString(v) && strcmp(v->valuestring, "content_filter") == 0)
+        stop = "refusal";
+
+    /* Go by the calls, not by finish_reason: some servers say "stop". */
+    cJSON_ArrayForEach(call, cJSON_GetObjectItem(msg, "tool_calls")) {
+        fn = cJSON_GetObjectItem(call, "function");
+        v  = cJSON_GetObjectItem(fn, "arguments");
+        in = cJSON_IsString(v) ? cJSON_Parse(v->valuestring)
+                               : cJSON_Duplicate(v, 1);
+        if (!cJSON_IsObject(in)) {      /* the tool reports what is missing */
+            cJSON_Delete(in);
+            in = cJSON_CreateObject();
+        }
+        b = cJSON_CreateObject();
+        if (b == NULL || in == NULL) {
+            cJSON_Delete(b);
+            cJSON_Delete(in);
+            goto oom;
+        }
+        cJSON_AddItemToArray(content, b);
+        cJSON_AddItemToObject(b, "input", in);
+        sprintf(idbuf, "call_%d", n++);
+        v = cJSON_GetObjectItem(call, "id");
+        if (cJSON_AddStringToObject(b, "type", "tool_use") == NULL ||
+            cJSON_AddStringToObject(b, "id", cJSON_IsString(v) &&
+                                    v->valuestring[0] != '\0'
+                                    ? v->valuestring : idbuf) == NULL)
+            goto oom;
+        v = cJSON_GetObjectItem(fn, "name");
+        if (cJSON_AddStringToObject(b, "name", cJSON_IsString(v)
+                                    ? v->valuestring : "") == NULL)
+            goto oom;
+        stop = "tool_use";
+    }
+
+    if (cJSON_AddStringToObject(root, "stop_reason", stop) == NULL) goto oom;
+    if (usage != NULL) {
+        v = cJSON_AddObjectToObject(root, "usage");
+        if (v == NULL ||
+            cJSON_AddNumberToObject(v, "input_tokens", (double)
+                usage_of(usage, "prompt_tokens")) == NULL ||
+            cJSON_AddNumberToObject(v, "output_tokens", (double)
+                usage_of(usage, "completion_tokens")) == NULL)
+            goto oom;
+    }
+    cJSON_Delete(oa);
+    return root;
+
+oom:
+    fprintf(stderr, "gork: out of memory reading reply\n");
+    cJSON_Delete(root);
+    cJSON_Delete(oa);
+    return NULL;
+}
+
 /* Sleep n seconds, giving up early if the user aborts. */
 static void wait_secs(int n)
 {
@@ -1712,6 +1966,11 @@ static cJSON *post(const struct conn *c, cJSON *messages)
     int         status, try, wait;
 
     req = build_request(messages, c->system);
+    if (req != NULL && openai) {
+        root = to_openai(req);
+        cJSON_Delete(req);
+        req = root;
+    }
     if (req == NULL) {
         fprintf(stderr, "gork: out of memory building request\n");
         return NULL;
@@ -1760,6 +2019,7 @@ static cJSON *post(const struct conn *c, cJSON *messages)
         fprintf(stderr, "gork: reply was not valid JSON\n");
         return NULL;
     }
+    if (openai && (root = from_openai(root)) == NULL) return NULL;
 
     usage = cJSON_GetObjectItem(root, "usage");
     if (usage != NULL) {
@@ -2105,6 +2365,12 @@ int main(int argc, char **argv)
     }
 #endif
     if (load_config() != 0) return 2;
+    openai = strcmp(cfg(CFG_PROTOCOL), "openai") == 0;
+    if (!openai && strcmp(cfg(CFG_PROTOCOL), "anthropic") != 0) {
+        fprintf(stderr, "gork: want protocol anthropic or openai\n");
+        return 2;
+    }
+    relay_bearer = openai;
 
     relay = cfg(CFG_RELAY);
     if (relay == NULL) {
@@ -2152,12 +2418,14 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    /* Local servers (LM Studio, llama.cpp, Ollama) serve the same Messages
-       API without auth, so an empty key is only fatal when we are actually
-       talking to Anthropic.  Catching it here beats a round-trip to find out. */
-    if (*c.key == '\0' && strstr(c.api_host, "anthropic.com") != NULL) {
+    /* Local servers (LM Studio, llama.cpp, Ollama) serve the same APIs
+       without auth, so an empty key is only fatal when we are actually
+       talking to Anthropic or OpenAI.  Catching it here beats a round-trip
+       to find out. */
+    if (*c.key == '\0' && (strstr(c.api_host, "anthropic.com") != NULL ||
+                           strstr(c.api_host, "openai.com") != NULL)) {
         fprintf(stderr, "gork: no API key; set api_key in ~/.gork.conf "
-                        "or ANTHROPIC_API_KEY\n");
+                        "or %s\n", cfg_env(CFG_KEY));
         return 2;
     }
 

@@ -13,7 +13,8 @@ see [docs/BUILD.md](docs/BUILD.md#dos).
 
 It talks to any server that speaks the Messages API format: Anthropic's own
 API, or a local model behind LM Studio or a similar compatible server (see
-[Local models](#local-models)). It speaks plaintext HTTP/1.0 only;
+[Local models](#local-models)). With `protocol = openai` it speaks the
+OpenAI chat completions format instead. It speaks plaintext HTTP/1.0 only;
 reaching an HTTPS endpoint is the relay's job, not gork's.
 
 ## Contents
@@ -230,11 +231,35 @@ localhost:1234/v1/models` lists them) -- the default `claude-opus-5` means
 nothing locally.
 
 The same applies to any other server exposing an Anthropic-compatible
-`/v1/messages`. For an **OpenAI-shaped** local server there is no support:
-`tools`, `tool_calls`, and `finish_reason` are a different wire format, and
-`function.arguments` arrives as a JSON-encoded *string* rather than an object.
-That's a real adapter, not a config change -- worth writing only if you need a
-server that has no Anthropic-compatible endpoint.
+`/v1/messages`.
+
+For a server that only speaks the **OpenAI** chat completions format
+(llama.cpp, Ollama, vLLM, OpenAI itself and the many services shaped like
+it), add `protocol = openai`:
+
+```ini
+relay    = localhost:11434
+host     = localhost:11434
+protocol = openai
+model    = qwen3
+```
+
+gork then posts to `/v1/chat/completions` (change it with `path`) and sends
+`api_key`, if there is one, as `Authorization: Bearer`. The key's
+environment override becomes `OPENAI_API_KEY`, so that an exported
+Anthropic key is never sent to another service. Everything else works the
+same: tools, skills, MCP servers and compacting. What differs:
+
+- No token limit is sent; the server's default applies.
+- Effort goes out as `reasoning_effort`, with the same five names. Servers
+  that know fewer levels may refuse `xhigh` or `max`.
+- Replies are not streamed, and reasoning text a server returns beside the
+  answer is dropped.
+- A hosted service is HTTPS, so it needs a relay that forwards to it, as
+  for Anthropic.
+
+So far this is checked against a fake server only (`testing/looptest.py`),
+not against a real one.
 
 ### Config
 
@@ -246,17 +271,18 @@ skipped.
 | Key | Env override | Default | Meaning |
 |---|---|---|---|
 | `relay` | -- | *(required)* | `host:port` gork connects to: the relay, or a local server |
-| `api_key` | `ANTHROPIC_API_KEY` | *(required for anthropic.com)* | Sent as the `x-api-key` header |
+| `api_key` | `ANTHROPIC_API_KEY` (`OPENAI_API_KEY` with `protocol = openai`) | *(required for anthropic.com and openai.com)* | Sent as the `x-api-key` header, or as `Authorization: Bearer` with `protocol = openai` |
+| `protocol` | `AGENT_PROTOCOL` | `anthropic` | Wire format: `anthropic` (Messages API) or `openai` (chat completions); see [Local models](#local-models) |
 | `model` | `AGENT_MODEL` | `claude-opus-5` | Model id |
 | `host` | `AGENT_HOST` | `api.anthropic.com` | `Host:` header value |
-| `path` | `AGENT_PATH` | `/v1/messages` | Request path |
+| `path` | `AGENT_PATH` | `/v1/messages`, or `/v1/chat/completions` with `protocol = openai` | Request path |
 | `allow` | -- | *(none)* | Extra directories the file tools may read and write, `:`-separated (`;` on DOS; up to 8) |
 | `max_turns` | `AGENT_MAX_TURNS` | `24` | Tool round-trips per task before gork gives up |
 | `retries` | `AGENT_RETRIES` | `2` | Extra attempts for a request that hits a network error, 429 or 5xx (0..10) |
 | `context_window` | `AGENT_CONTEXT_WINDOW` | `200000` | Tokens the model can take; set it to the loaded context length for a local model |
 | `auto_compact` | `AGENT_AUTO_COMPACT` | `80` | Compact once the context passes this percentage of `context_window` (0 = never, max 99) |
 | `timeout` | `AGENT_TIMEOUT` | `120` | Seconds one API request, MCP tool call or `run_command` may take before it fails |
-| `default_effort` | `AGENT_DEFAULT_EFFORT` | *(unset: model default)* | Reasoning effort at startup: `low`, `medium`, `high`, `xhigh` or `max`, sent as `output_config.effort`; `/effort` changes it in the TUI |
+| `default_effort` | `AGENT_DEFAULT_EFFORT` | *(unset: model default)* | Reasoning effort at startup: `low`, `medium`, `high`, `xhigh` or `max`, sent as `output_config.effort` (`reasoning_effort` with `protocol = openai`); `/effort` changes it in the TUI |
 
 A set environment variable beats the file, and gork says so at startup (e.g. `model meta/muse-glimmer from AGENT_MODEL overrides ~/.gork.conf`), since a stale `export` in an old shell is easy to forget. If the file holds `api_key` and
 anyone but you can read it, gork refuses to start: `chmod 600 ~/.gork.conf`.

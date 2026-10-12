@@ -103,6 +103,87 @@ def check_tool_loop():
     print("ok: tool_use round-trip")
 
 
+def check_openai():
+    """protocol = openai: the same round-trip as chat completions."""
+    turns = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            req = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            turns.append(({k.lower(): v for k, v in self.headers.items()},
+                          self.path, req))
+            if len(turns) == 1:
+                # "stop" with tool calls, as some local servers send it
+                reply(self, {"id": "c1", "choices": [{"index": 0, "finish_reason": "stop",
+                    "message": {"role": "assistant", "content": "Reading it.",
+                                "tool_calls": [
+                        {"id": "call_a", "type": "function", "function": {
+                            "name": "read_file",
+                            "arguments": "{\"path\": \"testing/req.json\"}"}},
+                        {"id": "call_b", "type": "function", "function": {
+                            "name": "read_file", "arguments": "not json"}}]}}],
+                    "usage": {"prompt_tokens": 900, "completion_tokens": 100}})
+            else:
+                reply(self, {"id": "c2", "choices": [{"index": 0, "finish_reason": "stop",
+                    "message": {"role": "assistant", "content": "done"}}]})
+
+        def log_message(self, *a):
+            pass
+
+    conf = ("relay = 127.0.0.1:8091\nprotocol = openai\napi_key = sk-oa\n"
+            "model = some-model\ndefault_effort = low\n")
+    with tempfile.TemporaryDirectory() as tmp:
+        with open(os.path.join(tmp, "GORK.md"), "w") as f:
+            f.write("Be brief.\n")
+        os.mkdir(os.path.join(tmp, "testing"))
+        with open(os.path.join(tmp, "testing", "req.json"), "w") as f:
+            f.write("the file\n")
+        srv = serve(H, 8091)
+        try:
+            proc = run_gork(8091, "what's in req.json?", cwd=tmp, config=conf)
+        finally:
+            srv.shutdown()
+
+    assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr}"
+    assert "Reading it." in proc.stdout and "done" in proc.stdout, proc.stdout
+    assert len(turns) == 2, f"expected 2 requests, got {len(turns)}"
+
+    hdrs, path, first = turns[0]
+    assert path == "/v1/chat/completions", path
+    assert hdrs["authorization"] == "Bearer sk-oa", "the Anthropic key in " \
+        f"the environment must not be sent: {hdrs.get('authorization')}"
+    assert "x-api-key" not in hdrs and "anthropic-version" not in hdrs, hdrs
+    assert first["model"] == "some-model" and first["reasoning_effort"] == "low", first
+    assert "system" not in first and "max_tokens" not in first, first
+    assert first["messages"][0]["role"] == "system", first["messages"]
+    assert first["messages"][0]["content"].startswith("Be brief."), first["messages"]
+    assert first["messages"][1:] == [{"role": "user", "content": "what's in req.json?"}]
+    tool = first["tools"][1]
+    assert tool["type"] == "function" and tool["function"]["name"] == "read_file", tool
+    assert tool["function"]["parameters"]["type"] == "object", tool
+
+    msgs = turns[1][2]["messages"]
+    assert [m["role"] for m in msgs] == ["system", "user", "assistant", "tool", "tool"], msgs
+    assert msgs[2]["content"] == "Reading it.", msgs[2]
+    calls = msgs[2]["tool_calls"]
+    assert [c["id"] for c in calls] == ["call_a", "call_b"], calls
+    assert calls[0]["type"] == "function", calls[0]
+    assert json.loads(calls[0]["function"]["arguments"]) == {"path": "testing/req.json"}
+    assert msgs[3] == {"role": "tool", "content": "the file\n", "tool_call_id": "call_a"}, msgs[3]
+    # arguments that are not JSON reach the tool as {}, which says what it lacks
+    assert msgs[4]["tool_call_id"] == "call_b" and "path" in msgs[4]["content"], msgs[4]
+
+    proc = run_gork(8091, "hi", config="relay = 127.0.0.1:8091\nprotocol = openai\n"
+                    "host = api.openai.com\n", AGENT_HOST=None)
+    assert proc.returncode == 2 and "OPENAI_API_KEY" in proc.stderr, proc.stderr
+    proc = run_gork(8091, "hi", config="relay = 127.0.0.1:8091\nprotocol = grpc\n")
+    assert proc.returncode == 2 and "protocol" in proc.stderr, proc.stderr
+
+    print("ok: protocol = openai round-trip")
+
+
 # ------------------------------------------- rules, write/run, confinement
 
 def check_rules_and_tools():
@@ -1009,6 +1090,7 @@ out = subprocess.run([BINARY, "--version"], capture_output=True, text=True)
 assert out.returncode == 0 and re.match(r"gork \d+\.\d+", out.stdout), out
 print("ok: --version")
 check_tool_loop()
+check_openai()
 check_rules_and_tools()
 check_local_no_key()
 check_key_still_required_for_anthropic()

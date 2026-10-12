@@ -33,6 +33,7 @@ static time_t deadline;
 
 int (*relay_abort)(void);
 int relay_timeout = 120;
+int relay_bearer;
 
 /* ------------------------------------------------------------------ */
 /* growable byte buffer                                               */
@@ -299,13 +300,20 @@ int relay_post(const char *relay_host, int relay_port, const char *api_host,
           "POST %s HTTP/1.0\r\n"
           "Host: %s\r\n"
           "User-Agent: gork/0\r\n"
-          "Content-Type: application/json\r\n"
-          "anthropic-version: 2023-06-01\r\n"
-          "x-api-key: %s\r\n"
+          "Content-Type: application/json\r\n",
+          path, api_host);
+  if (!relay_bearer)
+    sprintf(head + strlen(head),
+            "anthropic-version: 2023-06-01\r\n"
+            "x-api-key: %s\r\n",
+            api_key);
+  else if (*api_key != '\0')
+    sprintf(head + strlen(head), "Authorization: Bearer %s\r\n", api_key);
+  sprintf(head + strlen(head),
           "Content-Length: %lu\r\n"
           "Connection: close\r\n"
           "\r\n",
-          path, api_host, api_key, (unsigned long)body_len);
+          (unsigned long)body_len);
 
   if (install_alarm() != 0) {
     buf_free(&raw);

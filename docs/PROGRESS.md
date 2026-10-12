@@ -21,14 +21,24 @@ build on each system), README "Tested systems" (results table).
   (`looptest.py` polls for a killed child; `dostest.py` runs on other DOS
   versions and has nine checks), and the results of the overnight run
   below.
-- Tests: `testing/looptest.py` (16 checks, Unix) and `testing/dostest.py`
+- After v0.7-beta, on `dev` only: `protocol = openai` (chat completions:
+  llama.cpp, Ollama, OpenAI and the like). The conversation stays in
+  Messages API form; `to_openai()` and `from_openai()` in `main.c`
+  translate the request and the reply inside `post()`. Checked against the
+  fake server in `looptest.py` only: no real server has been tried, and
+  the DOS build was not rebuilt with it.
+- Tests: `testing/looptest.py` (17 checks since the OpenAI one; the tables
+  below say 16, which it was then; Unix) and `testing/dostest.py`
   (9 checks, DOS in QEMU). Jenkins runs the DOS one on every build of
   `main` and of tags.
 
 ## What to do next
 
-1. macOS and Cygwin are done (below). Not on Forgejo: `dev` has to be
-   pushed, and `master` brought up to it.
+1. macOS and Cygwin are done (below). GitHub `main` has that; Forgejo
+   does not: `dev` has to be pushed, and `master` brought up to it.
+   `protocol = openai` is committed on `dev` and pushed nowhere: try it
+   against a real server (Ollama or llama.cpp), run `dostest.py` on a
+   fresh DOS build, then push.
 2. HP-UX: find a compiler for PA-RISC 1.1, or try 11i v2/v3 on QEMU's
    C3700. AIX 7.2 on `qemu-system-ppc64` was not started: the media is
    several GB and an install under emulation takes hours.

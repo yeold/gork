@@ -46,6 +46,10 @@ int relay_post(const char *relay_host, int relay_port,
 
 extern int (*relay_abort)(void);
 
+/* Nonzero: send the key as `Authorization: Bearer` (and none if it is empty)
+   instead of `x-api-key`, and no anthropic-version.  For `protocol = openai`. */
+extern int relay_bearer;
+
 /* Seconds one request (and one MCP tool call) may take; `timeout`. */
 extern int relay_timeout;
 
