@@ -46,7 +46,7 @@ of `testing/looptest.py`.
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | Haiku | R1/beta6 | | Older releases: may work, untested |
 | macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
-| Windows (native, experimental) | Windows 95 OSR2 (1996), with `msvcrt.dll` beside it: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows NT 4.0 (1996), Windows 98 SE, Windows 11, Windows Server 2025, Wine 10 | Windows 2000 and XP should work, lying between NT 4 and 11, but are untested; so is the first Windows 95 |
+| Windows (native, experimental) | Windows 95 OSR2 (1996), with `msvcrt.dll` beside it: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows NT 4.0 (1996), 98 SE, 2000, XP SP3, 11, Server 2025; Wine 10 | The first Windows 95: untested |
 | Windows (Cygwin) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | |
 | DOS (experimental) | MS-DOS 6.22 (1994), with DJGPP, PDCurses and Watt-32, 386 or better | DR-DOS 7.03, FreeDOS 1.3 | 16-bit real mode: requests do not fit in 640 K |
 

@@ -352,15 +352,15 @@ screen and Winsock 1.1 for TCP/IP. It is one program for both lines of
 Windows, 9x and NT: it imports only functions that Windows 95 already has,
 from `kernel32`, `user32`, `advapi32`, `wsock32` and `msvcrt.dll`.
 
-Tested on Windows 95 OSR2 (4.00.1111), Windows 98 Second Edition and
-Windows NT 4.0 Workstation (as shipped, no service pack), in QEMU on an
-emulated Pentium: batch mode, every file tool, `run_command` through
+Tested on Windows 95 OSR2 (4.00.1111), Windows 98 Second Edition,
+Windows NT 4.0 Workstation (as shipped, no service pack), Windows 2000
+Professional (5.00.2195) and Windows XP Professional SP3, in QEMU, the
+first three on an emulated Pentium: batch mode, every file tool, `run_command` through
 `COMMAND.COM` or `cmd.exe`, and the TUI, all by hand against a fake API.
 `testing/wintest.py` runs the batch-mode checks under Wine 10 (Jenkins)
 and on the Windows of GitHub's runners, and the release zip of 0.9~beta is
 reported working on Windows 11, TUI included. Not tried: the first
-Windows 95, NT 3.51, and Windows 2000 and XP, which should work as they lie
-between NT 4 and 11.
+Windows 95, NT 3.51, Me, Vista, 7, 8 and 10.
 
 **Windows 95 has no `msvcrt.dll`**, and gork.exe will not start without
 it ("A required .DLL file, MSVCRT.DLL, was not found"). Put a copy beside

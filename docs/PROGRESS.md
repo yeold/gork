@@ -71,7 +71,7 @@ build on each system), README "Tested systems" (results table).
 1. Windows: 95 OSR2 and 98 SE are done by hand (below), and the user reported
    `gork.exe` from the v0.9-beta zip working on Windows 11, the TUI too
    (2026-10-12; whether `run_command` was used from it is not known).
-   NT 4.0 is done too. Left: 2000 and XP, expected to work; an automated TUI check (Wine draws it through a pseudo-terminal
+   NT 4.0, 2000 and XP are done too. Left: an automated TUI check (Wine draws it through a pseudo-terminal
    one character at a time, which was only read by hand); and the Windows
    98 run itself is not scripted, so Jenkins does not repeat it.
 2. macOS and Cygwin are done (below).
@@ -85,6 +85,33 @@ build on each system), README "Tested systems" (results table).
 6. Not attempted, and why: NeXTSTEP, SunOS 4, UnixWare/OpenServer, QNX,
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
+
+## Windows 2000 and XP in QEMU (2026-10-12)
+
+Result: the released v0.10-beta `gork.exe` works on Windows 2000
+Professional (`ver`: 5.00.2195) and Windows XP Professional SP3
+(5.1.2600), unchanged: `--version`, the batch round trip of ten tool
+calls, and the TUI with a reply, approvals, commands run from it and the
+window title.
+
+How, for a repeat (about 45 minutes for 2000, 55 for XP, nearly all
+unattended). In `/vm/2k` and `/vm/xp` of the same volume; scripts
+`prepnt5.py DIR NAME KEY` and `runnt5.sh DIR`.
+
+- Media: archive.org items `win2kproiso` (SHA1 `d0b0ad04...`, key in its
+  `Product Key.txt`) and `WinXPProSP3x86` (SHA1 `66ac289a...`, a volume
+  licence CD, key on the item's page).
+- Both CDs boot and install by themselves with an answer file `WINNT.SIF`
+  on a floppy (`sif.img`): partitioning, key, network, automatic logon as
+  Administrator. Nothing to press. Disk: an empty 4 GB qcow2. The CD stays
+  in; once the disk has a system the CD's "press any key" times out.
+- Windows 2000 needs `runnt5.sh 2k -win2k-hack`, `CPU=qemu32` and ACPI
+  left on. With `-machine acpi=off` and `-cpu pentium3` its graphical
+  setup reset the machine at "Installing components", again and again.
+- XP: `CPU=qemu32 runnt5.sh xp`. Network card `rtl8139` for both; both
+  have the driver and get an address by DHCP.
+- Test floppy as for NT 4 (`floppy/TNT.BAT`), run with `cmd /k a:\tnt.bat`
+  from Start, Run. `shutdown -s -t 0` turns XP off.
 
 ## Windows NT 4.0 in QEMU (2026-10-12)
 
