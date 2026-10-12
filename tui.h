@@ -9,8 +9,9 @@
 #define GORK_TUI_H
 
 /* Take over the terminal.  `status` is shown on the top bar and must stay
-   valid until tui_end.  Returns 0 on success. */
-int   tui_init(const char *status);
+   valid until tui_end; `title` becomes the window title where the terminal
+   has one.  Returns 0 on success. */
+int   tui_init(const char *status, const char *title);
 void  tui_end(void);
 
 /* Next line the user typed, or NULL when they quit.  Static storage. */

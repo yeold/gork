@@ -45,6 +45,14 @@ build on each system), README "Tested systems" (results table).
   below); NT 4 to XP and Windows 95 are untried. `port.h`
   defines `GORK_NO_FORK` for DOS and Windows, which now share the code
   that used to be `#ifdef __MSDOS__` only.
+- After v0.9-beta: the TUI's top bar and the window title show the
+  version; messages on DOS and Windows name the real config path.
+- Vulnerability scan: `.github/workflows/codeql.yml` runs CodeQL
+  (`security-extended`) on the C, cJSON included, and on the workflows,
+  at every push to GitHub `main` and weekly. It sees the Linux build only,
+  not the DOS and Windows code. Findings are under the repository's
+  Security tab and need a login to read: nobody has looked at them yet.
+  The vendored cJSON is 1.7.19, the latest release as of 2026-10-12.
 - Tests: `testing/looptest.py` (17 checks since the OpenAI one; the tables
   below say 16, which it was then; Unix) and `testing/dostest.py`
   (9 checks, DOS in QEMU). Jenkins runs the DOS one on every build of

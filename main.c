@@ -2302,7 +2302,7 @@ static int interactive(const struct conn *c)
         return 1;
     }
     interactive_mode = 1;
-    if (tui_init(status_line) != 0) {
+    if (tui_init(status_line, "gork " VERSION) != 0) {
         fprintf(stderr, "gork: cannot start the TUI (is this a terminal?)\n");
         cJSON_Delete(messages);
         return 1;

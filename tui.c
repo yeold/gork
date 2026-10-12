@@ -176,7 +176,35 @@ static void on_signal(int sig)
     raise(sig);
 }
 
-int tui_init(const char *status)
+/* The window title.  PDCurses knows how on DOS and Windows.  Elsewhere it
+   is the xterm sequence, sent only to the terminals known to take it: a
+   console or a real VT100 would print it.  xterm's title stack (22 and 23)
+   puts the old title back in tui_end(). */
+static FILE *term;
+static int   titled;
+
+static void set_title(const char *title)
+{
+#ifdef PDCURSES
+    PDC_set_title(title);
+#else
+    static const char *const takes[] = { "xterm", "rxvt", "screen", "tmux",
+                                         "alacritty", "foot", "konsole",
+                                         "putty" };
+    const char *t = getenv("TERM");
+    size_t      i;
+
+    for (i = 0; t != NULL && i < sizeof takes / sizeof *takes; i++)
+        if (strncmp(t, takes[i], strlen(takes[i])) == 0) {
+            fprintf(term, "\033[22;0t\033]0;%s\007", title);
+            fflush(term);
+            titled = 1;
+            return;
+        }
+#endif
+}
+
+int tui_init(const char *status, const char *title)
 {
 #ifdef GORK_NO_FORK
     char *name = cap_name;
@@ -246,6 +274,8 @@ int tui_init(const char *status)
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
+    term = tty;
+    set_title(title);
     active = 1;
     draw();
     return 0;
@@ -259,6 +289,10 @@ void tui_end(void)
     clear();
     refresh();
 #endif
+    if (titled) {
+        fputs("\033[23;0t", term);
+        fflush(term);
+    }
     endwin();
     fflush(stdout);
     fflush(stderr);
