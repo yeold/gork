@@ -87,6 +87,44 @@ build on each system), README "Tested systems" (results table).
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
 
+## Windows 3.x, 2.x and 1.x (2026-10-12)
+
+The Windows `gork.exe` is a 32-bit console program and cannot run on
+Windows 3.x. What runs there is the DOS `gork.exe`, in a DOS box.
+
+- **Windows 3.1 and 3.0, 386 enhanced mode, on MS-DOS 6.22**: all nine
+  `dostest.py` checks pass, the TUI among them, with the DOS zip of Jenkins
+  build 36 of `main`. `dostest.py` has a mode for it: `GORK_DOS_FLOPPY`
+  (MS-DOS 6.22 disk 1) and `GORK_DOS_WINDOWS` (an installed `WINDOWS`
+  directory); it starts `WIN /3` with a batch file that prints READY and
+  runs COMMAND.COM, and insists on that READY, since a Windows that fails
+  to start leaves a plain DOS prompt where everything passes as well (it
+  did, once). Two things it had to learn: `WINPKT 0x60` after the packet
+  driver (without it gork dies at its first disk access during a request),
+  and to see a typed command on the screen before pressing Enter (the DOS
+  box echoes late). `SWITCHES=/W` is for Windows 3.0, which otherwise
+  wants WINA20.386 in the boot drive's root.
+- **Windows 2.11/286**: not working; see TODO-OSES.md for what was found.
+  Windows 1.04, 2.03 and 2.11/386 are downloaded and untried.
+
+How, for a repeat, in `/vm/w31` and `/vm/wold` of the same volume (all
+other VMs there were deleted on the user's request before this):
+
+- Media from WinWorldPC: Windows 3.1 retail (six 1.44 MB disks), Windows
+  3.0 (seven 720K disks), MS-DOS 6.22 upgrade (three disks); also Windows
+  2.11/286, 2.11/386, 2.03, 1.04 and MS-DOS 4.01.
+- Windows 3.1 installs unattended: `prepw31.py` merges the disks into
+  `C:\WS` and runs `setup /h:c:\ws\auto.shh` from a DOS 6.22 floppy
+  (`sys c:` first). Setup ends in under a minute with one question, about
+  the startup files on A: (Tab, Enter; Enter). `runw31.sh`.
+- Windows 3.0 by hand (`prepwold.py w30`, `runwold.sh w30`, type `setup`):
+  Enter three times, Alt-P Alt-A Alt-D to skip the extras, Enter, Down
+  Down Enter (modify the startup files later), Alt-D, Alt-D (return to
+  DOS). Its HIMEM.SYS stays compressed that way: Windows 3.1's was put in
+  the tree.
+- The `WINDOWS` directory is copied off the disk with `mcopy -s` (the
+  partition starts at sector 2048) and handed to `dostest.py`.
+
 ## Windows NT 3.51, the first Windows 95, and Me in QEMU (2026-10-12)
 
 Results, all with the released v0.10-beta `gork.exe`, unchanged:

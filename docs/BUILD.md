@@ -330,6 +330,16 @@ make -f Makefile.dj CC=i586-pc-msdosdjgpp-gcc PDCURSES=/path/to/pdcurses \
 `python3 testing/dostest.py` then checks that zip on FreeDOS in QEMU, or
 on another DOS whose boot floppy image `GORK_DOS_FLOPPY` names.
 
+**Under Windows 3.0 and 3.1** the DOS `gork.exe` runs in a DOS box, in 386
+enhanced mode: Windows provides the protected mode there, so `CWSDPMI.EXE`
+is not used. It passes the same nine checks (`GORK_DOS_WINDOWS` names an
+installed `WINDOWS` directory for `dostest.py`). Load the packet driver
+before Windows, and `WINPKT` after it (`WINPKT 0x60`, from the same Crynwr
+collection): without `WINPKT`, gork dies at its first disk access during a
+request and the network is dead afterwards. The Windows `gork.exe` is of
+no use here: Windows 3.x cannot run 32-bit console programs, with or
+without Win32s.
+
 To run it, the machine needs:
 
 - `CWSDPMI.EXE` beside `gork.exe` (it is in the zip);

@@ -10,7 +10,12 @@ NE2000 packet driver are downloaded once into $GORK_VM/dostest (default
 floppy image of it in $GORK_DOS_FLOPPY (it needs COMMAND.COM in its root
 and a little free space); MS-DOS 6.22 install disk 1 works.  Set
 $GORK_DOS_ONE_DISK to skip the check that needs a D: drive (DR-DOS 7.03's
-install floppy does not see the second disk).  The guest reaches the fake API on the host as
+install floppy does not see the second disk).  To run the checks in a DOS
+box under Windows 3.0 or 3.1 in 386 enhanced mode, name an installed
+WINDOWS directory, copied off a disk where Setup ran (VGA, no network,
+with its HIMEM.SYS), in $GORK_DOS_WINDOWS, together with $GORK_DOS_FLOPPY:
+Windows is started from the floppy's DOS with a full-screen COMMAND.COM,
+and the packet driver is the real-mode one loaded before it, with WINPKT.  The guest reaches the fake API on the host as
 10.0.2.2; the keyboard is typed and the screen read through the QEMU
 monitor.
 """
@@ -135,10 +140,28 @@ def build_images(zip_path):
     rest = ("set WATTCP.CFG=C:\\\nset TEMP=C:\\TMP\nset GORK_ALLOW_RUN=1\n"
             "C:\nNE2000 0x60 5 0x300\ncd W\necho READY\n")
     other = os.environ.get("GORK_DOS_FLOPPY")
+    windows = os.environ.get("GORK_DOS_WINDOWS")
+    himem = ""
+    if windows:                         # the checks run in a DOS box
+        shutil.copytree(windows, os.path.join(c, "WINDOWS"))
+        with open(os.path.join(c, "WBOX.BAT"), "w", newline="\r\n") as f:
+            f.write("@echo off\nC:\ncd \\W\necho READY\nA:\\COMMAND.COM\n")
+        # WINPKT hands each received packet to the virtual machine that
+        # asked for it; without it gork dies at its first disk access.
+        sh("unzip", "-qoj", os.path.join(VM, "crynwr.zip"),
+           "DRIVERS/CRYNWR/WINPKT.COM", "-d", c)
+        rest = rest.replace("0x300\n", "0x300\nWINPKT 0x60\n")
+        rest = rest.replace("echo READY\n", "C:\\WINDOWS\\WIN.COM /3 C:\\WBOX.BAT\n")
+        assert os.path.exists(os.path.join(windows, "HIMEM.SYS")), \
+            "no HIMEM.SYS in the WINDOWS directory; enhanced mode needs it"
+        # /W: Windows 3.0 otherwise refuses enhanced mode on MS-DOS 5 and
+        # later unless WINA20.386 is in the boot drive's root, where the
+        # floppy has no room.  With DOS not in the HMA it is not needed.
+        himem = "DEVICE=C:\\WINDOWS\\HIMEM.SYS\nSWITCHES=/W\n"
     if other:                           # e.g. MS-DOS 6.22 install disk 1
         shutil.copy(other, boot)
         startup = {
-            "config.sys": "BUFFERS=20\nFILES=40\n"
+            "config.sys": himem + "BUFFERS=20\nFILES=40\n"
                           "SHELL=A:\\COMMAND.COM A:\\ /E:1024 /P\n",
             "autoexec.bat": "@echo off\nprompt $p$g\nset PATH=A:\\;C:\\\n"
                             + rest,
@@ -276,7 +299,11 @@ class Guest:
         """Type a DOS command and wait for the prompt to come back."""
         self.type("cls\n")
         self.wait(r"^C:\\W>$", 10)
-        self.type(line + "\n")
+        # A DOS box under Windows echoes late: see the command on the
+        # screen before Enter, or the bare prompt passes for its end.
+        self.type(line)
+        self.wait(re.escape(line[-8:]) + "$", 20)
+        self.type("\n")
         time.sleep(1)
         return self.wait(r"C:\\W>$", secs)
 
@@ -445,7 +472,12 @@ def main():
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     g = Guest(boot, disk, disk2)
     try:
-        g.wait(r"C:\\W>$", 90)
+        if os.environ.get("GORK_DOS_WINDOWS"):
+            # READY comes from the batch file Windows runs: without it the
+            # prompt would be plain DOS, after a Windows that did not start.
+            g.wait(r"READY[\s\S]*C:\\W>$", 240)
+        else:
+            g.wait(r"C:\\W>$", 90)
         check_batch(g)
         check_confinement(g)
         check_bad_allow(g)
