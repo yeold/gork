@@ -18,7 +18,9 @@
  *              The first time in a directory it asks whether to trust it,
  *              and remembers the answer in ~/.gork/trusted.
  *
- * Settings come from ~/.gork.conf (or $GORK_CONFIG), `key = value`:
+ * Settings come from ~/.gork.conf (or $GORK_CONFIG), `key = value`.  On
+ * DOS and Windows the file is gork.cnf and the directory _gork, beside
+ * gork.exe or, on Windows, in %USERPROFILE% (see DOT_GORK and port.h):
  *   relay    host:port to connect to                  (required)
  *   host     Host: header value     env AGENT_HOST    (api.anthropic.com)
  *   path     request path           env AGENT_PATH    (/v1/messages)
@@ -234,6 +236,15 @@ static int valid_effort(const char *e)
 }
 static char  cfg_path[PATH_MAX];        /* the file cfg_file came from */
 
+/* Where messages tell the user to put a setting.  DOS and Windows have no
+   `~`, and the file is not where a Unix user would look, so there
+   load_config() puts the full path here. */
+#ifdef GORK_NO_FORK
+static char  conf_hint[PATH_MAX] = CONF_NAME;
+#else
+static const char conf_hint[] = "~/" CONF_NAME;
+#endif
+
 static const char *cfg(int k)
 {
     const char *v = cfg_env(k) != NULL ? getenv(cfg_env(k)) : NULL;
@@ -296,6 +307,9 @@ static int load_config(void)
     } else if (home != NULL && strlen(home) < sizeof path - 16) {
         sprintf(path, "%s/" CONF_NAME, home);
         named = NULL;
+#ifdef GORK_NO_FORK
+        strcpy(conf_hint, path);
+#endif
     } else {
         return 0;
     }
@@ -2266,7 +2280,7 @@ static int run_task(const struct conn *c, cJSON *messages)
     }
 
     fprintf(stderr, "gork: gave up after %d turns; raise max_turns in "
-                    "~/.gork.conf to allow more\n", c->max_turns);
+                    "%s to allow more\n", c->max_turns, conf_hint);
     return 0;
 }
 
@@ -2420,7 +2434,7 @@ int main(int argc, char **argv)
     relay = cfg(CFG_RELAY);
     if (relay == NULL) {
         fprintf(stderr, "gork: no relay set; put `relay = host:port` in "
-                        "~/.gork.conf (or the file GORK_CONFIG names)\n");
+                        "%s (or the file GORK_CONFIG names)\n", conf_hint);
         return 2;
     }
     colon = strrchr(relay, ':');
@@ -2469,8 +2483,8 @@ int main(int argc, char **argv)
        to find out. */
     if (*c.key == '\0' && (strstr(c.api_host, "anthropic.com") != NULL ||
                            strstr(c.api_host, "openai.com") != NULL)) {
-        fprintf(stderr, "gork: no API key; set api_key in ~/.gork.conf "
-                        "or %s\n", cfg_env(CFG_KEY));
+        fprintf(stderr, "gork: no API key; set api_key in %s "
+                        "or %s\n", conf_hint, cfg_env(CFG_KEY));
         return 2;
     }
 

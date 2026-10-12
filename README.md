@@ -142,7 +142,8 @@ accept  = 0.0.0.0:8443
 connect = api.anthropic.com:443
 ```
 
-Then point gork at it in `~/.gork.conf`:
+Then point gork at it in `~/.gork.conf` (`gork.cnf` on DOS and Windows:
+see [Config](#config)):
 
 ```ini
 relay   = relayhost:8443
@@ -269,6 +270,21 @@ gork reads `~/.gork.conf`, or the file `GORK_CONFIG` names. One
 or a malformed line stops gork with the line number rather than being
 skipped.
 
+The DOS and Windows builds use other names, as a name with a leading dot
+is awkward or impossible to create there. Wherever this README says
+`~/.gork.conf`, `~/.gork` or `.gork`, read:
+
+| | Unix | DOS | Windows |
+|---|---|---|---|
+| Config file | `~/.gork.conf` | `gork.cnf` beside `gork.exe` | `%USERPROFILE%\gork.cnf` (Windows 9x: beside `gork.exe`) |
+| gork's directory (`trusted`, `skills`) | `~/.gork` | `_gork` beside `gork.exe` | `%USERPROFILE%\_gork` (Windows 9x: beside `gork.exe`) |
+| Project skills, in the working directory | `.gork/skills` | `_gork\skills` | `_gork\skills` |
+
+If `HOME` is set, DOS and Windows look there instead (it is, for one, in
+Git Bash). gork's own messages name the full path of the file it means.
+Neither build checks who can read the config file, and neither has MCP
+servers, so there is no `mcp.json`.
+
 | Key | Env override | Default | Meaning |
 |---|---|---|---|
 | `relay` | -- | *(required)* | `host:port` gork connects to: the relay, or a local server |
@@ -317,7 +333,8 @@ Steps the model should follow...
 ```
 
 gork loads skills from `.gork/skills/<name>/` in the working directory and
-from `~/.gork/skills/<name>/`; a project skill wins over a user skill of the
+from `~/.gork/skills/<name>/` (`_gork` on DOS and Windows: see
+[Config](#config)); a project skill wins over a user skill of the
 same name. Only each skill's name and description go into the system prompt
 (after `GORK.md`); the model calls the `skill` tool to load the full
 instructions when a task matches. A skill without a description is skipped

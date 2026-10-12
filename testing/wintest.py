@@ -164,6 +164,10 @@ def check_run_command():
 
 def check_home():
     """With no HOME, gork.cnf is read from %USERPROFILE%."""
+    with tempfile.TemporaryDirectory() as tmp:
+        proc = run_gork("hi", tmp)
+    assert proc.returncode == 2 and "gork.cnf (or" in proc.stderr \
+        and "~" not in proc.stderr, "the message should name the file: " + proc.stderr
     if WINE:                    # Wine sets USERPROFILE itself
         print("skipped: config from %USERPROFILE% (not under Wine)")
         return
