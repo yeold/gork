@@ -14,15 +14,17 @@ build on each system), README "Tested systems" (results table).
   (`configure.ac`, `gork.spec`, `debian/changelog`, fallback `VERSION` in
   `main.c`). Everything before v1.0 is published as a pre-release.
 - Branches: `dev`, `master` (Forgejo) and `main` (GitHub) have the same
-  tree at v0.7-beta. Work happens on `dev`.
+  tree, three changes past v0.7-beta. Work happens on `dev`; `master` gets
+  the same commits cherry-picked, and `main` one commit with the same tree
+  (`git commit-tree 'dev^{tree}' -p github/main`).
 - In v0.7-beta since v0.6: a `PATH_MAX` fallback (GNU/Hurd), a larger
   status-line buffer, `configure` falling back to `libncursesw`, DOS
   refusing an `allow` directory that does not exist, test changes
   (`looptest.py` polls for a killed child; `dostest.py` runs on other DOS
   versions and has nine checks), and the results of the overnight run
   below.
-- After v0.7-beta, on `dev` only: `protocol = openai` (chat completions:
-  llama.cpp, Ollama, OpenAI and the like). The conversation stays in
+- After v0.7-beta: `protocol = openai` (chat completions: llama.cpp,
+  Ollama, OpenAI and the like), marked untested in the README. The conversation stays in
   Messages API form; `to_openai()` and `from_openai()` in `main.c`
   translate the request and the reply inside `post()`. Checked against the
   fake server in `looptest.py` only: no real server has been tried, and
@@ -34,11 +36,10 @@ build on each system), README "Tested systems" (results table).
 
 ## What to do next
 
-1. macOS and Cygwin are done (below). GitHub `main` has that; Forgejo
-   does not: `dev` has to be pushed, and `master` brought up to it.
-   `protocol = openai` is committed on `dev` and pushed nowhere: try it
-   against a real server (Ollama or llama.cpp), run `dostest.py` on a
-   fresh DOS build, then push.
+1. `protocol = openai` is untested: try it against a real server (Ollama
+   or llama.cpp) and run `dostest.py` on a fresh DOS build, then take
+   "untested" out of the README and `main.c`. macOS and Cygwin are done
+   (below).
 2. HP-UX: find a compiler for PA-RISC 1.1, or try 11i v2/v3 on QEMU's
    C3700. AIX 7.2 on `qemu-system-ppc64` was not started: the media is
    several GB and an install under emulation takes hours.

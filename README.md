@@ -14,7 +14,8 @@ see [docs/BUILD.md](docs/BUILD.md#dos).
 It talks to any server that speaks the Messages API format: Anthropic's own
 API, or a local model behind LM Studio or a similar compatible server (see
 [Local models](#local-models)). With `protocol = openai` it speaks the
-OpenAI chat completions format instead. It speaks plaintext HTTP/1.0 only;
+OpenAI chat completions format instead; that is untested against a real
+server. It speaks plaintext HTTP/1.0 only;
 reaching an HTTPS endpoint is the relay's job, not gork's.
 
 ## Contents
@@ -235,7 +236,9 @@ The same applies to any other server exposing an Anthropic-compatible
 
 For a server that only speaks the **OpenAI** chat completions format
 (llama.cpp, Ollama, vLLM, OpenAI itself and the many services shaped like
-it), add `protocol = openai`:
+it), add `protocol = openai`. **This is untested:** it has only been run
+against the fake server in `testing/looptest.py`, never against a real
+one, and not on DOS.
 
 ```ini
 relay    = localhost:11434
@@ -258,9 +261,6 @@ same: tools, skills, MCP servers and compacting. What differs:
 - A hosted service is HTTPS, so it needs a relay that forwards to it, as
   for Anthropic.
 
-So far this is checked against a fake server only (`testing/looptest.py`),
-not against a real one.
-
 ### Config
 
 gork reads `~/.gork.conf`, or the file `GORK_CONFIG` names. One
@@ -272,7 +272,7 @@ skipped.
 |---|---|---|---|
 | `relay` | -- | *(required)* | `host:port` gork connects to: the relay, or a local server |
 | `api_key` | `ANTHROPIC_API_KEY` (`OPENAI_API_KEY` with `protocol = openai`) | *(required for anthropic.com and openai.com)* | Sent as the `x-api-key` header, or as `Authorization: Bearer` with `protocol = openai` |
-| `protocol` | `AGENT_PROTOCOL` | `anthropic` | Wire format: `anthropic` (Messages API) or `openai` (chat completions); see [Local models](#local-models) |
+| `protocol` | `AGENT_PROTOCOL` | `anthropic` | Wire format: `anthropic` (Messages API) or `openai` (chat completions, untested); see [Local models](#local-models) |
 | `model` | `AGENT_MODEL` | `claude-opus-5` | Model id |
 | `host` | `AGENT_HOST` | `api.anthropic.com` | `Host:` header value |
 | `path` | `AGENT_PATH` | `/v1/messages`, or `/v1/chat/completions` with `protocol = openai` | Request path |

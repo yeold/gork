@@ -193,7 +193,8 @@ static const struct {
     { "protocol", "AGENT_PROTOCOL",   "anthropic"         }
 };
 
-/* `protocol = openai`: speak chat completions instead of the Messages API. */
+/* `protocol = openai`: speak chat completions instead of the Messages API.
+   Untested against a real server. */
 static int openai;
 
 /* The environment variable that overrides setting k.  An Anthropic key in
