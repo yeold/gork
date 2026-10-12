@@ -1,3 +1,22 @@
+gork (0.9~beta) unstable; urgency=medium
+
+  * New: a native Windows build, gork-<version>-win32.zip.  One 32-bit
+    gork.exe for Windows 9x and NT, built with MinGW, PDCurses and Winsock
+    1.1.  Experimental.  It works on Windows 98 Second Edition (on a
+    Pentium, batch mode and TUI) and passes its checks on Windows Server
+    2025 and under Wine; Windows 95, NT 4, 2000 and XP are untested.
+  * On Windows the config is gork.cnf and the directory _gork, as on DOS;
+    there are no MCP servers, run_command cannot be timed out or
+    interrupted, and text files are written with CR LF line ends.
+    docs/BUILD.md has the details.
+  * New: macOS packages on the GitHub release, built by GitHub Actions:
+    gork-<version>-macos.pkg and .tar.gz, one binary for Apple silicon
+    and Intel, macOS 11 or later.  Not signed.
+  * DOS: a path like c:/file is now resolved in the root directory of the
+    drive, not in its current directory.
+
+ -- Yeold <isac.selea@gmail.com>  Mon, 12 Oct 2026 11:30:08 +0200
+
 gork (0.8~beta) unstable; urgency=medium
 
   * New setting protocol = openai: gork can speak the OpenAI chat

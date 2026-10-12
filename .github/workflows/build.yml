@@ -1,12 +1,14 @@
 # Build gork and run testing/looptest.py on the two systems that nothing
 # local can run: macOS and Cygwin; and run the Windows gork.exe, which
-# Jenkins only tries under Wine, on a real Windows.  Everything else is built by Jenkins
+# Jenkins only tries under Wine, on a real Windows.  On a tag it also adds
+# the macOS packages to the release that Jenkins makes.  Everything else is built by Jenkins
 # (Jenkinsfile) or by hand in QEMU (docs/PROGRESS.md).
 name: build
 
 on:
   push:
     branches: [main, 'ci/**']     # ci/*: to try something without touching main
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -16,6 +18,8 @@ permissions:
 jobs:
   macos:
     runs-on: macos-latest
+    permissions:
+      contents: write             # the release step uploads assets
     defaults:
       run:
         shell: bash               # named, so that it runs with pipefail
@@ -31,6 +35,42 @@ jobs:
         run: |
           test -f test.log || exit 0
           printf '::error title=looptest::%s\n' "$(tail -c 3000 test.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+      # The packages: one binary for Apple silicon and Intel, as an
+      # installer (/usr/local/bin/gork) and as a tarball.  Not signed.
+      - name: package
+        run: |
+          ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
+          make distclean
+          ./configure --disable-dependency-tracking \
+              CFLAGS="-O2 -arch arm64 -arch x86_64 -mmacosx-version-min=11.0"
+          make
+          test "$(lipo -archs gork)" = "x86_64 arm64"
+          python3 testing/looptest.py ./gork
+          mkdir -p out root/usr/local/bin "gork-$ver-macos"
+          cp gork root/usr/local/bin/
+          pkgbuild --root root --install-location / --ownership recommended \
+              --identifier org.yeold.gork --version "${ver%%~*}" \
+              "out/gork-$ver-macos.pkg"
+          cp gork README.md docs/BUILD.md "gork-$ver-macos/"
+          tar czf "out/gork-$ver-macos.tar.gz" "gork-$ver-macos"
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gork-macos
+          path: out/
+      # Jenkins makes the release from the same tag, with the other
+      # packages; wait for it rather than race it.
+      - name: release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          for i in $(seq 1 120); do
+              gh release view "$TAG" >/dev/null 2>&1 && break
+              sleep 30
+          done
+          gh release upload "$TAG" out/* --clobber
 
   cygwin:
     runs-on: windows-latest

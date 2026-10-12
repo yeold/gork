@@ -9,13 +9,14 @@ build on each system), README "Tested systems" (results table).
 
 ## Current state (2026-10-12)
 
-- Released: v0.8-beta (`protocol = openai`, macOS and Cygwin). Naming
+- Released: v0.9-beta (the native Windows build; v0.8-beta had
+  `protocol = openai`, macOS and Cygwin). Naming
   since v0.7-beta: tag
   `vX.Y-beta`, version `X.Y~beta` in the four version files
   (`configure.ac`, `gork.spec`, `debian/changelog`, fallback `VERSION` in
   `main.c`). Everything before v1.0 is published as a pre-release.
 - Branches: `dev`, `master` (Forgejo) and `main` (GitHub) have the same
-  tree at v0.8-beta. Work happens on `dev`; `master` gets
+  tree at v0.9-beta. Work happens on `dev`; `master` gets
   the same commits cherry-picked, and `main` one commit with the same tree
   (`git commit-tree 'dev^{tree}' -p github/main`).
 - In v0.7-beta since v0.6: a `PATH_MAX` fallback (GNU/Hurd), a larger
@@ -31,7 +32,12 @@ build on each system), README "Tested systems" (results table).
   fake server in `looptest.py` only: no real server has been tried. The
   DOS build has it and passes its nine checks (Jenkins, v0.8-beta), none
   of which uses the protocol.
-- After v0.8-beta: a native Windows `gork.exe` (MinGW, PDCurses, Winsock
+- New in v0.9-beta: macOS packages (`.pkg` and `.tar.gz`, universal,
+  unsigned). The `macos` job of the GitHub workflow builds them; on a tag
+  it waits for the release Jenkins creates and uploads them there. So they
+  are on the GitHub release only, not on Forgejo, and a release needs both
+  the Jenkins tag build and the Actions run to finish.
+- New in v0.9-beta: a native Windows `gork.exe` (MinGW, PDCurses, Winsock
   1.1; `port.h`, `win.c`, `Makefile.w32`, `winbuild.sh`), one binary meant
   for 9x and NT. Jenkins builds `gork-<version>-win32.zip` and runs
   `testing/wintest.py` under Wine; GitHub Actions cross-builds it and runs

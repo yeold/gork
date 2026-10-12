@@ -283,6 +283,13 @@ Install the `ncurses6_devel` package, then build as under
 
 ## macOS
 
+Releases carry `gork-<version>-macos.pkg`, which installs
+`/usr/local/bin/gork`, and `gork-<version>-macos.tar.gz` with the same
+binary: for Apple silicon and Intel, macOS 11 or later, built by GitHub
+Actions. Neither is signed, so macOS asks before it opens one that a
+browser downloaded: right-click the package and choose Open, or run
+`xattr -d com.apple.quarantine` on the file.
+
 **macOS 26** (Apple clang 21, arm64). The compiler comes with the Xcode
 command line tools and curses with the system. A git checkout also needs
 `brew install autoconf automake`. Then build as under
