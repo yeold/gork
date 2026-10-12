@@ -27,8 +27,8 @@ needs (a C89 compiler, curses, BSD sockets, `fork`/`pipe`/`select`,
 | OS | Route | What to expect |
 |---|---|---|
 | OS/2 (Warp 3 and 4, ArcaOS) | EMX with gcc, or kLIBC; runs in QEMU | EMX has `fork`, pipes, sockets and a curses port, so it is nearer to Unix than DOS is. |
-| Windows NT (3.51, 4.0, 2000, XP, current) | Cygwin, or native with MinGW, PDCurses and Winsock | Cygwin is done on a current Windows: it passes the whole suite on GitHub Actions. Native needs the same work as DOS: no `fork`, `CreateProcess` for commands, Winsock start-up, backslash paths. |
-| Windows 9x | The DJGPP `gork.exe` in a DOS box, or MinGW with PDCurses and Winsock | The DOS binary gets long file names there for free, but Watt-32 needs a packet driver shim. A Winsock build is the cleaner route. |
+| Windows NT (3.51, 4.0, 2000, XP, current) | Cygwin, or native with MinGW, PDCurses and Winsock | Cygwin is done on a current Windows: it passes the whole suite on GitHub Actions. A native `gork.exe` (MinGW, PDCurses, Winsock 1.1) exists and passes `wintest.py` under Wine and on a current Windows; it has not been run on NT 3.51 to XP. Native needed the same work as DOS: no `fork`, `CreateProcess` for commands, Winsock start-up, backslash paths. |
+| Windows 9x | The DJGPP `gork.exe` in a DOS box, or MinGW with PDCurses and Winsock | The MinGW `gork.exe` is built to run there too (it imports nothing newer than Windows 95), but has never been started on 9x: install Windows 98 in QEMU and run it. Unknowns: `msvcrt.dll` on the first Windows 95, `COMMAND.COM` with redirected output in `run_command`, the console under PDCurses. |
 | BeOS R5 | x86 in QEMU | Haiku already works. BeOS has gcc 2.95 and sockets that are not file descriptors, so `select` on them is the risk. |
 | AmigaOS, MorphOS, AROS | ixemul or libnix with gcc; UAE, or AROS in QEMU | `fork` is emulated badly or not at all; sockets come from `bsdsocket.library`. |
 | OpenVMS | SIMH VAX, Alpha emulators, x86 in a VM | DEC C has sockets and curses, but only `vfork`, and paths are not Unix paths. |

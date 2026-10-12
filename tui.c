@@ -20,9 +20,12 @@
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
+#ifndef _WIN32
 #include <termios.h>
+#endif
 #include <curses.h>
 
+#include "port.h"
 #include "relay.h"              /* struct buf */
 #include "tui.h"
 
@@ -40,8 +43,8 @@ struct line {
 
 static int          active;
 static int          cap_rfd = -1, saved_out = -1, saved_err = -1;
-#ifdef __MSDOS__
-static char         cap_name[L_tmpnam];     /* DOS cannot unlink it open */
+#ifdef GORK_NO_FORK
+static char         cap_name[TMPNAM_MAX];   /* DOS cannot unlink it open */
 static long         cap_off;                /* how far it has been read */
 #endif
 static struct buf   partial;            /* captured output not yet a line */
@@ -175,7 +178,7 @@ static void on_signal(int sig)
 
 int tui_init(const char *status)
 {
-#ifdef __MSDOS__
+#ifdef GORK_NO_FORK
     char *name = cap_name;
 #else
     char  name[] = "/tmp/gorkXXXXXX";
@@ -190,7 +193,7 @@ int tui_init(const char *status)
     setvbuf(stdout, NULL, _IOLBF, 0);   /* before anything is printed */
 
     if (buf_init(&partial) != 0) return -1;
-#ifdef __MSDOS__
+#ifdef GORK_NO_FORK
     fd = tmpnam(name) != NULL ? open(name, O_WRONLY | O_CREAT | O_EXCL, 0600)
                               : -1;
 #else
@@ -198,7 +201,7 @@ int tui_init(const char *status)
 #endif
     if (fd < 0) return -1;
     cap_rfd = open(name, O_RDONLY);     /* own offset, independent of writers */
-#ifndef __MSDOS__
+#ifndef GORK_NO_FORK
     unlink(name);
 #endif
 
@@ -246,7 +249,7 @@ void tui_end(void)
 {
     if (!active) return;
     active = 0;
-#ifdef __MSDOS__            /* no alternate screen to switch back from */
+#ifdef GORK_NO_FORK         /* no alternate screen to switch back from */
     clear();
     refresh();
 #endif
@@ -255,7 +258,7 @@ void tui_end(void)
     fflush(stderr);
     dup2(saved_out, 1);
     dup2(saved_err, 2);
-#ifdef __MSDOS__
+#ifdef GORK_NO_FORK
     close(cap_rfd);
     remove(cap_name);
 #endif
@@ -271,7 +274,7 @@ void tui_drain(void)
     if (!active) return;
     fflush(stdout);
 
-#ifdef __MSDOS__
+#ifdef GORK_NO_FORK
     /* A second handle does not see what the first appends until the file
        is committed and opened again. */
     fsync(1);
@@ -281,7 +284,7 @@ void tui_drain(void)
 #endif
     while ((n = read(cap_rfd, chunk, sizeof chunk)) > 0)
         if (buf_add(&partial, chunk, (size_t) n) != 0) break;
-#ifdef __MSDOS__
+#ifdef GORK_NO_FORK
     cap_off = lseek(cap_rfd, 0L, SEEK_CUR);
 #endif
 
@@ -407,20 +410,26 @@ int tui_confirm(const char *title, const char *detail)
    reader that tells them apart would have to steal the prompts' input. */
 void tui_suspend(void)
 {
+#ifndef _WIN32
     struct termios t;
+#endif
 
     if (!active) return;
 #ifdef __MSDOS__
     hint_text = "running command ... (DOS cannot interrupt it)";
+#elif defined(_WIN32)
+    hint_text = "running command ... (it cannot be interrupted)";
 #else
     hint_text = "running command ... (answer any prompt it shows; Esc aborts)";
 #endif
     draw();
     reset_shell_mode();
+#ifndef _WIN32
     if (tcgetattr(0, &t) == 0) {
         t.c_cc[VINTR] = 27;
         tcsetattr(0, TCSANOW, &t);
     }
+#endif
 }
 
 void tui_resume(void)

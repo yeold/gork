@@ -1,6 +1,8 @@
-// Source tarball, then RPMs and debs built from it and a DOS zip
+// Source tarball, then RPMs and debs built from it, a DOS zip
 // cross-built from the tree (dosbuild.sh) and tested on FreeDOS in QEMU
-// (testing/dostest.py), each in a throwaway
+// (testing/dostest.py), and a Windows zip cross-built with MinGW
+// (winbuild.sh) and tested under Wine (testing/wintest.py), each in a
+// throwaway
 // container via plain `docker run` (no Docker Pipeline plugin needed).
 // Containers build as root in their own /tmp and only copy finished
 // packages into out/, chowned back to the Jenkins user.
@@ -46,6 +48,24 @@ pipeline {
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates >/dev/null
                                 cd /src && GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos.zip'
+                        '''
+                    }
+                }
+                stage('windows') {
+                    steps {
+                        sh '''
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends gcc-mingw-w64-i686 curl ca-certificates zip make >/dev/null
+                                cp -r /src /tmp/src && cd /tmp/src
+                                sh winbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
+                            # and run it: one gork.exe for 9x and NT, here under Wine
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                                dpkg --add-architecture i386
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends wine wine32:i386 unzip python3 >/dev/null
+                                mkdir /tmp/w && cd /tmp/w && unzip -q /out/gork-*-win32.zip
+                                cd /src && python3 testing/wintest.py wine /tmp/w/gork.exe'
                         '''
                     }
                 }

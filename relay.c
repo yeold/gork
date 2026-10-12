@@ -7,25 +7,42 @@
 #include <sys/types.h>          /* first: 4.4BSD <netinet/in.h> needs it */
 #include <ctype.h>
 #include <errno.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <winsock.h>            /* 1.1: all that Windows 95 has */
+#else
+#include <netdb.h>
+#include <netinet/in.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+#endif
 
+#include "port.h"
 #include "relay.h"
 
-#ifdef __MSDOS__
-/* A SIGALRM that lands inside Watt-32 aborts the program, so on DOS the
-   timeout is a deadline that read_to_eof polls.  Only the read is covered;
-   Watt-32 times out its own connect. */
+#ifdef GORK_NO_FORK
+/* A SIGALRM that lands inside Watt-32 aborts the program, and Windows has
+   none, so there the timeout is a deadline that read_to_eof polls.  Only
+   the read is covered; the connect times out by itself. */
 #include <time.h>
 static time_t deadline;
 #define alarm(s) (deadline = (s) ? time(NULL) + (s) : 0)
+#endif
+
+#ifdef _WIN32
+/* Sockets are not file descriptors, and their errors are not in errno. */
+#define close(fd)       closesocket(fd)
+#define write(fd, p, n) send(fd, p, (int)(n), 0)
+#define read(fd, p, n)  recv(fd, p, (int)(n), 0)
+static void sock_perror(const char *what) {
+  fprintf(stderr, "gork: %s: Winsock error %d\n", what, WSAGetLastError());
+}
+#else
+#define sock_perror perror
 #endif
 
 #define BUF_INITIAL 8192
@@ -79,6 +96,9 @@ void buf_free(struct buf *b) {
 /* timeout: unblock a stuck syscall with EINTR, no SA_RESTART         */
 /* ------------------------------------------------------------------ */
 
+#ifdef _WIN32
+#define install_alarm() 0
+#else
 static void on_alarm(int sig) { (void)sig; }
 
 static int install_alarm(void) {
@@ -94,6 +114,7 @@ static int install_alarm(void) {
   }
   return 0;
 }
+#endif
 
 /* ------------------------------------------------------------------ */
 /* connect / read / write                                             */
@@ -103,6 +124,16 @@ static int tcp_connect(const char *host, int port) {
   struct hostent *he;
   struct sockaddr_in addr;
   int fd;
+#ifdef _WIN32
+  static int started;
+  WSADATA wsa;
+
+  if (!started && WSAStartup(MAKEWORD(1, 1), &wsa) != 0) {
+    fprintf(stderr, "gork: cannot start Winsock\n");
+    return -1;
+  }
+  started = 1;
+#endif
 
   he = gethostbyname(host);
   if (he == NULL || he->h_addr_list[0] == NULL) {
@@ -116,7 +147,7 @@ static int tcp_connect(const char *host, int port) {
 
   fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {
-    perror("socket");
+    sock_perror("socket");
     return -1;
   }
 
@@ -126,7 +157,7 @@ static int tcp_connect(const char *host, int port) {
   memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
 
   if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
-    perror("connect");
+    sock_perror("connect");
     close(fd);
     return -1;
   }
@@ -143,7 +174,7 @@ static int write_all(int fd, const char *p, size_t n) {
         fprintf(stderr, "gork: timeout while sending\n");
         return -1;
       }
-      perror("write");
+      sock_perror("write");
       return -1;
     }
     if (w == 0) {
@@ -164,7 +195,7 @@ static int read_to_eof(int fd, struct buf *b) {
 
   for (;;) {
     /* Wake every 200 ms so the user can abort a slow reply. */
-#ifndef __MSDOS__
+#ifndef GORK_NO_FORK
     if (relay_abort != NULL)
 #endif
     {
@@ -174,7 +205,7 @@ static int read_to_eof(int fd, struct buf *b) {
       tv.tv_usec = 200000;
       r = select(fd + 1, &rd, NULL, NULL, &tv);
       if (r == 0) {
-#ifdef __MSDOS__
+#ifdef GORK_NO_FORK
         if (deadline != 0 && time(NULL) >= deadline) {
           fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
                   (unsigned long)b->len);
@@ -190,7 +221,7 @@ static int read_to_eof(int fd, struct buf *b) {
           fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
                   (unsigned long)b->len);
         else
-          perror("select");
+          sock_perror("select");
         return -1;
       }
     }
@@ -209,7 +240,11 @@ static int read_to_eof(int fd, struct buf *b) {
               (unsigned long)b->len);
       return -1;
     }
+#ifdef _WIN32
+    sock_perror("read from socket");
+#else
     fprintf(stderr, "gork: read from socket: %s\n", strerror(errno));
+#endif
     return -1;
   }
 }

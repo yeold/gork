@@ -1,5 +1,6 @@
 # Build gork and run testing/looptest.py on the two systems that nothing
-# local can run: macOS and Cygwin.  Everything else is built by Jenkins
+# local can run: macOS and Cygwin; and run the Windows gork.exe, which
+# Jenkins only tries under Wine, on a real Windows.  Everything else is built by Jenkins
 # (Jenkinsfile) or by hand in QEMU (docs/PROGRESS.md).
 name: build
 
@@ -58,3 +59,34 @@ jobs:
         run: |
           test -f test.log || exit 0
           printf '::error title=looptest::%s\n' "$(tail -c 3000 test.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+
+  # The native gork.exe (MinGW, see winbuild.sh): cross-built on Linux as
+  # Jenkins does it, then run on Windows.
+  windows-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get -qq update && sudo apt-get -qq install -y gcc-mingw-w64-i686 zip
+      - run: sh winbuild.sh out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gork-win32
+          path: gork.exe
+
+  windows:
+    needs: windows-build
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: gork-win32
+      - run: ./gork.exe --version
+      - run: python testing/wintest.py gork.exe 2>&1 | tee test.log
+      - if: failure()
+        run: |
+          test -f test.log || exit 0
+          printf '::error title=wintest::%s\n' "$(tail -c 3000 test.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"

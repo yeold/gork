@@ -1,7 +1,8 @@
 bin_PROGRAMS = gork
-gork_SOURCES = main.c relay.c relay.h tui.c tui.h mcp.c mcp.h \
+gork_SOURCES = main.c relay.c relay.h tui.c tui.h mcp.c mcp.h port.h \
                 cJSON/cJSON.c cJSON/cJSON.h
-EXTRA_DIST = README.md docs/BUILD.md Makefile.dj dosbuild.sh gork.spec debian/changelog debian/control \
+EXTRA_DIST = README.md docs/BUILD.md Makefile.dj dosbuild.sh win.c \
+             Makefile.w32 winbuild.sh gork.spec debian/changelog debian/control \
              debian/rules debian/source/format
 
 iconsdir = $(datadir)/icons/hicolor/256x256/apps

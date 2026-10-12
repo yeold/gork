@@ -8,7 +8,7 @@ dependencies beyond libc, curses and vendored cJSON. It targets gcc 2.4.5+,
 libc 4.5 or glibc 2.0+, and Linux 1.0+, and also builds on FreeBSD 2.0+,
 OpenBSD 2.0+, NetBSD 1.0+, Solaris 2.5.1+ and illumos (configure adds
 `-lsocket -lnsl` and uses the system curses) and Haiku (`-lnetwork`, with
-the `ncurses6_devel` package). There is an experimental DOS build as well;
+the `ncurses6_devel` package). There are experimental DOS and Windows builds as well;
 see [docs/BUILD.md](docs/BUILD.md#dos).
 
 It talks to any server that speaks the Messages API format: Anthropic's own
@@ -110,7 +110,7 @@ of `testing/looptest.py`.
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | Haiku | R1/beta6 | | |
 | macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
-| Windows | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | Native (MinGW): not ported |
+| Windows | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | Native `gork.exe` (experimental; MinGW, PDCurses, Winsock 1.1): under Wine 10 | Native on Windows 9x and NT 4: built for them, never run there |
 | DOS (experimental) | MS-DOS 6.22 (1994), with DJGPP, PDCurses and Watt-32, 386 or better | DR-DOS 7.03, FreeDOS 1.3 | 16-bit real mode: requests do not fit in 640 K |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
@@ -276,7 +276,7 @@ skipped.
 | `model` | `AGENT_MODEL` | `claude-opus-5` | Model id |
 | `host` | `AGENT_HOST` | `api.anthropic.com` | `Host:` header value |
 | `path` | `AGENT_PATH` | `/v1/messages`, or `/v1/chat/completions` with `protocol = openai` | Request path |
-| `allow` | -- | *(none)* | Extra directories the file tools may read and write, `:`-separated (`;` on DOS; up to 8) |
+| `allow` | -- | *(none)* | Extra directories the file tools may read and write, `:`-separated (`;` on DOS and Windows; up to 8) |
 | `max_turns` | `AGENT_MAX_TURNS` | `24` | Tool round-trips per task before gork gives up |
 | `retries` | `AGENT_RETRIES` | `2` | Extra attempts for a request that hits a network error, 429 or 5xx (0..10) |
 | `context_window` | `AGENT_CONTEXT_WINDOW` | `200000` | Tokens the model can take; set it to the loaded context length for a local model |
@@ -414,6 +414,8 @@ interrupt it too.
 | [relay.c](relay.c), [relay.h](relay.h) | HTTP POST through the relay; growable buffer |
 | [tui.c](tui.c), [tui.h](tui.h) | Interactive chat pane, input line, approvals |
 | [mcp.c](mcp.c), [mcp.h](mcp.h) | MCP client: stdio servers, JSON-RPC, tool calls |
+| [port.h](port.h), [win.c](win.c) | What differs without `fork` (DOS, Windows); the Windows replacements for POSIX calls |
+| [Makefile.dj](Makefile.dj), [dosbuild.sh](dosbuild.sh), [Makefile.w32](Makefile.w32), [winbuild.sh](winbuild.sh) | The DOS (DJGPP) and Windows (MinGW) cross builds |
 | [configure.ac](configure.ac), [Makefile.am](Makefile.am) | Build: curses detection, compiler flags, sources |
 | [cJSON/](cJSON/) | Vendored JSON parser |
 | [docs/BUILD.md](docs/BUILD.md) | Build instructions per operating system |
@@ -487,7 +489,8 @@ gcc 2.7.2.1) disk image for QEMU, and `testing/oldvm.sh run` boots it with
 the current tree as a tarball on `/dev/hdb`; `./build.sh` inside builds it.
 The header of the script has the details.
 
-`testing/dostest.py` does the same for DOS: it boots FreeDOS in QEMU, runs
+`testing/wintest.py` checks the Windows `gork.exe` in batch mode, under
+Wine or on Windows. `testing/dostest.py` does the same for DOS: it boots FreeDOS in QEMU, runs
 the `gork.exe` that `sh dosbuild.sh` built, and checks a round trip, path
 confinement, an `allow` directory on a second drive, `edit_file`,
 `run_command`, long output, the timeout and the TUI. Jenkins runs it on

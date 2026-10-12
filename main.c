@@ -53,7 +53,9 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifndef _WIN32
 #include <sys/wait.h>
+#endif
 #include <sys/time.h>
 #include <dirent.h>
 #include <signal.h>
@@ -61,6 +63,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "port.h"
 #include "relay.h"
 #include "tui.h"
 #include "mcp.h"
@@ -84,6 +87,12 @@
 #ifdef __MSDOS__
 #define DOT_GORK  "_gork"
 #define CONF_NAME "gork.cnf"
+#else
+#define DOT_GORK  ".gork"
+#define CONF_NAME ".gork.conf"
+#endif
+
+#ifdef GORK_NO_FORK
 #define ALLOW_SEP ";"           /* ':' belongs to the drive letter */
 /* No fork, so no MCP servers: mcp.c is left out of the build. */
 #define mcp_start(path)          ((void) (path))
@@ -101,8 +110,13 @@
 #define ALLOW_SEP ":"
 #define RB "rb"
 #define WB "wb"
-#define DOT_GORK  ".gork"
-#define CONF_NAME ".gork.conf"
+#endif
+
+/* Windows file names do not tell upper case from lower. */
+#ifdef _WIN32
+#define PATHNCMP strnicmp
+#else
+#define PATHNCMP strncmp
 #endif
 
 #define DEFAULT_MODEL "claude-opus-5"
@@ -323,8 +337,8 @@ static int load_config(void)
     }
 
     /* The key is a secret: refuse a file others can read, as ssh does.
-       DOS has no file owners; every file reads as 0644 there. */
-#ifndef __MSDOS__
+       DOS and Windows have no such modes; every file reads as 0644. */
+#ifndef GORK_NO_FORK
     if (cfg_file[CFG_KEY] != NULL && fstat(fileno(f), &st) == 0 &&
         (st.st_mode & 077) != 0) {
         fprintf(stderr, "gork: %s holds api_key but others can read it; "
@@ -359,8 +373,8 @@ static int under(const char *p, const char *root)
 {
     size_t n = strlen(root);
 
-    return n > 0 && strncmp(p, root, n) == 0 &&
-           (n == 1 || p[n] == '/' || p[n] == '\0');
+    return n > 0 && PATHNCMP(p, root, n) == 0 &&
+           (root[n - 1] == '/' || p[n] == '/' || p[n] == '\0');
 }
 
 /* Resolve the config's `allow` list (`:`-separated) into allow_roots.  A
@@ -419,6 +433,14 @@ static const char *confine(const char *path, char *out, int writing)
     size_t      n;
     struct stat st;
     int         i;
+#ifdef _WIN32           /* the model may write either slash */
+    char        norm[PATH_MAX];
+
+    if (strlen(path) >= sizeof norm) return "path too long";
+    for (i = 0; (norm[i] = path[i] == '\\' ? '/' : path[i]) != '\0'; i++)
+        ;
+    path = norm;
+#endif
 
     if (realpath(path, out) == NULL) {
         if (errno != ENOENT) return strerror(errno);
@@ -429,6 +451,9 @@ static const char *confine(const char *path, char *out, int writing)
             base = path;
         } else {
             n = (base == path) ? 1 : (size_t) (base - path);   /* "/x" -> "/" */
+#ifdef GORK_NO_FORK
+            if (n == 2 && path[1] == ':') n = 3;        /* "c:/x" -> "c:/" */
+#endif
             if (n >= sizeof dir) return "path too long";
             memcpy(dir, path, n);
             dir[n] = '\0';
@@ -438,7 +463,7 @@ static const char *confine(const char *path, char *out, int writing)
             return "not a file name";
         if (realpath(dir, out) == NULL) return strerror(errno);
         if (strlen(out) + 1 + strlen(base) >= PATH_MAX) return "path too long";
-        strcat(out, "/");
+        if (out[strlen(out) - 1] != '/') strcat(out, "/");
         strcat(out, base);
 
         /* realpath said ENOENT, yet something is here: a dangling symlink,
@@ -500,7 +525,13 @@ static const char *save_file(const char *real, const char *data, size_t n)
         goto fail;
     }
     if (stat(real, &st) == 0) chmod(tmp, st.st_mode & 07777);
+#ifdef _WIN32
+    /* rename() does not replace a file here.  ponytail: not atomic; if the
+       second rename fails the old file is gone. */
+    if (rename(tmp, real) != 0 && (remove(real) != 0 || rename(tmp, real) != 0)) {
+#else
     if (rename(tmp, real) != 0) {
+#endif
         e = errno;
         goto fail;
     }
@@ -861,15 +892,16 @@ static int aborted;
  * (ssh, ftp, sudo) still work, and the interrupt key -- Esc in the TUI, see
  * tui_suspend(), Ctrl-C in batch mode -- hits the command, not gork.
  */
-#ifdef __MSDOS__
+#ifdef GORK_NO_FORK
 /* DOS runs one program at a time, so there is no pipe to read while the
    command runs: its output goes to a temporary file, and there is no
-   timeout and no interrupt.  The command line is COMMAND.COM's. */
+   timeout and no interrupt.  The command line is COMMAND.COM's.  The
+   Windows build does the same, with cmd.exe on the NT line. */
 static char *tool_run_command(cJSON *input, int *is_err)
 {
     cJSON      *cmd;
     struct buf  b;
-    char        chunk[4096], msg[64], out[L_tmpnam];
+    char        chunk[4096], msg[64], out[TMPNAM_MAX];
     FILE       *f;
     size_t      n;
     int         status, trunc = 0, fd, o1, o2;
@@ -1291,6 +1323,9 @@ static const struct tool TOOLS[] = {
 #ifdef __MSDOS__
                       "\"description\":\"Command line for DOS "
                       "(COMMAND.COM).\"}},"
+#elif defined(_WIN32)
+                      "\"description\":\"Command line for Windows "
+                      "(cmd.exe; COMMAND.COM on Windows 9x).\"}},"
 #else
                       "\"description\":\"Command line for /bin/sh.\"}},"
 #endif
@@ -2363,6 +2398,13 @@ int main(int argc, char **argv)
             p[p[-1] == ':'] = '\0';    /* "c:" is that drive's cwd: keep the / */
             putenv(h);
         }
+    }
+#endif
+#ifdef _WIN32
+    if (getenv("HOME") == NULL) {
+        static char h[PATH_MAX + 8] = "HOME=";
+
+        if (win_home(h + 5, PATH_MAX) == 0) putenv(h);
     }
 #endif
     if (load_config() != 0) return 2;

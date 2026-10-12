@@ -31,6 +31,13 @@ build on each system), README "Tested systems" (results table).
   fake server in `looptest.py` only: no real server has been tried. The
   DOS build has it and passes its nine checks (Jenkins, v0.8-beta), none
   of which uses the protocol.
+- After v0.8-beta: a native Windows `gork.exe` (MinGW, PDCurses, Winsock
+  1.1; `port.h`, `win.c`, `Makefile.w32`, `winbuild.sh`), one binary meant
+  for 9x and NT. Jenkins builds `gork-<version>-win32.zip` and runs
+  `testing/wintest.py` under Wine; GitHub Actions cross-builds it and runs
+  the same checks on Windows. Never run on a real 9x or NT 4. `port.h`
+  defines `GORK_NO_FORK` for DOS and Windows, which now share the code
+  that used to be `#ifdef __MSDOS__` only.
 - Tests: `testing/looptest.py` (17 checks since the OpenAI one; the tables
   below say 16, which it was then; Unix) and `testing/dostest.py`
   (9 checks, DOS in QEMU). Jenkins runs the DOS one on every build of
@@ -38,18 +45,22 @@ build on each system), README "Tested systems" (results table).
 
 ## What to do next
 
-1. `protocol = openai` is untested: try it against a real server (Ollama
+1. Windows 9x: start the MinGW `gork.exe` on Windows 98 in QEMU (see
+   TODO-OSES.md for the unknowns). The Windows TUI has no automated check:
+   Wine draws it through a pseudo-terminal one character at a time, which
+   was only read by hand.
+2. `protocol = openai` is untested: try it against a real server (Ollama
    or llama.cpp), then take
    "untested" out of the README and `main.c`. macOS and Cygwin are done
    (below).
-2. HP-UX: find a compiler for PA-RISC 1.1, or try 11i v2/v3 on QEMU's
+3. HP-UX: find a compiler for PA-RISC 1.1, or try 11i v2/v3 on QEMU's
    C3700. AIX 7.2 on `qemu-system-ppc64` was not started: the media is
    several GB and an install under emulation takes hours.
-3. OpenBSD/sparc64: get the installed kernel to boot, to run the four
+4. OpenBSD/sparc64: get the installed kernel to boot, to run the four
    checks that need a pseudo-terminal.
-4. Open questions: the Minix console glitch (below) and the DOS `stat()`
+5. Open questions: the Minix console glitch (below) and the DOS `stat()`
    and Esc question (TODO-DOS.md).
-5. Not attempted, and why: NeXTSTEP, SunOS 4, UnixWare/OpenServer, QNX,
+6. Not attempted, and why: NeXTSTEP, SunOS 4, UnixWare/OpenServer, QNX,
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
 

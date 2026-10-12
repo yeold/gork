@@ -18,6 +18,7 @@ release named; the table of what was tested is in the
 - [macOS](#macos)
 - [Cygwin](#cygwin)
 - [DOS](#dos)
+- [Windows](#windows)
 - [No curses headers](#no-curses-headers)
 
 ## Everywhere
@@ -334,6 +335,53 @@ directory is `_gork`; `allow` directories are separated by `;`, as `:`
 belongs to the drive letter; text files keep their CR LF line ends while the
 model sees plain newlines; `run_command` takes `COMMAND.COM` syntax and
 cannot be timed out or interrupted; MCP servers are not available.
+
+## Windows
+
+Experimental. Besides the [Cygwin](#cygwin) build there is a native one:
+a 32-bit `gork.exe` built with MinGW (mingw-w64), with PDCurses for the
+screen and Winsock 1.1 for TCP/IP. It is one program for both lines of
+Windows, 9x and NT: it imports only functions that Windows 95 already has,
+from `kernel32`, `user32`, `advapi32`, `wsock32` and `msvcrt.dll`.
+
+It has been run under Wine 10 and on the Windows of GitHub's runners
+(`testing/wintest.py`: batch mode, the file tools, `run_command`, the
+timeout), and the TUI by hand under Wine. **It has never been run on
+Windows 9x or NT 4.** What to expect there: `msvcrt.dll` is part of
+Windows 98 and later but not of the first Windows 95, where Internet
+Explorer 4 or an application brings it; and Debian's MinGW libraries are
+compiled for the Pentium Pro, so a 486 or a first Pentium may not do.
+
+On Linux, `winbuild.sh` downloads the PDCurses source and leaves
+`gork-<version>-win32.zip` in `out/`. It needs the 32-bit mingw-w64 gcc
+(`gcc-mingw-w64-i686` on Debian):
+
+```sh
+sh winbuild.sh
+```
+
+With a MinGW you already have, on Windows or as a cross compiler, build
+`wincon/pdcurses.a` in the PDCurses 3.9 source and run:
+
+```sh
+make -f Makefile.w32 CC=i686-w64-mingw32-gcc PDCURSES=/path/to/PDCurses-3.9
+```
+
+`python3 testing/wintest.py wine gork.exe` then checks it under Wine, and
+`python testing\wintest.py gork.exe` on Windows.
+
+The config is `.gork.conf` and the directory `.gork`, as on Unix, in
+`%HOME%` if that is set, else in `%USERPROFILE%`, else (Windows 9x) beside
+`gork.exe`.
+
+Windows differences, mostly those of DOS: `allow` directories are separated
+by `;`; paths may be written with either slash and in either case; text
+files are written with CR LF line ends, also where they had plain newlines
+before, while the model sees plain newlines; `run_command` takes `cmd.exe`
+syntax (`COMMAND.COM` on Windows 9x) and cannot be timed out or
+interrupted; MCP servers are not available; the config file's permissions
+are not checked. Junctions and 8.3 short names are not resolved, so a
+junction inside the working directory leads the file tools out of it.
 
 ## No curses headers
 
