@@ -15,6 +15,8 @@ release named; the table of what was tested is in the
 - [Minix](#minix)
 - [GNU/Hurd](#gnuhurd)
 - [Haiku](#haiku)
+- [macOS](#macos)
+- [Cygwin](#cygwin)
 - [DOS](#dos)
 - [No curses headers](#no-curses-headers)
 
@@ -277,6 +279,22 @@ assumes 4096 there.
 Install the `ncurses6_devel` package, then build as under
 [Everywhere](#everywhere). `configure` finds sockets and the resolver in
 `libnetwork`. Confirmed on R1/beta6.
+
+## macOS
+
+**macOS 26** (Apple clang 21, arm64). The compiler comes with the Xcode
+command line tools and curses with the system. A git checkout also needs
+`brew install autoconf automake`. Then build as under
+[Everywhere](#everywhere).
+
+## Cygwin
+
+**Cygwin 3.6** (gcc 14, ncurses 6.5). Install `gcc-core`, `make` and
+`libncurses-devel` with Cygwin's setup program, plus `autoconf` and
+`automake` for a git checkout, and `python3` for the test suite. Then
+build as under [Everywhere](#everywhere), in a Cygwin shell. Check the
+source out with LF line ends (`git config core.autocrlf input`): with CRLF
+`autoreconf` fails.
 
 ## DOS
 

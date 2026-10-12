@@ -27,9 +27,8 @@ build on each system), README "Tested systems" (results table).
 
 ## What to do next
 
-1. macOS and Cygwin: `.github/workflows/build.yml` builds both and runs
-   `looptest.py`. Written but never run: it has to reach GitHub `main`
-   first. Then read the results and fix what breaks.
+1. macOS and Cygwin are done (below). Not on Forgejo: `dev` has to be
+   pushed, and `master` brought up to it.
 2. HP-UX: find a compiler for PA-RISC 1.1, or try 11i v2/v3 on QEMU's
    C3700. AIX 7.2 on `qemu-system-ppc64` was not started: the media is
    several GB and an install under emulation takes hours.
@@ -117,8 +116,15 @@ What exists, for a repeat (about 80 minutes):
 |---|---|---|
 | Linux with musl | done, passes | Alpine 3.24, gcc 15: `./configure && make`, no warnings, all 16 checks. Run in the `alpine:latest` container from the tarball. |
 | Minix 3.3.0 | done, works with one glitch | See below. |
-| macOS | workflow written, not run | `.github/workflows/build.yml`, job `macos` (`macos-latest`); nothing local can run it. Runs once the file is on GitHub `main`. |
-| Cygwin | workflow written, not run | Same file, job `cygwin` (`windows-latest` with `cygwin/cygwin-install-action`). |
+| macOS | done, passes | macOS 26.6.2 on arm64, Apple clang 21, the system's ncurses: all 16 checks. `.github/workflows/build.yml`, job `macos`. One test compared a path under `/var` with the resolved `/private/var`; it now resolves it first. The TUI was not looked at by hand. |
+| Cygwin | done, passes | Cygwin 3.6.11 on Windows Server 2025, gcc 14.4, ncurses 6.5: all 16 checks, no source change. Same file, job `cygwin`. Needs LF line ends in the checkout. |
+
+The workflow runs on pushes to GitHub `main` and to `ci/*` branches. To
+try a tree without touching `main`: `git push github <commit>:refs/heads/ci/try`.
+The job logs need a GitHub login, so a failing test's output is also
+written as an annotation, which the public API shows:
+`https://api.github.com/repos/yeold/gork/commits/<sha>/check-runs`, then
+each run's `url` + `/annotations`.
 
 Next after these, per TODO-OSES.md: AIX and HP-UX in QEMU. Another session
 added UEFI and U-Boot rows to TODO-OSES.md (not tried, just recorded).

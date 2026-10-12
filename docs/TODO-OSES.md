@@ -18,7 +18,7 @@ needs (a C89 compiler, curses, BSD sockets, `fork`/`pipe`/`select`,
 | UnixWare, SCO OpenServer | x86 in QEMU | SVR4 and SVR3 curses; old SCO needs `-lsocket`, which `configure` already looks for. |
 | NeXTSTEP / OPENSTEP | x86 in QEMU, or the Previous emulator for 68k | 4.3BSD base with BSD curses only, so ncurses must be added as on NetBSD 1.0. |
 | SunOS 4, Ultrix, A/UX | QEMU `sparc` (SunOS 4.1.4), SIMH (VAX Ultrix), Shoebill (A/UX) | Pre-ANSI bundled compilers, so gcc. SunOS 4's libc lacks `strerror` and `memmove`. |
-| macOS, Mac OS X | GitHub Actions for current releases; `qemu-system-ppc` for 10.4 and 10.5 | Should behave like FreeBSD. |
+| Mac OS X (old) | `qemu-system-ppc` for 10.4 and 10.5 | Current macOS is done: it passes the whole suite on GitHub Actions. Should behave like FreeBSD. |
 | QNX (4, 6) | x86 in QEMU | QNX 6 is POSIX with ncurses; QNX 4 uses Watcom C. |
 | Linux with dietlibc | A cross toolchain | musl and uClibc are done and pass the whole suite. dietlibc has no curses port in common use; batch mode only, if at all. |
 
@@ -27,7 +27,7 @@ needs (a C89 compiler, curses, BSD sockets, `fork`/`pipe`/`select`,
 | OS | Route | What to expect |
 |---|---|---|
 | OS/2 (Warp 3 and 4, ArcaOS) | EMX with gcc, or kLIBC; runs in QEMU | EMX has `fork`, pipes, sockets and a curses port, so it is nearer to Unix than DOS is. |
-| Windows NT (3.51, 4.0, 2000, XP, current) | Cygwin, or native with MinGW, PDCurses and Winsock | Cygwin should mostly just work. Native needs the same work as DOS: no `fork`, `CreateProcess` for commands, Winsock start-up, backslash paths. |
+| Windows NT (3.51, 4.0, 2000, XP, current) | Cygwin, or native with MinGW, PDCurses and Winsock | Cygwin is done on a current Windows: it passes the whole suite on GitHub Actions. Native needs the same work as DOS: no `fork`, `CreateProcess` for commands, Winsock start-up, backslash paths. |
 | Windows 9x | The DJGPP `gork.exe` in a DOS box, or MinGW with PDCurses and Winsock | The DOS binary gets long file names there for free, but Watt-32 needs a packet driver shim. A Winsock build is the cleaner route. |
 | BeOS R5 | x86 in QEMU | Haiku already works. BeOS has gcc 2.95 and sockets that are not file descriptors, so `select` on them is the risk. |
 | AmigaOS, MorphOS, AROS | ixemul or libnix with gcc; UAE, or AROS in QEMU | `fork` is emulated badly or not at all; sockets come from `bsdsocket.library`. |
@@ -66,9 +66,7 @@ reachable from C. These have them and are not listed above.
 
 ## Suggested order
 
-1. macOS and Cygwin: cheap, and likely to pass unchanged, but both need
-   a GitHub Actions runner or a real machine. (Minix 3 and musl, once in
-   this step, are done.)
+1. Done: macOS and Cygwin (GitHub Actions), Minix 3 and musl.
 2. AIX and HP-UX in QEMU: System V variety beyond Solaris, and both emulate.
 3. OS/2 with EMX, then native Windows (NT and 9x): the Windows work overlaps
    the DOS port, which is done (see [TODO-DOS.md](TODO-DOS.md)): its

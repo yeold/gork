@@ -90,9 +90,9 @@ systems too old to run `configure`, and what to do without curses headers.
 One row per family: the oldest release gork is verified on, what else was
 tried, and where it stops. "Works" means it builds and runs; nearly all were
 checked with a tool-use round trip in batch mode and in the TUI, and
-openSUSE, Alpine, Debian 2.2, FreeBSD 15.1, OpenBSD 7.9, OmniOS and
-GNU/Hurd, DragonFly, MidnightBSD and NetBSD 11.0 pass all of
-`testing/looptest.py`.
+openSUSE, Alpine, Debian 2.2, FreeBSD 15.1, OpenBSD 7.9, OmniOS,
+GNU/Hurd, DragonFly, MidnightBSD, NetBSD 11.0, macOS and Cygwin pass all
+of `testing/looptest.py`.
 
 | Family | Oldest that works | Also works | Does not work |
 |---|---|---|---|
@@ -107,6 +107,8 @@ GNU/Hurd, DragonFly, MidnightBSD and NetBSD 11.0 pass all of
 | Minix | 3.3.0 (2014, clang 3.4) | | |
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | Haiku | R1/beta6 | | |
+| macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
+| Windows | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | Native (MinGW): not ported |
 | DOS (experimental) | MS-DOS 6.22 (1994), with DJGPP, PDCurses and Watt-32, 386 or better | DR-DOS 7.03, FreeDOS 1.3 | 16-bit real mode: requests do not fit in 640 K |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
@@ -116,7 +118,8 @@ big-endian, gcc 4.2.1) builds and passes the twelve checks that need no
 pseudo-terminal; the TUI could not be run there.
 
 Everything but SuSE 8.1, Haiku, NetBSD 10.1 and openSUSE ran in QEMU or,
-for Debian 2.1 and 2.2, in Docker. The oldest Linux and BSD systems are
+for Debian 2.1 and 2.2, in Docker; macOS and Cygwin run on GitHub Actions
+(`.github/workflows/build.yml`), batch mode and the suite only. The oldest Linux and BSD systems are
 compiled by hand; see [docs/BUILD.md](docs/BUILD.md).
 
 ## Run

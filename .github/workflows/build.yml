@@ -5,7 +5,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'ci/**']     # ci/*: to try something without touching main
   pull_request:
   workflow_dispatch:
 
@@ -15,13 +15,21 @@ permissions:
 jobs:
   macos:
     runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash               # named, so that it runs with pipefail
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # curses comes with the system; only the autotools are missing.
       - run: brew install autoconf automake
       - run: autoreconf -i && ./configure && make
       - run: ./gork --version
-      - run: python3 testing/looptest.py ./gork
+      - run: python3 testing/looptest.py ./gork 2>&1 | tee test.log
+      # The log needs a login to read; an annotation does not.
+      - if: failure()
+        run: |
+          test -f test.log || exit 0
+          printf '::error title=looptest::%s\n' "$(tail -c 3000 test.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
 
   cygwin:
     runs-on: windows-latest
@@ -37,10 +45,16 @@ jobs:
       # which autoreconf and the shell do not take.
       - run: git config --global core.autocrlf input
         shell: bash
-      - uses: actions/checkout@v4
-      - uses: cygwin/cygwin-install-action@v5
+      - uses: actions/checkout@v5
+      - uses: cygwin/cygwin-install-action@v6
         with:
+          install-dir: C:\cygwin    # where the shell above looks for bash
           packages: gcc-core make autoconf automake libncurses-devel python3
       - run: autoreconf -i && ./configure && make
       - run: ./gork --version
-      - run: python3 testing/looptest.py ./gork
+      - run: python3 testing/looptest.py ./gork 2>&1 | tee test.log
+      # The log needs a login to read; an annotation does not.
+      - if: failure()
+        run: |
+          test -f test.log || exit 0
+          printf '::error title=looptest::%s\n' "$(tail -c 3000 test.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"

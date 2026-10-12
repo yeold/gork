@@ -548,6 +548,7 @@ def check_skills():
             f.write(front + body)
 
     with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
         home, work = os.path.join(tmp, "home"), os.path.join(tmp, "work")
         user, proj = (os.path.join(home, ".gork", "skills"),
                       os.path.join(work, ".gork", "skills"))
