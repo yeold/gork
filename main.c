@@ -1746,7 +1746,8 @@ static void update_status(const struct conn *c)
                 c->ctx_window / 1000, ctx_tokens * 100 / c->ctx_window);
     else
         strcpy(ctx, "ctx -");
-    sprintf(status_line, " gork | %.100s @ %.100s | effort %.32s | %s | %s",
+    sprintf(status_line, " gork %.16s | %.100s @ %.100s | effort %.32s | %s | %s",
+            VERSION,
             cfg(CFG_MODEL), c->api_host, *effort ? effort : "default", ctx,
             work_root);
 }

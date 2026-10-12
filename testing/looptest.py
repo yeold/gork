@@ -890,7 +890,8 @@ def check_tui_abort():
                 step = 3
             elif step == 3 and b"fine" in out:
                 step = 4
-            elif step == 4 and idle_after(out, b"42k/200k (21%)"):
+            # no ")": with the version in it the bar ends at column 80 here
+            elif step == 4 and idle_after(out, b"42k/200k (21%"):
                 os.write(fd, b"/quit\r")
                 step = 5
         release.set()
