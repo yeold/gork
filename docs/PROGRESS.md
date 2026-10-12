@@ -9,12 +9,13 @@ build on each system), README "Tested systems" (results table).
 
 ## Current state (2026-10-12)
 
-- Released: v0.7-beta, the first release with the beta naming: tag
+- Released: v0.8-beta (`protocol = openai`, macOS and Cygwin). Naming
+  since v0.7-beta: tag
   `vX.Y-beta`, version `X.Y~beta` in the four version files
   (`configure.ac`, `gork.spec`, `debian/changelog`, fallback `VERSION` in
   `main.c`). Everything before v1.0 is published as a pre-release.
 - Branches: `dev`, `master` (Forgejo) and `main` (GitHub) have the same
-  tree, three changes past v0.7-beta. Work happens on `dev`; `master` gets
+  tree at v0.8-beta. Work happens on `dev`; `master` gets
   the same commits cherry-picked, and `main` one commit with the same tree
   (`git commit-tree 'dev^{tree}' -p github/main`).
 - In v0.7-beta since v0.6: a `PATH_MAX` fallback (GNU/Hurd), a larger
@@ -23,7 +24,7 @@ build on each system), README "Tested systems" (results table).
   (`looptest.py` polls for a killed child; `dostest.py` runs on other DOS
   versions and has nine checks), and the results of the overnight run
   below.
-- After v0.7-beta: `protocol = openai` (chat completions: llama.cpp,
+- New in v0.8-beta: `protocol = openai` (chat completions: llama.cpp,
   Ollama, OpenAI and the like), marked untested in the README. The conversation stays in
   Messages API form; `to_openai()` and `from_openai()` in `main.c`
   translate the request and the reply inside `post()`. Checked against the

@@ -77,7 +77,7 @@
 /* configure passes VERSION; this is for builds by hand and Makefile.dj.
    Bumped with configure.ac at each release. */
 #ifndef VERSION
-#define VERSION "0.7~beta"
+#define VERSION "0.8~beta"
 #endif
 
 /* DOS (DJGPP) has 8.3 file names: no leading dot, one extension. */

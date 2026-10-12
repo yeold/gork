@@ -1,4 +1,4 @@
-AC_INIT([gork], [0.7~beta])
+AC_INIT([gork], [0.8~beta])
 AC_CONFIG_SRCDIR([main.c])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 AC_PROG_CC

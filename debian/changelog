@@ -1,3 +1,19 @@
+gork (0.8~beta) unstable; urgency=medium
+
+  * New setting protocol = openai: gork can speak the OpenAI chat
+    completions format (llama.cpp, Ollama, vLLM, OpenAI and services
+    shaped like it) as well as the Messages API.  The key is then sent as
+    Authorization: Bearer and comes from OPENAI_API_KEY, not
+    ANTHROPIC_API_KEY.  Untested: it has only been run against a fake
+    server, never a real one.
+  * Newly verified, both passing the test suite: macOS 26 on arm64 and
+    Cygwin 3.6 on Windows.  GitHub Actions builds and tests both on every
+    push.
+  * Test suite: a new check for the OpenAI protocol, and the skills check
+    no longer fails where the temporary directory is a symbolic link.
+
+ -- Yeold <isac.selea@gmail.com>  Mon, 12 Oct 2026 08:22:45 +0200
+
 gork (0.7~beta) unstable; urgency=medium
 
   * First release named as a beta: tag v0.7-beta, version 0.7~beta.
