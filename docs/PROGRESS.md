@@ -60,7 +60,9 @@ build on each system), README "Tested systems" (results table).
 
 ## What to do next
 
-1. Windows: 98 SE is done by hand (below). Left: Windows 95, NT 4, 2000
+1. Windows: 98 SE is done by hand (below), and the user reported
+   `gork.exe` working on Windows 11 (2026-10-12; which build and what was
+   tried is not recorded here). Left: Windows 95, NT 4, 2000
    and XP; an automated TUI check (Wine draws it through a pseudo-terminal
    one character at a time, which was only read by hand); and the Windows
    98 run itself is not scripted, so Jenkins does not repeat it.
