@@ -355,8 +355,8 @@ Tested on Windows 98 Second Edition (in QEMU, on an emulated Pentium and
 Pentium II): batch mode, every file tool, `run_command` through
 `COMMAND.COM`, and the TUI with its approvals, all by hand against a fake
 API. `testing/wintest.py` runs the batch-mode checks under Wine 10
-(Jenkins) and on the Windows of GitHub's runners, and it is reported
-working on Windows 11. Not tried: Windows 95,
+(Jenkins) and on the Windows of GitHub's runners, and the release zip of
+0.9~beta is reported working on Windows 11, TUI included. Not tried: Windows 95,
 NT 3.51 and 4, 2000, XP. Windows 95 needs `msvcrt.dll`, which the first
 release lacks (Internet Explorer 4 or an application brings it).
 
