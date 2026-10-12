@@ -1,0 +1,46 @@
+# Build gork and run testing/looptest.py on the two systems that nothing
+# local can run: macOS and Cygwin.  Everything else is built by Jenkins
+# (Jenkinsfile) or by hand in QEMU (docs/PROGRESS.md).
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      # curses comes with the system; only the autotools are missing.
+      - run: brew install autoconf automake
+      - run: autoreconf -i && ./configure && make
+      - run: ./gork --version
+      - run: python3 testing/looptest.py ./gork
+
+  cygwin:
+    runs-on: windows-latest
+    defaults:
+      run:
+        # A login shell, so /usr/bin is first in PATH; CHERE_INVOKING keeps
+        # it in the checkout instead of changing to the home directory.
+        shell: C:\cygwin\bin\bash.exe --login -eo pipefail -o igncr '{0}'
+    env:
+      CHERE_INVOKING: 1
+    steps:
+      # Git for Windows would check the files out with CRLF line ends,
+      # which autoreconf and the shell do not take.
+      - run: git config --global core.autocrlf input
+        shell: bash
+      - uses: actions/checkout@v4
+      - uses: cygwin/cygwin-install-action@v5
+        with:
+          packages: gcc-core make autoconf automake libncurses-devel python3
+      - run: autoreconf -i && ./configure && make
+      - run: ./gork --version
+      - run: python3 testing/looptest.py ./gork

@@ -27,8 +27,9 @@ build on each system), README "Tested systems" (results table).
 
 ## What to do next
 
-1. macOS and Cygwin: need a GitHub Actions workflow on GitHub `main`
-   (the user has not said yes to adding one).
+1. macOS and Cygwin: `.github/workflows/build.yml` builds both and runs
+   `looptest.py`. Written but never run: it has to reach GitHub `main`
+   first. Then read the results and fix what breaks.
 2. HP-UX: find a compiler for PA-RISC 1.1, or try 11i v2/v3 on QEMU's
    C3700. AIX 7.2 on `qemu-system-ppc64` was not started: the media is
    several GB and an install under emulation takes hours.
@@ -116,8 +117,8 @@ What exists, for a repeat (about 80 minutes):
 |---|---|---|
 | Linux with musl | done, passes | Alpine 3.24, gcc 15: `./configure && make`, no warnings, all 16 checks. Run in the `alpine:latest` container from the tarball. |
 | Minix 3.3.0 | done, works with one glitch | See below. |
-| macOS | not started | Needs a GitHub Actions workflow (`macos-latest`); nothing local can run it. That means adding a workflow file to GitHub `main`: ask first. |
-| Cygwin | not started | Needs a Windows machine or a GitHub Actions `windows-latest` runner with Cygwin. Same question. |
+| macOS | workflow written, not run | `.github/workflows/build.yml`, job `macos` (`macos-latest`); nothing local can run it. Runs once the file is on GitHub `main`. |
+| Cygwin | workflow written, not run | Same file, job `cygwin` (`windows-latest` with `cygwin/cygwin-install-action`). |
 
 Next after these, per TODO-OSES.md: AIX and HP-UX in QEMU. Another session
 added UEFI and U-Boot rows to TODO-OSES.md (not tried, just recorded).
