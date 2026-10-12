@@ -71,7 +71,7 @@ build on each system), README "Tested systems" (results table).
 1. Windows: 95 OSR2 and 98 SE are done by hand (below), and the user reported
    `gork.exe` from the v0.9-beta zip working on Windows 11, the TUI too
    (2026-10-12; whether `run_command` was used from it is not known).
-   Left: NT 4, 2000 and XP; an automated TUI check (Wine draws it through a pseudo-terminal
+   NT 4.0 is done too. Left: 2000 and XP, expected to work; an automated TUI check (Wine draws it through a pseudo-terminal
    one character at a time, which was only read by hand); and the Windows
    98 run itself is not scripted, so Jenkins does not repeat it.
 2. macOS and Cygwin are done (below).
@@ -85,6 +85,37 @@ build on each system), README "Tested systems" (results table).
 6. Not attempted, and why: NeXTSTEP, SunOS 4, UnixWare/OpenServer, QNX,
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
+
+## Windows NT 4.0 in QEMU (2026-10-12)
+
+Result: the released v0.10-beta `gork.exe` works on Windows NT
+Workstation 4.0 as shipped in 1996 (`ver`: "Windows NT Version 4.0", no
+service pack), with NT's own `msvcrt.dll`: `--version`, the batch round
+trip (ten tool calls, `run_command` through `cmd.exe`), the config found
+in `%USERPROFILE%` (`C:\WINNT\Profiles\Administrator\gork.cnf`), and
+the TUI with a reply, the approval prompts, commands run from it and the
+window title. Nothing had to be changed in gork.
+
+How, for a repeat (about 25 minutes, the easiest of the three). Same
+container and volume, in `/vm/nt4`; scripts `prepnt.py`, `runnt.sh`,
+`stopnt.sh`.
+
+- Media: archive.org item `WindowsNTWorkstation4_201708` (ISO SHA1
+  `7061f78c...`, volume `NTWKS40A`), with `Key.txt` beside it.
+- Setup runs from DOS: the Windows 98 startup floppy, `fdisk /mbr`,
+  `smartdrv`, `echo y| lock c:` (DOS 7 refuses WINNT.EXE's write of the
+  boot sector otherwise), then `winnt /b /s:d:\i386 /u:d:\unattend.txt`
+  with `I386` on the second FAT disk. `UNATTEND.TXT` is honoured in full:
+  after the DOS phase (ten minutes) start QEMU from the disk and it runs
+  to the logon screen by itself. Log on with `sendkey ctrl-alt-delete`,
+  Administrator, no password.
+- `-cpu pentium`, full speed (no `-icount`), `-vga cirrus`.
+- Network: with QEMU's `pcnet`, NT 4's bundled AMD driver stops Setup with
+  "The network failed to start (0x42a)". An ISA NE2000 at 0x300 is
+  detected and works, on **IRQ 3**: on IRQ 5 the driver reads the card's
+  address but DHCP gets nothing.
+- `floppy/TNT.BAT` is the batch run; it copies `gork.cnf` to
+  `%USERPROFILE%`. `c-installed.img` is the finished disk.
 
 ## Windows 95 OSR2 in QEMU (2026-10-12)
 

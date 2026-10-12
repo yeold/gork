@@ -279,7 +279,8 @@ assumes 4096 there.
 
 Install the `ncurses6_devel` package, then build as under
 [Everywhere](#everywhere). `configure` finds sockets and the resolver in
-`libnetwork`. Confirmed on R1/beta6.
+`libnetwork`. Confirmed on R1/beta6; older releases may work but are
+untested.
 
 ## macOS
 
@@ -351,18 +352,22 @@ screen and Winsock 1.1 for TCP/IP. It is one program for both lines of
 Windows, 9x and NT: it imports only functions that Windows 95 already has,
 from `kernel32`, `user32`, `advapi32`, `wsock32` and `msvcrt.dll`.
 
-Tested on Windows 95 OSR2 (4.00.1111) and Windows 98 Second Edition, in
-QEMU on an emulated Pentium: batch mode, every file tool, `run_command`
-through `COMMAND.COM`, and the TUI, all by hand against a fake API.
+Tested on Windows 95 OSR2 (4.00.1111), Windows 98 Second Edition and
+Windows NT 4.0 Workstation (as shipped, no service pack), in QEMU on an
+emulated Pentium: batch mode, every file tool, `run_command` through
+`COMMAND.COM` or `cmd.exe`, and the TUI, all by hand against a fake API.
 `testing/wintest.py` runs the batch-mode checks under Wine 10 (Jenkins)
 and on the Windows of GitHub's runners, and the release zip of 0.9~beta is
 reported working on Windows 11, TUI included. Not tried: the first
-Windows 95, NT 3.51 and 4, 2000, XP.
+Windows 95, NT 3.51, and Windows 2000 and XP, which should work as they lie
+between NT 4 and 11.
 
 **Windows 95 has no `msvcrt.dll`**, and gork.exe will not start without
 it ("A required .DLL file, MSVCRT.DLL, was not found"). Put a copy beside
 `gork.exe` or in `C:\WINDOWS\SYSTEM`; the one from Windows 98 works, and
-Internet Explorer 4 and many applications install one. Windows 95 also
+Internet Explorer 4 and many applications install one. gork does not
+include the file, in the repository or in the release zip: it is
+Microsoft's, and not ours to pass on. Windows 95 also
 installs no TCP/IP by itself: add the protocol in the Network control
 panel.
 
