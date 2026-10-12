@@ -34,9 +34,10 @@ build on each system), README "Tested systems" (results table).
   Ollama, OpenAI and the like). The conversation stays in
   Messages API form; `to_openai()` and `from_openai()` in `main.c`
   translate the request and the reply inside `post()`. The user confirmed
-  it working against a real server speaking that format (2026-10-12;
-  which server is not recorded here); here it only ever met the fake
-  server in `looptest.py`. The
+  it working with GLM-5.3-Flash, tool calls included (2026-10-12, from
+  the Windows build on Windows 11); here it only ever met the fake server
+  in `looptest.py`. Other servers (Ollama, llama.cpp, OpenAI) are
+  untried. The
   DOS build has it and passes its nine checks (Jenkins, v0.8-beta), none
   of which uses the protocol.
 - New in v0.9-beta: macOS packages (`.pkg` and `.tar.gz`, universal,

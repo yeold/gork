@@ -245,8 +245,8 @@ The same applies to any other server exposing an Anthropic-compatible
 
 For a server that only speaks the **OpenAI** chat completions format
 (llama.cpp, Ollama, vLLM, OpenAI itself and the many services shaped like
-it), add `protocol = openai`. It is confirmed working against a real
-server; it has not been tried from the DOS build.
+it), add `protocol = openai`. It is confirmed working, tool calls
+included, with GLM-5.3-Flash; it has not been tried from the DOS build.
 
 ```ini
 relay    = localhost:11434
