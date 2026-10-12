@@ -352,24 +352,27 @@ screen and Winsock 1.1 for TCP/IP. It is one program for both lines of
 Windows, 9x and NT: it imports only functions that Windows 95 already has,
 from `kernel32`, `user32`, `advapi32`, `wsock32` and `msvcrt.dll`.
 
-Tested on Windows 95 OSR2 (4.00.1111), Windows 98 Second Edition,
-Windows NT 4.0 Workstation (as shipped, no service pack), Windows 2000
-Professional (5.00.2195) and Windows XP Professional SP3, in QEMU, the
-first three on an emulated Pentium: batch mode, every file tool, `run_command` through
+Tested on Windows NT 3.51 Workstation, the first Windows 95 (4.00.950),
+Windows 95 OSR2 (4.00.1111), Windows 98 Second Edition, Windows NT 4.0
+Workstation (as shipped, no service pack), Windows 2000 Professional
+(5.00.2195) and Windows XP Professional SP3, in QEMU, the older ones on an
+emulated Pentium or 486: batch mode, every file tool, `run_command` through
 `COMMAND.COM` or `cmd.exe`, and the TUI, all by hand against a fake API.
 `testing/wintest.py` runs the batch-mode checks under Wine 10 (Jenkins)
 and on the Windows of GitHub's runners, and the release zip of 0.9~beta is
-reported working on Windows 11, TUI included. Not tried: the first
-Windows 95, NT 3.51, Me, Vista, 7, 8 and 10.
+reported working on Windows 11, TUI included. Not tried: Windows Me,
+Vista, 7, 8 and 10.
 
-**Windows 95 has no `msvcrt.dll`**, and gork.exe will not start without
-it ("A required .DLL file, MSVCRT.DLL, was not found"). Put a copy beside
-`gork.exe` or in `C:\WINDOWS\SYSTEM`; the one from Windows 98 works, and
+**Windows 95 and NT 3.51 have no `msvcrt.dll`**, and gork.exe will not
+start without it ("A required .DLL file, MSVCRT.DLL, was not found"). Put a copy beside
+`gork.exe` or in the system directory; the ones from Windows 98 and NT 4
+work, and
 Internet Explorer 4 and many applications install one. gork does not
 include the file, in the repository or in the release zip: it is
-Microsoft's, and not ours to pass on. Windows 95 also
-installs no TCP/IP by itself: add the protocol in the Network control
-panel.
+Microsoft's, and not ours to pass on. Neither
+installs TCP/IP unless asked: add the protocol in the Network control
+panel. NT 3.51 sets no `USERPROFILE`, so there `gork.cnf` goes beside
+`gork.exe`, as on Windows 9x.
 
 It is compiled for the 486, but two instructions of MinGW's start-up code,
 which Debian ships built for the Pentium Pro, remain; a Pentium did not

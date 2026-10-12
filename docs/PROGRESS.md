@@ -68,7 +68,8 @@ build on each system), README "Tested systems" (results table).
 
 ## What to do next
 
-1. Windows: 95 OSR2 and 98 SE are done by hand (below), and the user reported
+1. Windows: NT 3.51, both Windows 95s and 98 SE are done by hand
+   (below), and the user reported
    `gork.exe` from the v0.9-beta zip working on Windows 11, the TUI too
    (2026-10-12; whether `run_command` was used from it is not known).
    NT 4.0, 2000 and XP are done too. Left: an automated TUI check (Wine draws it through a pseudo-terminal
@@ -85,6 +86,54 @@ build on each system), README "Tested systems" (results table).
 6. Not attempted, and why: NeXTSTEP, SunOS 4, UnixWare/OpenServer, QNX,
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
+
+## Windows NT 3.51, the first Windows 95, and Me in QEMU (2026-10-12)
+
+Results, all with the released v0.10-beta `gork.exe`, unchanged:
+
+- **Windows NT 3.51 Workstation** (`ver`: "Windows NT Version 3.51"):
+  works, once `msvcrt.dll` is beside it (NT 3.51 has none; NT 4's copy was
+  used). `--version`, the batch round trip of ten tool calls, and the TUI
+  with approvals and commands. The file is marked for Windows 4.0 and NT
+  3.51 runs it all the same; a 3.10-marked build was made and not needed.
+  No `USERPROFILE` there, so `gork.cnf` is read from beside `gork.exe`.
+- **The first Windows 95** (`ver`: 4.00.950; boot files dated 1995-07-11):
+  works, with `msvcrt.dll` added, exactly as OSR2 did: batch round trip
+  and the TUI with approvals and commands.
+- **Windows Me**: not tested. Its Setup rejects the product key in the
+  archive.org item and both serials on WinWorldPC's page for this very
+  ISO ("Windows Me (101 - Retail Full)", the same file from both sites),
+  with the clock at 2026 and at 2001. Not pursued further.
+
+How, for a repeat, in `/vm/nt351`, `/vm/95a` and `/vm/me` of the same
+volume:
+
+- NT 3.51: archive.org item `ntwks351_iso` (SHA1 `4d3a8964...`), no
+  product key asked. `prepnt351.py`, `runnt351.sh`: as NT 4, from DOS
+  with `winnt /b /u`. **`CPU=486`**: on `-cpu pentium` text-mode setup
+  dies with STOP 0x50. 32 MB, `-vga std`, ISA NE2000 at 0x300 IRQ 3. The
+  graphical part asks: name, computer name, the card (Enter; then Left,
+  Enter for "use them anyway"), and reports that the network could not
+  start (choose No): only the Workstation service fails, the card's
+  driver is fine. Log on: Ctrl-Alt-Del, the user name is remembered, so
+  just Enter. TCP/IP is not installed: `control ncpa.cpl`, Alt-S (Add
+  Software), `t` for "TCP/IP Protocol and related components", Alt-E for
+  DHCP, the path `d:\i386`, OK, restart. Commands through File, Run
+  (Alt-F, R). `floppy351/T351.BAT`.
+- The first Windows 95: archive.org item `win95_202004` (`Win95.iso`),
+  its key in the item's description. `prep9x.py 95a WIN95 KEY`, then
+  `CPU=pentium MEM=64 VGA=std NIC=ne2k_isa,netdev=n0,iobase=0x200,irq=3
+  run9x.sh 95a`, with `ICOUNT=3` for every boot from the disk. As OSR2,
+  except: the product number goes into one box, dashes and "OEM"
+  included; Setup asks for a startup disk (Tab, Enter cancels); and the
+  network card's property sheet has two tabs, so one Ctrl-Tab reaches
+  Resources (Alt-S, four Tabs, Enter).
+- `prep9x.py DIR SRC KEY` and `run9x.sh DIR` are the general forms of
+  the 98 and 95 scripts.
+- WinWorldPC: a product page lists `/download/<id>` pages, each with
+  `/download/<id>/from/<mirror>` links that redirect to a `.7z` on
+  `dl.winworldpc.com` (the `dl-alt1` mirror did not answer). Serials are
+  on the product page.
 
 ## Windows 2000 and XP in QEMU (2026-10-12)
 
