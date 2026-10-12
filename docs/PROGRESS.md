@@ -9,14 +9,15 @@ build on each system), README "Tested systems" (results table).
 
 ## Current state (2026-10-12)
 
-- Released: v0.9-beta (the native Windows build; v0.8-beta had
-  `protocol = openai`, macOS and Cygwin). Naming
+- Released: v0.10-beta (version in the TUI's bar and window title;
+  v0.9-beta had the native Windows build and the macOS packages,
+  v0.8-beta `protocol = openai`, macOS and Cygwin). Naming
   since v0.7-beta: tag
   `vX.Y-beta`, version `X.Y~beta` in the four version files
   (`configure.ac`, `gork.spec`, `debian/changelog`, fallback `VERSION` in
   `main.c`). Everything before v1.0 is published as a pre-release.
 - Branches: `dev`, `master` (Forgejo) and `main` (GitHub) have the same
-  tree at v0.9-beta. Work happens on `dev`; `master` gets
+  tree at v0.10-beta. Work happens on `dev`; `master` gets
   the same commits cherry-picked, and `main` one commit with the same tree
   (`git commit-tree 'dev^{tree}' -p github/main`).
 - In v0.7-beta since v0.6: a `PATH_MAX` fallback (GNU/Hurd), a larger
@@ -45,7 +46,7 @@ build on each system), README "Tested systems" (results table).
   below); NT 4 to XP and Windows 95 are untried. `port.h`
   defines `GORK_NO_FORK` for DOS and Windows, which now share the code
   that used to be `#ifdef __MSDOS__` only.
-- After v0.9-beta: the TUI's top bar and the window title show the
+- New in v0.10-beta: the TUI's top bar and the window title show the
   version; messages on DOS and Windows name the real config path.
 - Vulnerability scan: `.github/workflows/codeql.yml` runs CodeQL
   (`security-extended`) on the C, cJSON included, and on the workflows,

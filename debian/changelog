@@ -1,3 +1,16 @@
+gork (0.10~beta) unstable; urgency=medium
+
+  * The TUI shows the version: in its top bar, after "gork", and in the
+    window title, where the terminal has one.
+  * The top bar now has the context size before the model, so that a
+    narrow terminal cuts off the working directory, not the context.
+  * DOS and Windows: messages that pointed at ~/.gork.conf now name the
+    file gork really reads there, with its full path.  The README has a
+    table of the file and directory names on Unix, DOS and Windows.
+  * Windows: gork.exe is confirmed working on Windows 11, TUI included.
+
+ -- Yeold <isac.selea@gmail.com>  Mon, 12 Oct 2026 12:27:55 +0200
+
 gork (0.9~beta) unstable; urgency=medium
 
   * New: a native Windows build, gork-<version>-win32.zip.  One 32-bit

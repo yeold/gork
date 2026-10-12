@@ -82,7 +82,7 @@
 /* configure passes VERSION; this is for builds by hand and Makefile.dj.
    Bumped with configure.ac at each release. */
 #ifndef VERSION
-#define VERSION "0.9~beta"
+#define VERSION "0.10~beta"
 #endif
 
 /* DOS (DJGPP) has 8.3 file names: no leading dot, one extension.  Windows
@@ -1746,9 +1746,10 @@ static void update_status(const struct conn *c)
                 c->ctx_window / 1000, ctx_tokens * 100 / c->ctx_window);
     else
         strcpy(ctx, "ctx -");
-    sprintf(status_line, " gork %.16s | %.100s @ %.100s | effort %.32s | %s | %s",
-            VERSION,
-            cfg(CFG_MODEL), c->api_host, *effort ? effort : "default", ctx,
+    /* What matters most first: a narrow terminal cuts the bar on the right. */
+    sprintf(status_line, " gork %.16s | %s | %.100s @ %.100s | effort %.32s | %s",
+            VERSION, ctx,
+            cfg(CFG_MODEL), c->api_host, *effort ? effort : "default",
             work_root);
 }
 
