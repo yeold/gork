@@ -9,8 +9,11 @@ release named; the table of what was tested is in the
 - [FreeBSD](#freebsd)
 - [NetBSD](#netbsd)
 - [OpenBSD](#openbsd)
+- [DragonFly BSD](#dragonfly-bsd)
 - [Solaris](#solaris)
 - [illumos](#illumos)
+- [Minix](#minix)
+- [GNU/Hurd](#gnuhurd)
 - [Haiku](#haiku)
 - [DOS](#dos)
 - [No curses headers](#no-curses-headers)
@@ -49,6 +52,14 @@ per-system sections give the exact flags; the general shape is:
 gcc -O -o gork main.c relay.c tui.c mcp.c cJSON/cJSON.c -lncurses -lm
 ```
 
+Cross-compiling works the usual autoconf way, given a cross compiler and
+the target's curses library and headers:
+
+```sh
+./configure --host=s390x-linux-gnu
+make
+```
+
 Useful `configure` arguments:
 
 | Argument | When |
@@ -64,7 +75,7 @@ That is harmless.
 
 **Current distributions.** Install a compiler, make and the ncurses headers
 (`libncurses-dev` on Debian and Ubuntu, `ncurses-devel` on Fedora and
-openSUSE), plus autoconf and automake for a git checkout. Then build as
+openSUSE, `build-base ncurses-dev` on Alpine, which uses musl), plus autoconf and automake for a git checkout. Then build as
 under [Everywhere](#everywhere).
 
 **SuSE 8.1** (gcc 3.2, glibc 2.2). Builds from a git checkout; its autoconf
@@ -111,7 +122,7 @@ make
 ```
 
 A git checkout additionally needs autoconf and automake; that route was
-not tried here.
+not tried here. MidnightBSD 4.0.8 builds the same way.
 
 **FreeBSD 2.0 and 2.0.5** (gcc 2.6). `/bin/sh` cannot run `configure`.
 `curses.h` is BSD curses and ncurses is in `ncurses.h`, so give the
@@ -127,7 +138,8 @@ gcc -O -Iinc -o gork main.c relay.c tui.c mcp.c cJSON/cJSON.c \
 
 ## NetBSD
 
-**NetBSD 10.1.** A fresh clone builds with the system curses and make:
+**NetBSD 10.1 and 11.0.** A fresh clone, or the tarball, builds with the
+system curses and make (11.0 also passes the whole test suite):
 
 ```sh
 autoreconf -i
@@ -169,6 +181,19 @@ is already ncurses:
 ```sh
 gcc -O -o gork main.c relay.c tui.c mcp.c cJSON/cJSON.c \
     -lcurses -ltermlib -lm
+```
+
+## DragonFly BSD
+
+**DragonFly 6.4.** The compiler is in the base system, but its ncurses is
+private to the base tools. Use the `ncurses` package, which needs two
+include directories:
+
+```sh
+pkg install ncurses
+./configure CPPFLAGS="-I/usr/local/include -I/usr/local/include/ncurses" \
+    LDFLAGS=-L/usr/local/lib
+make
 ```
 
 ## Solaris
@@ -226,6 +251,27 @@ pkg install developer/gcc-3 system/header developer/object-file \
 make
 ```
 
+## Minix
+
+**Minix 3.3.0.** The base system has make and curses but no compiler.
+Install `clang` and `binutils` from the 3.3.0 package set (`pkgin`, or
+`pkg_add -f` on the downloaded files; do it under `/usr`, the root file
+system is too small), then build from the tarball:
+
+```sh
+./configure CC=clang
+make
+```
+
+Batch mode and the TUI work. On the Minix console itself the TUI's status
+line scrolls off the top after the first reply; the cause is not found yet.
+
+## GNU/Hurd
+
+**Debian GNU/Hurd.** `apt-get install gcc make libncurses-dev`, then build
+as under [Everywhere](#everywhere). The Hurd has no `PATH_MAX`; gork
+assumes 4096 there.
+
 ## Haiku
 
 Install the `ncurses6_devel` package, then build as under
@@ -237,7 +283,7 @@ Install the `ncurses6_devel` package, then build as under
 Experimental; [TODO-DOS.md](TODO-DOS.md) has what works and what is left.
 32-bit protected mode only: a 386 or better, built with
 [DJGPP](https://www.delorie.com/djgpp/), with PDCurses for the screen and
-Watt-32 for TCP/IP. Tested on FreeDOS 1.3.
+Watt-32 for TCP/IP. Tested on FreeDOS 1.3, MS-DOS 6.22 and DR-DOS 7.03.
 
 On Linux, `dosbuild.sh` downloads a DJGPP cross compiler and both libraries
 and leaves `gork-<version>-dos.zip` in `out/`:
@@ -254,7 +300,8 @@ make -f Makefile.dj CC=i586-pc-msdosdjgpp-gcc PDCURSES=/path/to/pdcurses \
     WATT=/path/to/watt/net/watt
 ```
 
-`python3 testing/dostest.py` then checks that zip on FreeDOS in QEMU.
+`python3 testing/dostest.py` then checks that zip on FreeDOS in QEMU, or
+on another DOS whose boot floppy image `GORK_DOS_FLOPPY` names.
 
 To run it, the machine needs:
 

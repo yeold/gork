@@ -1,4 +1,4 @@
-AC_INIT([gork], [0.6])
+AC_INIT([gork], [0.7~beta])
 AC_CONFIG_SRCDIR([main.c])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 AC_PROG_CC
@@ -23,10 +23,11 @@ CFLAGS="$CFLAGS $AM_CFLAGS"
 
 AC_CHECK_HEADER([curses.h], [], [AC_MSG_ERROR([curses.h not found; install ncurses headers])])
 # ncurses on Linux/FreeBSD/OpenBSD, plain curses on NetBSD and Solaris.
-# `./configure LIBS=-lncursesw` for UTF-8 terminals.
+# `./configure LIBS=-lncursesw` for UTF-8 terminals; it is also the last
+# resort, for systems that have only the wide library.
 # A System V curses.h (it renames initscr) needs libcurses even where a
 # libncurses is installed too, as on illumos.
-AC_CHECK_DECL([initscr32], [gork_curses="curses ncurses"], [gork_curses="ncurses curses"],
+AC_CHECK_DECL([initscr32], [gork_curses="curses ncurses"], [gork_curses="ncurses curses ncursesw"],
               [[#include <curses.h>]])
 AC_SEARCH_LIBS([initscr], [$gork_curses], [], [AC_MSG_ERROR([no curses library found])])
 AC_SEARCH_LIBS([fabs], [m])

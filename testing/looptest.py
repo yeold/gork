@@ -935,12 +935,17 @@ def check_run_timeout_and_esc():
             assert res.get("is_error") and "timed out after 1 s" in json.dumps(res), res
             with open(os.path.join(tmp, "bg.pid")) as f:
                 bg = int(f.read())
-            time.sleep(0.2)
-            try:
-                os.kill(bg, 0)
-                assert False, "background child survived the timeout"
-            except ProcessLookupError:
-                pass
+            # Give the kill a moment to land: on GNU/Hurd under emulation
+            # the child is still there 0.2 s later.
+            deadline = time.time() + 5
+            while True:
+                try:
+                    os.kill(bg, 0)
+                except ProcessLookupError:
+                    break
+                assert time.time() < deadline, \
+                    "background child survived the timeout"
+                time.sleep(0.1)
 
         # Esc while the command runs, in the TUI.
         del turns[:]

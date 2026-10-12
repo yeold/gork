@@ -115,5 +115,19 @@ Testing and release
 - [x] Jenkins runs `dostest.py` after building the zip, in a container
       with qemu and mtools.
 - [x] `mcp.c` is left out of `gork.exe`.
+- [x] MS-DOS 6.22: `GORK_DOS_FLOPPY=<install disk 1> python3
+      testing/dostest.py` passes all eight checks.
+- [x] DR-DOS 7.03: passes the seven checks that need one disk
+      (`GORK_DOS_ONE_DISK=1`); its install floppy does not see a second
+      hard disk, so the `allow` check on D: could not run there.
+- [x] An `allow` directory that does not exist is refused on DOS too
+      (DJGPP's `realpath` does not check, so gork opens the directory).
+- [ ] Find out why a `stat()` at startup breaks Esc. The first version of
+      the allow check called `stat()` on each allow directory before the
+      TUI starts, and with it Esc no longer aborted a waiting request (the
+      request ran into its timeout instead); with `opendir()` it works.
+      Narrowed down: Esc still works after a `list_dir` tool call, which
+      also calls `stat()`, on C: and on D:. So it is something about the
+      first `stat()` coming before curses is initialised.
 - [ ] Real hardware. Everything above ran in QEMU with an emulated NE2000;
       a real 386 or 486 with a real packet driver has not been tried.

@@ -6,7 +6,11 @@ Usage:  python3 testing/dostest.py [gork-<version>-dos.zip]
 The zip is what dosbuild.sh makes (default: the newest out/gork-*-dos.zip).
 Needs qemu-system-i386, mtools and unzip.  The FreeDOS boot floppy and the
 NE2000 packet driver are downloaded once into $GORK_VM/dostest (default
-~/.cache/gork-vm/dostest).  The guest reaches the fake API on the host as
+~/.cache/gork-vm/dostest).  To test on another DOS, name a bootable 1.44 MB
+floppy image of it in $GORK_DOS_FLOPPY (it needs COMMAND.COM in its root
+and a little free space); MS-DOS 6.22 install disk 1 works.  Set
+$GORK_DOS_ONE_DISK to skip the check that needs a D: drive (DR-DOS 7.03's
+install floppy does not see the second disk).  The guest reaches the fake API on the host as
 10.0.2.2; the keyboard is typed and the screen read through the QEMU
 monitor.
 """
@@ -109,7 +113,11 @@ def build_images(zip_path):
                       "gateway = 10.0.2.2\nnameserver = 10.0.2.3\n",
         "GORK.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
                     "timeout = 6\nretries = 0\n"
-                    "allow = d:/shared;c:/tmp\n" % PORT,
+                    "allow = %sc:/tmp\n"
+                    % (PORT, "" if os.environ.get("GORK_DOS_ONE_DISK")
+                       else "d:/shared;"),
+        "BAD.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
+                   "allow = c:/nope\n" % PORT,
         "SECRET.TXT": "secret\n",
         "W/GORK.MD": "Always answer in haiku.\n",
         "W/IN.TXT": "inside\n",
@@ -124,33 +132,48 @@ def build_images(zip_path):
             f.write(body)
 
     boot = os.path.join(VM, "boot.img")
-    sh("unzip", "-qoj", os.path.join(VM, "FD13-FloppyEdition.zip"),
-       "144m/x86BOOT.img", "-d", VM)
-    shutil.copy(os.path.join(VM, "x86BOOT.img"), boot)
-    startup = {
-        "fdconfig.sys": "LASTDRIVE=Z\nBUFFERS=20\nFILES=40\n"
-                        "SHELL=\\FREEDOS\\BIN\\COMMAND.COM \\FREEDOS\\BIN "
-                        "/E:2048 /P=\\FDAUTO.BAT\n",
-        "fdauto.bat": "@echo off\nset PATH=A:\\FREEDOS\\BIN;C:\\\n"
-                      "set WATTCP.CFG=C:\\\nset TEMP=C:\\TMP\n"
-                      "set GORK_ALLOW_RUN=1\nC:\nNE2000 0x60 5 0x300\n"
-                      "cd W\necho READY\n",
-    }
+    rest = ("set WATTCP.CFG=C:\\\nset TEMP=C:\\TMP\nset GORK_ALLOW_RUN=1\n"
+            "C:\nNE2000 0x60 5 0x300\ncd W\necho READY\n")
+    other = os.environ.get("GORK_DOS_FLOPPY")
+    if other:                           # e.g. MS-DOS 6.22 install disk 1
+        shutil.copy(other, boot)
+        startup = {
+            "config.sys": "BUFFERS=20\nFILES=40\n"
+                          "SHELL=A:\\COMMAND.COM A:\\ /E:1024 /P\n",
+            "autoexec.bat": "@echo off\nprompt $p$g\nset PATH=A:\\;C:\\\n"
+                            + rest,
+        }
+    else:
+        sh("unzip", "-qoj", os.path.join(VM, "FD13-FloppyEdition.zip"),
+           "144m/x86BOOT.img", "-d", VM)
+        shutil.copy(os.path.join(VM, "x86BOOT.img"), boot)
+        startup = {
+            "fdconfig.sys": "LASTDRIVE=Z\nBUFFERS=20\nFILES=40\n"
+                            "SHELL=\\FREEDOS\\BIN\\COMMAND.COM "
+                            "\\FREEDOS\\BIN /E:2048 /P=\\FDAUTO.BAT\n",
+            "fdauto.bat": "@echo off\nset PATH=A:\\FREEDOS\\BIN;C:\\\n"
+                          + rest,
+        }
     for name, body in startup.items():
         path = os.path.join(VM, name)
         with open(path, "w", newline="\r\n") as f:
             f.write(body)
         sh("mcopy", "-o", "-i", boot, path, "::" + name)
 
-    def fat_disk(name, mb, tree):
+    def fat_disk(name, mb, tree, active=0x80):
         """A disk image with one bootable FAT16 partition holding `tree`."""
         disk = os.path.join(VM, name)
         sectors, start = mb * 2048, 2048
         with open(disk, "wb") as f:
             f.truncate(sectors * 512)
             f.seek(446)
-            f.write(struct.pack("<B3sB3sII", 0x80, bytes([32, 33, 0]), 6,
-                                bytes([254, 63, 7]), start, sectors - start))
+            # CHS for the 16 heads x 63 sectors the BIOS and mformat use;
+            # DR-DOS goes by these, not by the LBA fields.
+            def chs(lba):
+                c, r = divmod(lba, 16 * 63)
+                return bytes([r // 63, r % 63 + 1 | (c >> 8) << 6, c & 255])
+            f.write(struct.pack("<B3sB3sII", active, chs(start), 6,
+                                chs(sectors - 1), start, sectors - start))
             f.write(bytes(48) + b"\x55\xaa")
         part = "%s@@%d" % (disk, start * 512)
         sh("mformat", "-i", part, "-T", str(sectors - start), "-h", "16",
@@ -166,7 +189,7 @@ def build_images(zip_path):
         with open(os.path.join(d, name), "w", newline="\r\n") as f:
             f.write("on d\n")
     disk = fat_disk("disk.img", 64, c)
-    disk2 = fat_disk("disk2.img", 16, d)
+    disk2 = fat_disk("disk2.img", 40, d, 0)    # type 6: 32 MB or more
     return boot, disk, disk2
 
 
@@ -317,6 +340,15 @@ def check_edit(g):
     print("ok: edit_file on a CR LF file")
 
 
+def check_bad_allow(g):
+    """An allow directory that does not exist stops gork, as on Unix."""
+    g.run("set GORK_CONFIG=c:\\bad.cnf")
+    s = g.run("..\\gork t")
+    g.run("set GORK_CONFIG=")
+    assert "allow: c:/nope" in s, s
+    print("ok: missing allow directory refused")
+
+
 def check_allow(g):
     """An allow directory on another drive is reachable, its sibling is not;
     the list is ';'-separated, since ':' belongs to the drive letter."""
@@ -356,7 +388,8 @@ def check_run(g):
     script[:] = [tool("run_command", command="ver"), text("done")]
     g.run("..\\gork t")
     r = results()[0]
-    assert "FreeCom" in r["content"] and "[exit 0]" in r["content"], r
+    out = r["content"]              # wording differs from DOS to DOS
+    assert out.endswith("[exit 0]") and len(out.strip()) > 20, r
     assert not r.get("is_error"), r
     print("ok: run_command")
 
@@ -395,8 +428,8 @@ def check_tui(g):
     g.type("/quit\n")
     s = g.wait(r"C:\\W>$", 20)
     assert "Enter send" not in s, s     # the screen was cleared
-    assert "TRUSTED" in g.run("dir /b c:\\_gork")
-    assert "TUI.TXT" in g.run("dir /b").upper()
+    assert "TRUSTED" in g.run("dir c:\\_gork").upper()
+    assert "TUI" in g.run("dir tui.*").upper()
     time.sleep(10)
     print("ok: TUI")
 
@@ -415,8 +448,10 @@ def main():
         g.wait(r"C:\\W>$", 90)
         check_batch(g)
         check_confinement(g)
+        check_bad_allow(g)
         check_edit(g)
-        check_allow(g)
+        if not os.environ.get("GORK_DOS_ONE_DISK"):
+            check_allow(g)
         check_long(g)
         check_run(g)
         check_timeout(g)

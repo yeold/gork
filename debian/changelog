@@ -1,3 +1,21 @@
+gork (0.7~beta) unstable; urgency=medium
+
+  * First release named as a beta: tag v0.7-beta, version 0.7~beta.
+    Everything before 1.0 is a beta.
+  * Builds on GNU/Hurd, which has no PATH_MAX.
+  * configure falls back to libncursesw where it is the only curses.
+  * The status line can no longer overflow its buffer with very long
+    model and host names.
+  * DOS: an allow directory that does not exist is refused, as on Unix;
+    gork.exe also passes its tests on MS-DOS 6.22 and DR-DOS 7.03.
+  * Newly verified, all passing the test suite: Debian GNU/Hurd, DragonFly
+    BSD 6.4, NetBSD 11.0, MidnightBSD 4.0, Linux with musl and uClibc, and
+    Linux on s390x, armhf, arm64, ppc64el, riscv64 and i386.  Minix 3.3
+    and OpenBSD on SPARC64 build and run; docs/PROGRESS.md has the details
+    and what is still open.
+
+ -- Yeold <isac.selea@gmail.com>  Mon, 12 Oct 2026 05:48:13 +0200
+
 gork (0.6) unstable; urgency=medium
 
   * gork --version prints the version and exits.

@@ -1,5 +1,5 @@
 Name:           gork
-Version:        0.6
+Version:        0.7~beta
 Release:        1%{?dist}
 Summary:        AI agent harness for machines that predate TLS
 # ponytail: placeholder until gork picks a license (cJSON is MIT)

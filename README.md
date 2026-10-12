@@ -90,19 +90,30 @@ systems too old to run `configure`, and what to do without curses headers.
 One row per family: the oldest release gork is verified on, what else was
 tried, and where it stops. "Works" means it builds and runs; nearly all were
 checked with a tool-use round trip in batch mode and in the TUI, and
-openSUSE, Debian 2.2, FreeBSD 15.1, OpenBSD 7.9 and OmniOS pass all of
+openSUSE, Alpine, Debian 2.2, FreeBSD 15.1, OpenBSD 7.9, OmniOS and
+GNU/Hurd, DragonFly, MidnightBSD and NetBSD 11.0 pass all of
 `testing/looptest.py`.
 
 | Family | Oldest that works | Also works | Does not work |
 |---|---|---|---|
-| Linux | Slackware 2.0.0 (1994: Linux 1.0.9, gcc 2.5.8, libc 4.5.26, ncurses 1.8.5) | Slackware 3.0, Debian 1.3, 2.1 and 2.2, SuSE 8.1, openSUSE Tumbleweed (gcc 16) | Slackware 1.01 (libc 4.4.1): no `realpath`, no `has_colors` |
+| Linux | Slackware 2.0.0 (1994: Linux 1.0.9, gcc 2.5.8, libc 4.5.26, ncurses 1.8.5) | Slackware 3.0, Debian 1.3, 2.1 and 2.2, SuSE 8.1, openSUSE Tumbleweed (gcc 16), Alpine 3.24 (musl), uClibc (static, gcc 15) | Slackware 1.01 (libc 4.4.1): no `realpath`, no `has_colors` |
 | FreeBSD | 2.0 (1994, gcc 2.6.2) | 2.0.5, 15.1 | 1.0 and 1.1.5.1: no `realpath` in libc |
-| NetBSD | 1.0 (1994, gcc 2.4.5), with ncurses 4.2 added | 10.1 | |
+| NetBSD | 1.0 (1994, gcc 2.4.5), with ncurses 4.2 added | 10.1, 11.0 | |
 | OpenBSD | 2.0 (1996, gcc 2.7.2.1) | 7.9 | |
+| DragonFly BSD | 6.4.2 (gcc 8.3) | | |
+| MidnightBSD | 4.0.8 (clang 19) | | |
 | Solaris | 2.5.1 (1996, gcc 2.7.2) | 2.6, 10 | 2.4: its kernel panics at boot in QEMU, so untested |
 | illumos | OpenSolaris build 134 (2010, gcc 3.4.3) | OmniOS r151058, with the system curses or ncurses | |
+| Minix | 3.3.0 (2014, clang 3.4) | | |
+| GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | Haiku | R1/beta6 | | |
-| DOS (experimental) | FreeDOS 1.3 with DJGPP, PDCurses and Watt-32, 386 or better | | 16-bit real mode: requests do not fit in 640 K |
+| DOS (experimental) | MS-DOS 6.22 (1994), with DJGPP, PDCurses and Watt-32, 386 or better | DR-DOS 7.03, FreeDOS 1.3 | 16-bit real mode: requests do not fit in 640 K |
+
+Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
+and i386 passes the whole suite: cross-built with Debian 13's toolchains
+and run under QEMU's user-mode emulation. OpenBSD 7.9 on SPARC64 (64-bit
+big-endian, gcc 4.2.1) builds and passes the twelve checks that need no
+pseudo-terminal; the TUI could not be run there.
 
 Everything but SuSE 8.1, Haiku, NetBSD 10.1 and openSUSE ran in QEMU or,
 for Debian 2.1 and 2.2, in Docker. The oldest Linux and BSD systems are

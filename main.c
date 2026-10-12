@@ -66,10 +66,18 @@
 #include "mcp.h"
 #include "cJSON/cJSON.h"
 
+/* GNU/Hurd has no path length limit, so no PATH_MAX.
+   ponytail: a fixed 4096 there; realpath() into a buffer of that size is
+   only safe while paths stay shorter.  Use realpath(p, NULL) if that ever
+   matters. */
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
 /* configure passes VERSION; this is for builds by hand and Makefile.dj.
    Bumped with configure.ac at each release. */
 #ifndef VERSION
-#define VERSION "0.6"
+#define VERSION "0.7~beta"
 #endif
 
 /* DOS (DJGPP) has 8.3 file names: no leading dot, one extension. */
@@ -365,6 +373,17 @@ static int load_allow(const char *list)
             fprintf(stderr, "gork: allow: %s: %s\n", p, strerror(errno));
             return -1;
         }
+#ifdef __MSDOS__    /* DJGPP's realpath does not check that the path exists */
+        {
+            DIR *d = opendir(allow_roots[nallow]);
+
+            if (d == NULL) {
+                fprintf(stderr, "gork: allow: %s: no such directory\n", p);
+                return -1;
+            }
+            closedir(d);
+        }
+#endif
         nallow++;
     }
     return 0;
@@ -1651,7 +1670,7 @@ struct conn {
 static long ctx_tokens;
 static int  compactions;                /* bumped by every compact() */
 
-static char status_line[PATH_MAX + 320];
+static char status_line[PATH_MAX + 400];
 
 static void update_status(const struct conn *c)
 {
@@ -1662,7 +1681,7 @@ static void update_status(const struct conn *c)
                 c->ctx_window / 1000, ctx_tokens * 100 / c->ctx_window);
     else
         strcpy(ctx, "ctx -");
-    sprintf(status_line, " gork | %.100s @ %.100s | effort %s | %s | %s",
+    sprintf(status_line, " gork | %.100s @ %.100s | effort %.32s | %s | %s",
             cfg(CFG_MODEL), c->api_host, *effort ? effort : "default", ctx,
             work_root);
 }
