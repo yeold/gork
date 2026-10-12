@@ -28,8 +28,9 @@ build on each system), README "Tested systems" (results table).
   Ollama, OpenAI and the like), marked untested in the README. The conversation stays in
   Messages API form; `to_openai()` and `from_openai()` in `main.c`
   translate the request and the reply inside `post()`. Checked against the
-  fake server in `looptest.py` only: no real server has been tried, and
-  the DOS build was not rebuilt with it.
+  fake server in `looptest.py` only: no real server has been tried. The
+  DOS build has it and passes its nine checks (Jenkins, v0.8-beta), none
+  of which uses the protocol.
 - Tests: `testing/looptest.py` (17 checks since the OpenAI one; the tables
   below say 16, which it was then; Unix) and `testing/dostest.py`
   (9 checks, DOS in QEMU). Jenkins runs the DOS one on every build of
@@ -38,7 +39,7 @@ build on each system), README "Tested systems" (results table).
 ## What to do next
 
 1. `protocol = openai` is untested: try it against a real server (Ollama
-   or llama.cpp) and run `dostest.py` on a fresh DOS build, then take
+   or llama.cpp), then take
    "untested" out of the README and `main.c`. macOS and Cygwin are done
    (below).
 2. HP-UX: find a compiler for PA-RISC 1.1, or try 11i v2/v3 on QEMU's
