@@ -35,7 +35,8 @@ build on each system), README "Tested systems" (results table).
   1.1; `port.h`, `win.c`, `Makefile.w32`, `winbuild.sh`), one binary meant
   for 9x and NT. Jenkins builds `gork-<version>-win32.zip` and runs
   `testing/wintest.py` under Wine; GitHub Actions cross-builds it and runs
-  the same checks on Windows. Never run on a real 9x or NT 4. `port.h`
+  the same checks on Windows. Works on Windows 98 SE in QEMU (section
+  below); NT 4 to XP and Windows 95 are untried. `port.h`
   defines `GORK_NO_FORK` for DOS and Windows, which now share the code
   that used to be `#ifdef __MSDOS__` only.
 - Tests: `testing/looptest.py` (17 checks since the OpenAI one; the tables
@@ -45,10 +46,10 @@ build on each system), README "Tested systems" (results table).
 
 ## What to do next
 
-1. Windows 9x: start the MinGW `gork.exe` on Windows 98 in QEMU (see
-   TODO-OSES.md for the unknowns). The Windows TUI has no automated check:
-   Wine draws it through a pseudo-terminal one character at a time, which
-   was only read by hand.
+1. Windows: 98 SE is done by hand (below). Left: Windows 95, NT 4, 2000
+   and XP; an automated TUI check (Wine draws it through a pseudo-terminal
+   one character at a time, which was only read by hand); and the Windows
+   98 run itself is not scripted, so Jenkins does not repeat it.
 2. `protocol = openai` is untested: try it against a real server (Ollama
    or llama.cpp), then take
    "untested" out of the README and `main.c`. macOS and Cygwin are done
@@ -63,6 +64,66 @@ build on each system), README "Tested systems" (results table).
 6. Not attempted, and why: NeXTSTEP, SunOS 4, UnixWare/OpenServer, QNX,
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
+
+## Windows 98 SE in QEMU (2026-10-12)
+
+Result: the MinGW `gork.exe` works on Windows 98 Second Edition
+(4.10.2222), on QEMU's `pentium` and `pentium2` CPUs. Checked by hand
+against a fake API on the host (10.0.2.2): `--version`; a batch round trip
+with `read_file` (either slash, either case), `write_file`, `edit_file`,
+a path outside the working directory refused, `list_dir`, and
+`run_command` (`echo`, `ver`, `dir /b`) with output and exit status; the
+TUI with a reply, the approval prompts, a command run from it, `/quit`.
+On `pentium` the TUI was only taken as far as one reply.
+
+What 98 found, all fixed:
+
+- `COMMAND.COM` cannot copy to a name starting with a dot, so Windows now
+  uses the DOS names `gork.cnf` and `_gork`.
+- Winsock's `gethostbyname` does not take a numeric address there
+  ("cannot resolve 10.0.2.2"): `relay.c` tries `inet_addr` first.
+- The TUI drew nothing: PDCurses draws into a second screen buffer, which
+  9x never shows. `tui.c` sets `PDC_RESTORE_SCREEN=0` and gives curses its
+  own `CONOUT$` handle (`win_own_console`), since fd 1 is redirected.
+- On the `pentium` CPU: "illegal operation". gcc's default is the Pentium
+  Pro, and so is Debian's build of MinGW's own `strtod` and `printf`.
+  Now `-march=i486`, `-D__USE_MINGW_ANSI_STDIO=0`, and a `strtod` in
+  `win.c` that goes through msvcrt's `sscanf`. Two `cmov` remain, in
+  start-up code (`_mark_section_writable`, `__GetPEImageBase`); the
+  Pentium run did not reach them.
+
+How it was set up, for a repeat (about 90 minutes, no KVM). Scripts are in
+`~/.cache/gork-vm/win98/` on this machine (`lab`); the VM itself is in the
+podman volume `w98vm`, mounted at `/vm` in a `debian:stable` container
+named `w98` with `qemu-system-x86 mtools p7zip-full cabextract netpbm`.
+
+- Media: archive.org item `windows-98-se-isofile`, saved as `/vm/w98.iso`
+  (SHA1 `fa040cd3...`); the product key is on the item's page.
+- `prep.py KEY` builds `boot.img` (the CD's startup floppy with our
+  `autoexec.bat`: `sys c:`, `fdisk /mbr`, `setup /is /iq /im /ie
+  d:\msbatch.inf`), an empty `c.img` and a `d.img` holding `WIN98\` and
+  `MSBATCH.INF`, so no CD driver is needed. Three things it has to get
+  right: `JO.SYS` removed from the floppy (else it boots the hard disk);
+  partitions on whole cylinders of the 16 x 63 geometry (else `mformat` writes another geometry and
+  Setup stops with SU0013); disks under 504 MB.
+- `run.sh` starts QEMU (`-M pc -cpu pentium2 -m 128 -vga cirrus`,
+  `ne2k_pci`, `-no-reboot` in a loop): after a reboot inside one QEMU
+  process the guest gets no interrupts any more, so each guest reboot
+  needs a new process. First start: `run.sh -boot once=a,order=c`.
+  `CPU=pentium FLOPPY=g.img run.sh -boot order=c` for the other CPU.
+- `m.py` drives the monitor: `key`, `type`, `shot` (PNG), `text`.
+- Setup stops four times in spite of `MSBATCH.INF`: user name (Enter),
+  licence (Alt-A, Enter), product key (Enter), Finish (Enter).
+- The first boot from disk hangs on the logo: add `Logo=0` to `[Options]`
+  in `C:\MSDOS.SYS` (from Linux with `mattrib` and `mcopy`).
+- No network card at first: "Plug and Play BIOS" fails in Device Manager.
+  Update its driver, choosing "PCI bus" from the list of all hardware;
+  after the restart Windows finds the PCI devices, the Realtek RTL8029
+  among them, and each wizard is Enter all the way.
+- Files go in on a floppy image (`change floppy0 /vm/g.img`); commands
+  through Start, Run (`sendkey ctrl-esc`, `r`). `fake98.py` is the fake
+  API; `floppy/T3.BAT` the batch run. `c-installed.img` is a copy of the
+  finished disk.
 
 ## Overnight QEMU run (started 2026-10-11, late)
 

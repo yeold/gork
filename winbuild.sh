@@ -16,7 +16,9 @@ f=$WORK/PDCurses-3.9.tar.gz
 echo "590dbe0f5835f66992df096d3602d0271103f90cf8557a5d124f693c2b40d7ec  $f" | sha256sum -c - >/dev/null
 
 [ -d "$WORK/PDCurses-3.9" ] || tar xzf "$f" -C "$WORK"
-make -s -C "$WORK/PDCurses-3.9/wincon" CC="$HOST-gcc" AR="$HOST-ar" \
+make -s -C "$WORK/PDCurses-3.9/wincon" \
+    CC="$HOST-gcc -march=i486 -mtune=generic -D__USE_MINGW_ANSI_STDIO=0" \
+    AR="$HOST-ar" \
     STRIP="$HOST-strip" pdcurses.a
 
 make -f Makefile.w32 CC="$HOST-gcc" PDCURSES="$WORK/PDCurses-3.9"

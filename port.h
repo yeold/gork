@@ -22,9 +22,13 @@ char *win_realpath(const char *path, char *out);
    root directory, which is often read-only.  `out` holds TMPNAM_MAX. */
 char *win_tmpnam(char *out);
 void  win_sleep(int secs);
-/* The directory for .gork.conf and .gork: %USERPROFILE%, or where gork.exe
+/* The directory for gork.cnf and _gork: %USERPROFILE%, or where gork.exe
    is (Windows 9x sets no USERPROFILE).  0, or -1 if `out` is too small. */
 int   win_home(char *out, size_t size);
+/* Give curses a console handle of its own, before it starts: it keeps the
+   standard output handle, and that one is closed when the TUI points fd 1
+   at its capture file. */
+void  win_own_console(void);
 
 #define TMPNAM_MAX     260
 #define tmpnam         win_tmpnam

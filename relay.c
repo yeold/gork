@@ -135,14 +135,23 @@ static int tcp_connect(const char *host, int port) {
   started = 1;
 #endif
 
-  he = gethostbyname(host);
-  if (he == NULL || he->h_addr_list[0] == NULL) {
-    fprintf(stderr, "gork: cannot resolve %s\n", host);
-    return -1;
-  }
-  if (he->h_addrtype != AF_INET) {
-    fprintf(stderr, "gork: %s is not IPv4\n", host);
-    return -1;
+  memset(&addr, 0, sizeof addr);
+#ifdef _WIN32
+  /* gethostbyname() on Windows 9x does not take a numeric address. */
+  addr.sin_addr.s_addr = inet_addr(host);
+  if (addr.sin_addr.s_addr == INADDR_NONE)
+#endif
+  {
+    he = gethostbyname(host);
+    if (he == NULL || he->h_addr_list[0] == NULL) {
+      fprintf(stderr, "gork: cannot resolve %s\n", host);
+      return -1;
+    }
+    if (he->h_addrtype != AF_INET) {
+      fprintf(stderr, "gork: %s is not IPv4\n", host);
+      return -1;
+    }
+    memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
   }
 
   fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -151,10 +160,8 @@ static int tcp_connect(const char *host, int port) {
     return -1;
   }
 
-  memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
   addr.sin_port = htons((unsigned short)port);
-  memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
 
   if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
     sock_perror("connect");

@@ -344,13 +344,17 @@ screen and Winsock 1.1 for TCP/IP. It is one program for both lines of
 Windows, 9x and NT: it imports only functions that Windows 95 already has,
 from `kernel32`, `user32`, `advapi32`, `wsock32` and `msvcrt.dll`.
 
-It has been run under Wine 10 and on the Windows of GitHub's runners
-(`testing/wintest.py`: batch mode, the file tools, `run_command`, the
-timeout), and the TUI by hand under Wine. **It has never been run on
-Windows 9x or NT 4.** What to expect there: `msvcrt.dll` is part of
-Windows 98 and later but not of the first Windows 95, where Internet
-Explorer 4 or an application brings it; and Debian's MinGW libraries are
-compiled for the Pentium Pro, so a 486 or a first Pentium may not do.
+Tested on Windows 98 Second Edition (in QEMU, on an emulated Pentium and
+Pentium II): batch mode, every file tool, `run_command` through
+`COMMAND.COM`, and the TUI with its approvals, all by hand against a fake
+API. `testing/wintest.py` runs the batch-mode checks under Wine 10
+(Jenkins) and on the Windows of GitHub's runners. Not tried: Windows 95,
+NT 3.51 and 4, 2000, XP. Windows 95 needs `msvcrt.dll`, which the first
+release lacks (Internet Explorer 4 or an application brings it).
+
+It is compiled for the 486, but two instructions of MinGW's start-up code,
+which Debian ships built for the Pentium Pro, remain; a Pentium did not
+run into them, a real 486 was not tried.
 
 On Linux, `winbuild.sh` downloads the PDCurses source and leaves
 `gork-<version>-win32.zip` in `out/`. It needs the 32-bit mingw-w64 gcc
@@ -370,8 +374,9 @@ make -f Makefile.w32 CC=i686-w64-mingw32-gcc PDCURSES=/path/to/PDCurses-3.9
 `python3 testing/wintest.py wine gork.exe` then checks it under Wine, and
 `python testing\wintest.py gork.exe` on Windows.
 
-The config is `.gork.conf` and the directory `.gork`, as on Unix, in
-`%HOME%` if that is set, else in `%USERPROFILE%`, else (Windows 9x) beside
+The config is `gork.cnf` and the directory `_gork`, as on DOS (the shell
+and Explorer of Windows 9x refuse names that start with a dot), in `%HOME%`
+if that is set, else in `%USERPROFILE%`, else (Windows 9x) beside
 `gork.exe`.
 
 Windows differences, mostly those of DOS: `allow` directories are separated

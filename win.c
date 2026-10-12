@@ -9,6 +9,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -50,6 +51,15 @@ char *win_tmpnam(char *out)
     return out;
 }
 
+void win_own_console(void)
+{
+    HANDLE h = CreateFileA("CONOUT$", GENERIC_READ | GENERIC_WRITE,
+                           FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                           OPEN_EXISTING, 0, NULL);
+
+    if (h != INVALID_HANDLE_VALUE) SetStdHandle(STD_OUTPUT_HANDLE, h);
+}
+
 void win_sleep(int secs)
 {
     Sleep((DWORD) secs * 1000);
@@ -71,4 +81,18 @@ int win_home(char *out, size_t size)
     strcpy(out, p);
     slashes(out);
     return 0;
+}
+
+/* MinGW replaces msvcrt's strtod() with its own, and Debian's copy of that
+   is compiled for the Pentium Pro: cJSON's first number was an illegal
+   instruction on a Pentium.  This one, found first by the linker, goes
+   through msvcrt's sscanf(). */
+double strtod(const char *s, char **end)
+{
+    double d = 0;
+    int    n = 0;
+
+    if (sscanf(s, "%lf%n", &d, &n) < 1) n = 0;
+    if (end != NULL) *end = (char *) s + n;
+    return d;
 }

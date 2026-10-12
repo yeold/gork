@@ -163,7 +163,7 @@ def check_run_command():
 
 
 def check_home():
-    """With no HOME, .gork.conf is read from %USERPROFILE%."""
+    """With no HOME, gork.cnf is read from %USERPROFILE%."""
     if WINE:                    # Wine sets USERPROFILE itself
         print("skipped: config from %USERPROFILE% (not under Wine)")
         return
@@ -181,7 +181,7 @@ def check_home():
             pass
 
     with tempfile.TemporaryDirectory() as tmp:
-        with open(os.path.join(tmp, ".gork.conf"), "w") as f:
+        with open(os.path.join(tmp, "gork.cnf"), "w") as f:
             f.write("relay = 127.0.0.1:8103\nmodel = from-profile\n")
         srv = serve(H, 8103)
         try:

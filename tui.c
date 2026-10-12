@@ -208,6 +208,12 @@ int tui_init(const char *status)
     saved_out = dup(1);
     saved_err = dup(2);
     tty = fdopen(dup(1), "w");
+#ifdef _WIN32
+    /* PDCurses would draw in a second screen buffer, which Windows 9x
+       never shows: have it use the console's own. */
+    if (getenv("PDC_RESTORE_SCREEN") == NULL) putenv("PDC_RESTORE_SCREEN=0");
+    win_own_console();
+#endif
     if (cap_rfd < 0 || saved_out < 0 || saved_err < 0 || tty == NULL ||
         newterm(NULL, tty, stdin) == NULL) {
         close(fd);

@@ -83,8 +83,10 @@
 #define VERSION "0.8~beta"
 #endif
 
-/* DOS (DJGPP) has 8.3 file names: no leading dot, one extension. */
-#ifdef __MSDOS__
+/* DOS (DJGPP) has 8.3 file names: no leading dot, one extension.  Windows
+   gets the same names: COMMAND.COM on Windows 98 cannot copy to a name
+   that starts with a dot, and Explorer will not create one. */
+#ifdef GORK_NO_FORK
 #define DOT_GORK  "_gork"
 #define CONF_NAME "gork.cnf"
 #else
