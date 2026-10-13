@@ -46,7 +46,7 @@ of `testing/looptest.py`.
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | Haiku | R1/beta6 | | Older releases: may work, untested |
 | macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
-| Windows (native, experimental) | Windows NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, 2000, XP SP3, 11, Server 2025; Wine 10 | Windows Me: untested (no working product key for the install) |
+| Windows (native, experimental) | Windows NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, Me, 2000, XP SP3, 11, Server 2025; Wine 10 | |
 | Windows (Cygwin) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | |
 | DOS (experimental) | MS-DOS 4.01 (1989), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | 16-bit real mode: requests do not fit in 640 K. Windows 1: not tried |
 
@@ -299,7 +299,7 @@ HTTP goes over the SPX connection.
 | Build | Needs | State |
 |---|---|---|
 | DOS | An IPX driver with SPX loaded: Novell's `IPXODI` or `IPX.COM`, or `PDIPX` on a packet driver. No packet driver for TCP/IP is needed then | Works with PDIPX on FreeDOS 1.3 in QEMU; `dostest.py` checks it when `GORK_RELAY` names a relay binary |
-| Windows | The IPX/SPX-compatible protocol installed (Windows 95 to XP have it; Vista and later do not) | Written, compiles, **not yet run** against a relay |
+| Windows | The IPX/SPX-compatible protocol installed (Windows 95 to XP have it; Vista and later do not) | Works on Windows Me in QEMU, by hand: the relay was started with `-n 1`, and Windows found the network number and the frame type by itself. Other Windows versions untried |
 | Unix | -- | Not there. Linux had SPX sockets only briefly, around 2.2, and current systems have no IPX |
 
 Token ring needs nothing from gork: it is the network card's driver that

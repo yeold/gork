@@ -581,6 +581,9 @@ def main():
     relay = RELAY and subprocess.Popen(
         [RELAY, "-p", "-t", "0", "-x", "udp:127.0.0.1:%d" % RELAY_PORT,
          "127.0.0.1:%d" % PORT])
+    if relay:
+        time.sleep(0.3)
+        assert relay.poll() is None, "gork-relay did not start"
     g = Guest(boot, disk, disk2)
     try:
         if WINDOWS2:

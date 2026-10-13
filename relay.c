@@ -293,6 +293,79 @@ static void conn_close(int fd) {
   close(fd);
 }
 
+#ifdef _WIN32
+static size_t find_body(const char *p, size_t len);
+
+/* Has the whole reply arrived, going by its Content-Length?  0 as well
+   when the header is missing. */
+static int reply_complete(const struct buf *b) {
+  size_t body = find_body(b->p, b->len), i;
+
+  if (body == 0)
+    return 0;
+  for (i = 0; i + 16 < body; i++) {
+    if ((i == 0 || b->p[i - 1] == '\n') &&
+        tolower((unsigned char)b->p[i]) == 'c' &&
+        tolower((unsigned char)b->p[i + 7]) == '-' &&
+        tolower((unsigned char)b->p[i + 8]) == 'l' &&
+        b->p[i + 14] == ':') {
+      char name[15];
+      size_t j;
+
+      for (j = 0; j < 14; j++)
+        name[j] = (char)tolower((unsigned char)b->p[i + j]);
+      name[14] = '\0';
+      if (strcmp(name, "content-length") == 0)
+        return b->len - body >= (size_t)strtoul(b->p + i + 15, NULL, 10);
+    }
+  }
+  return 0;
+}
+
+/* SPX on Windows.  Windows Me never reports the end of an SPX connection
+   to select(), so the socket is polled, and the reply is also taken as
+   complete when its Content-Length has arrived. */
+static int spx_read_to_eof(int fd, struct buf *b) {
+  char chunk[READ_CHUNK];
+  u_long on = 1;
+  DWORD asked = GetTickCount();
+  int r;
+
+  ioctlsocket(fd, FIONBIO, &on);
+  for (;;) {
+    r = recv(fd, chunk, sizeof chunk, 0);
+    if (r > 0) {
+      if (buf_add(b, chunk, (size_t)r) != 0) {
+        fprintf(stderr, "gork: out of memory reading socket\n");
+        return -1;
+      }
+      if (reply_complete(b))
+        return 0;
+      continue;
+    }
+    if (r == 0)
+      return 0;
+    if (WSAGetLastError() != WSAEWOULDBLOCK) {
+      if (WSAGetLastError() == WSAEDISCON || reply_complete(b))
+        return 0;
+      sock_perror("read from socket");
+      return -1;
+    }
+    if (deadline != 0 && time(NULL) >= deadline) {
+      fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
+              (unsigned long)b->len);
+      return -1;
+    }
+    if (relay_abort != NULL && GetTickCount() - asked >= 200) {
+      asked = GetTickCount();
+      if (relay_abort())
+        return -2;
+    }
+    Sleep(50);
+  }
+}
+#endif
+
 /* Returns 0 at EOF, -1 on error, -2 if relay_abort asked to stop. */
 static int read_to_eof(int fd, struct buf *b) {
   char chunk[READ_CHUNK];
@@ -328,6 +401,10 @@ static int read_to_eof(int fd, struct buf *b) {
       }
     }
   }
+#endif
+#ifdef _WIN32
+  if (spx)
+    return spx_read_to_eof(fd, b);
 #endif
   for (;;) {
     /* Wake every 200 ms so the user can abort a slow reply. */
@@ -371,11 +448,6 @@ static int read_to_eof(int fd, struct buf *b) {
     }
     if (r == 0)
       return 0; /* clean EOF */
-#ifdef _WIN32
-    /* how the end of an SPX connection is reported */
-    if (spx && WSAGetLastError() == WSAEDISCON)
-      return 0;
-#endif
     if (errno == EINTR) {
       fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
               (unsigned long)b->len);

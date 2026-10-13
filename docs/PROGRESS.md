@@ -87,6 +87,52 @@ build on each system), README "Tested systems" (results table).
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
 
+## Windows Me (2026-10-13)
+
+Works: `gork.exe` built from this tree (with the SPX code), batch mode
+with the ten tool calls of `fake98.py` (`ver`: "Windows Millennium
+[Version 4.90.3000]") and the TUI with approvals and commands
+(`tui-on-winme.png` beside the others).
+
+What was wrong the day before was the pairing of CD and key. The retail
+CD refused both serials on WinWorldPC's page; the **OEM** CD ("Windows Me
+(4.90.3000) (OEM Full)" there, 426 MB, `Windows Me (115 - OEM Full).iso`)
+takes the first of them, `B88DH-...`, from `MSBATCH.INF`.
+
+How, for a repeat, in `/vm/me` of the same volume (about two hours, most
+of it Setup under `-icount`):
+
+- `prepme.py me WIN9X KEY`: `prep9x.py` with `InstallType=0` (compact: a
+  typical install does not fit the 500 MB disk, Setup says it is 24.5 MB
+  short) and `smartdrv.exe` taken from the CD's `win9x`.
+- First start `run9x.sh me -boot once=a,order=c`. When Setup restarts,
+  stop that loop (`touch /vm/me/stop`, quit QEMU) and go on with
+  `ICOUNT=3 run9x.sh me -boot order=c`: the loop repeats its arguments,
+  and a second boot from the floppy starts Setup again, which then
+  complains about disk space.
+- Setup stops for the name (Enter), the licence (Alt-A, Enter), the key
+  (Enter) and Finish (Enter), then the first log-on (Enter).
+- No network card at first, as on 98: Device Manager (`control
+  sysdm.cpl`, Ctrl-Tab), "Plug and Play BIOS", Properties, Driver, Update
+  Driver, "Specify the location", "Display a list", Show all hardware,
+  model "PCI bus" (Home, `p`), Yes. After the restart every wizard is
+  Enter, the RTL8029 among them, and one more restart follows. Me needs
+  no `Logo=0`.
+- `c-installed.img` is the finished disk, with the IPX/SPX protocol in.
+
+SPX from Windows was tried here as well: Network control panel (`control
+netcpl.cpl`), Add, Protocol, Microsoft, "IPX/SPX-compatible Protocol"
+(Tab to the list, Down twice; no CD asked for), restart. `runme.sh` puts
+the card on a QEMU hub with the user network and a relay started as
+`gork-relay -v -p -n 1 -t 0 -x udp:127.0.0.1:8097 127.0.0.1:8098`.
+Windows learned network 1 from the relay's RIP answer, and
+`relay = spx:1.02676F726B01:8443` connected. The first try showed that
+Windows never tells `select()` that an SPX connection has ended (the
+reply was all there, and gork waited out its timeout), so the Windows
+SPX read now polls a non-blocking socket and also stops at the reply's
+Content-Length. With that, the batch run with its ten tool calls passes
+over SPX.
+
 ## SPX, and gork-relay (2026-10-13)
 
 The user asked for IPX/SPX and token ring support, and for a relay of
@@ -105,7 +151,7 @@ gork's own in a separate repository.
   AX=7A00h, ECBs in DOS memory, polled). One thing found: the driver does
   not fill the listen ECBs in the order they were posted, so packets are
   taken by SPX sequence number. Windows: an `AF_IPX` stream socket in
-  `relay.c`; compiles, never run against a relay. Unix: refused with a
+  `relay.c`, tried on Windows Me (section above). Unix: refused with a
   message.
 - Tested: `GORK_RELAY=/path/gork-relay python3 testing/dostest.py` adds a
   check, `check_spx`: FreeDOS loads `PDIPX.COM` (Novell IPX/SPX 1.10 on
@@ -116,8 +162,9 @@ gork's own in a separate repository.
   relay reads and writes 802.5 frames with source routes, checked only
   against frames its own test builds: QEMU has no token ring card and
   Linux no drivers since 3.5.
-- Left: SPX from the Windows build against NWLink (Windows 95 to XP);
-  `IPXODI` instead of PDIPX; the relay on Cygwin with Npcap; a real ring;
+- Left: SPX on Windows versions other than Me (done there by hand, see
+  above), and a check for it that runs by itself; `IPXODI` instead of
+  PDIPX; the relay on Cygwin with Npcap; a real ring;
   Jenkins does not build the relay, so `check_spx` runs only by hand.
 - Regression runs after this change, all passing: `looptest.py` (17),
   `wintest.py` under Wine, `dostest.py` in the six configurations of the
@@ -209,10 +256,8 @@ Results, all with the released v0.10-beta `gork.exe`, unchanged:
 - **The first Windows 95** (`ver`: 4.00.950; boot files dated 1995-07-11):
   works, with `msvcrt.dll` added, exactly as OSR2 did: batch round trip
   and the TUI with approvals and commands.
-- **Windows Me**: not tested. Its Setup rejects the product key in the
-  archive.org item and both serials on WinWorldPC's page for this very
-  ISO ("Windows Me (101 - Retail Full)", the same file from both sites),
-  with the clock at 2026 and at 2001. Not pursued further.
+- **Windows Me**: not installed that day: Setup rejected the keys tried
+  with the retail CD. Done on 2026-10-13 with the OEM CD, above.
 
 How, for a repeat, in `/vm/nt351`, `/vm/95a` and `/vm/me` of the same
 volume:
