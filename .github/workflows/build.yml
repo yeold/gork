@@ -1,7 +1,8 @@
 # Build gork and run testing/looptest.py on the two systems that nothing
 # local can run: macOS and Cygwin; and run the Windows gork.exe, which
 # Jenkins only tries under Wine, on a real Windows.  On a tag it also adds
-# the macOS packages to the release that Jenkins makes.  Everything else is built by Jenkins
+# the macOS packages and the Cygwin package (gork-<version>-win32.zip) to
+# the release that Jenkins makes.  Everything else is built by Jenkins
 # (Jenkinsfile) or by hand in QEMU (docs/PROGRESS.md).
 name: build
 
@@ -74,6 +75,8 @@ jobs:
 
   cygwin:
     runs-on: windows-latest
+    permissions:
+      contents: write             # the release step uploads the package
     defaults:
       run:
         # A login shell, so /usr/bin is first in PATH; CHERE_INVOKING keeps
@@ -90,7 +93,7 @@ jobs:
       - uses: cygwin/cygwin-install-action@v6
         with:
           install-dir: C:\cygwin    # where the shell above looks for bash
-          packages: gcc-core make autoconf automake libncurses-devel python3
+          packages: gcc-core make autoconf automake libncurses-devel python3 dash zip
       - run: autoreconf -i && ./configure && make
       - run: ./gork --version
       - run: python3 testing/looptest.py ./gork 2>&1 | tee test.log
@@ -99,6 +102,43 @@ jobs:
         run: |
           test -f test.log || exit 0
           printf '::error title=looptest::%s\n' "$(tail -c 3000 test.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+      # The Windows package for current systems: gork.exe with the Cygwin
+      # DLLs, a shell and the terminal descriptions (cygpack.sh).
+      - name: package
+        run: |
+          sh cygpack.sh out
+          mkdir unpacked && cd unpacked && unzip -q ../out/gork-*-win32.zip
+          find . | sort
+      # ... tried the way a user has it: unpacked, started from cmd by the
+      # Windows Python, with nothing of Cygwin on the PATH.
+      - name: package test
+        shell: cmd
+        run: |
+          for /d %%d in (unpacked\gork-*-win32) do python testing\cygpacktest.py %%d > pack.log 2>&1
+          set rc=%errorlevel%
+          type pack.log
+          exit /b %rc%
+      - if: failure()
+        run: |
+          test -f pack.log || exit 0
+          printf '::error title=cygpacktest::%s\n' "$(tail -c 3000 pack.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gork-cygwin
+          path: out/
+      # As for macOS: Jenkins makes the release; wait for it.
+      - name: release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          for i in $(seq 1 120); do
+              gh release view "$TAG" >/dev/null 2>&1 && break
+              sleep 30
+          done
+          gh release upload "$TAG" out/* --clobber
 
   # The native gork.exe (MinGW, see winbuild.sh): cross-built on Linux as
   # Jenkins does it, then run on Windows.

@@ -4,14 +4,14 @@ A lightweight AI agent harness for old and obscure operating systems.
 
 gork is an AI agent for the machines everything else has left behind. It
 runs the usual tool-use loop -- send a task, get tool calls back, execute
-them locally, feed the results in, repeat -- on systems from 1994 to today:
-Linux 1.0, the first BSDs, Solaris 2.5.1, MS-DOS, Windows 95, Minix,
-GNU/Hurd and Haiku, and just as well on a current Linux, macOS or
-Windows 11. One source for all of them, with a batch mode and a
+them locally, feed the results in, repeat -- on systems from 1987 to today:
+MS-DOS 3.30 and Windows 1.04, Linux 1.0, the first BSDs, Solaris 2.5.1,
+Windows 95, Minix, GNU/Hurd and Haiku, and just as well on a current
+Linux, macOS or Windows 11. One source for all of them, with a batch mode and a
 full-screen interactive one. The [table below](#tested-systems) says what
 it has been run on.
 
-It is small: about 4,600 lines of strict C89 and a binary of about 100 KB
+It is small: about 5,000 lines of strict C89 and a binary of about 100 KB
 (x86-64 Linux, stripped), with no dependencies beyond libc, a curses library and the vendored cJSON.
 It builds with gcc 2.4.5, with a single compiler command where `configure`
 cannot run, and asks the system for little: TCP sockets, a terminal, a
@@ -46,9 +46,9 @@ of `testing/looptest.py`.
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | Haiku | R1/beta6 | | Older releases: may work, untested |
 | macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
-| Windows (native, experimental) | Windows NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, Me, 2000, XP SP3, 11, Server 2025; Wine 10 | |
-| Windows (Cygwin) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | |
-| DOS (experimental) | MS-DOS 4.01 (1989), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | 16-bit real mode: requests do not fit in 640 K. Windows 1: not tried |
+| Windows (native, experimental; the `win32-legacy` package) | Windows NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, Me, 2000, XP SP3, 11, Server 2025; Wine 10 | |
+| Windows (Cygwin; the `win32` package) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | 64-bit Windows 10 and later only. The package was run on GitHub's Windows runner, batch mode only |
+| DOS (experimental) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | 16-bit real mode: requests do not fit in 640 K. Windows/386 2.x: not tried |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
 and i386 passes the whole suite: cross-built with Debian 13's toolchains
@@ -63,6 +63,13 @@ GitHub Actions (`.github/workflows/build.yml`), batch mode and the suite
 only. The oldest Linux and BSD systems are compiled by hand.
 [docs/BUILD.md](docs/BUILD.md) has the instructions for every system
 here, and [docs/TODO-OSES.md](docs/TODO-OSES.md) the ones still to try.
+
+There are two Windows packages:
+
+| Package | For | MCP servers | Commands run by |
+|---|---|---|---|
+| `gork-<version>-win32.zip` | 64-bit Windows 10 and later. The Cygwin build, with the Cygwin DLLs it needs; start `gork.cmd` | yes | a POSIX shell, `bin\sh.exe` in the package |
+| `gork-<version>-win32-legacy.zip` | Windows 95 and NT 3.51 up to Windows 11: one small 32-bit `gork.exe` | **no**: it cannot start MCP servers, and ignores `mcp.json` | `cmd.exe` (`COMMAND.COM` on Windows 9x) |
 
 ## Contents
 
@@ -346,6 +353,8 @@ servers, so there is no `mcp.json`.
 
 A set environment variable beats the file, and gork says so at startup (e.g. `model meta/muse-glimmer from AGENT_MODEL overrides ~/.gork.conf`), since a stale `export` in an old shell is easy to forget. If the file holds `api_key` and
 anyone but you can read it, gork refuses to start: `chmod 600 ~/.gork.conf`.
+(Not on DOS and Windows, the Cygwin build included: there are no such
+modes there.)
 
 Two more switches are environment-only:
 
@@ -477,6 +486,8 @@ interrupt it too.
 | [mcp.c](mcp.c), [mcp.h](mcp.h) | MCP client: stdio servers, JSON-RPC, tool calls |
 | [port.h](port.h), [win.c](win.c) | What differs without `fork` (DOS, Windows); the Windows replacements for POSIX calls |
 | [Makefile.dj](Makefile.dj), [dosbuild.sh](dosbuild.sh), [Makefile.w32](Makefile.w32), [winbuild.sh](winbuild.sh) | The DOS (DJGPP) and Windows (MinGW) cross builds |
+| [cygpack.sh](cygpack.sh) | Packs the Cygwin build as the `win32` zip |
+| [dosspx.c](dosspx.c) | SPX on DOS, through the IPX driver |
 | [configure.ac](configure.ac), [Makefile.am](Makefile.am) | Build: curses detection, compiler flags, sources |
 | [cJSON/](cJSON/) | Vendored JSON parser |
 | [docs/BUILD.md](docs/BUILD.md) | Build instructions per operating system |

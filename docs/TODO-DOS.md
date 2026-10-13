@@ -117,6 +117,8 @@ Testing and release
 - [x] `mcp.c` is left out of `gork.exe`.
 - [x] MS-DOS 6.22: `GORK_DOS_FLOPPY=<install disk 1> python3
       testing/dostest.py` passes all eight checks.
+- [x] MS-DOS 3.30 (Dell's, 1988): passes all nine checks, with
+      `GORK_DOS_SMALL_DISKS=1`. The oldest DOS tried.
 - [x] MS-DOS 4.01: passes all nine checks (`GORK_DOS_FLOPPY=<its "Setup"
       disk> GORK_DOS_SMALL_DISKS=1`). DJGPP's `stat()` page-faulted there
       in `edit_file`: it reads tables inside DOS for the inode number and

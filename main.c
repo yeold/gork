@@ -353,8 +353,11 @@ static int load_config(void)
     }
 
     /* The key is a secret: refuse a file others can read, as ssh does.
-       DOS and Windows have no such modes; every file reads as 0644. */
-#ifndef GORK_NO_FORK
+       DOS and Windows have no such modes; every file reads as 0644.  Nor
+       under Cygwin: a file made by a Windows program in the user's own
+       profile shows group bits, for the access SYSTEM and the
+       administrators have, and the packaged build has no chmod. */
+#if !defined(GORK_NO_FORK) && !defined(__CYGWIN__)
     if (cfg_file[CFG_KEY] != NULL && fstat(fileno(f), &st) == 0 &&
         (st.st_mode & 077) != 0) {
         fprintf(stderr, "gork: %s holds api_key but others can read it; "
@@ -1357,6 +1360,10 @@ static const struct tool TOOLS[] = {
 #elif defined(_WIN32)
                       "\"description\":\"Command line for Windows "
                       "(cmd.exe; COMMAND.COM on Windows 9x).\"}},"
+#elif defined(__CYGWIN__)
+                      "\"description\":\"Command line for /bin/sh, on "
+                      "Windows (Cygwin): Windows programs can be run; the "
+                      "Unix tools may be missing.\"}},"
 #else
                       "\"description\":\"Command line for /bin/sh.\"}},"
 #endif

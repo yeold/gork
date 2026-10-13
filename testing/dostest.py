@@ -16,15 +16,17 @@ WINDOWS directory, copied off a disk where Setup ran (VGA, no network,
 with its HIMEM.SYS), in $GORK_DOS_WINDOWS, together with $GORK_DOS_FLOPPY:
 Windows is started from the floppy's DOS with a full-screen COMMAND.COM,
 and the packet driver is the real-mode one loaded before it, with WINPKT.
-A WINDOWS directory of Windows 2.x (it has WIN200.BIN) is run in real mode
-instead, and needs the "Setup" disk of MS-DOS 4.01 as $GORK_DOS_FLOPPY
-and $GORK_DOS_SMALL_DISKS: Windows 2.11 runs no DOS program on MS-DOS 6.
+A WINDOWS directory of Windows 1 or 2 (it has WIN100.BIN or WIN200.BIN) is
+run in real mode instead, and needs a DOS of its time as $GORK_DOS_FLOPPY,
+with $GORK_DOS_SMALL_DISKS: MS-DOS 4.01 (its "Setup" disk) for Windows 2,
+which runs no DOS program on MS-DOS 6, and MS-DOS 3.30 for Windows 1,
+which hangs on 4.01.
 Name a gork-relay binary (https://github.com/yeold/gork-relay) in
 $GORK_RELAY to check SPX as well: the guest then loads PDIPX, Novell's
 IPX and SPX on the packet driver, and its network card is also wired to
 that relay, which passes what it gets on to the fake API.
-Set $GORK_DOS_SMALL_DISKS for MS-DOS 4.01 and the like, which read only
-disks laid out the old way.  The guest reaches the fake API on the host as
+Set $GORK_DOS_SMALL_DISKS for MS-DOS 3.30, 4.01 and the like, which read
+only disks laid out the old way.  The guest reaches the fake API on the host as
 10.0.2.2; the keyboard is typed and the screen read through the QEMU
 monitor.
 """
@@ -39,7 +41,9 @@ RELAY = os.environ.get("GORK_RELAY")    # a gork-relay binary: check SPX too
 RELAY_PORT = 8097                       # where it takes the guest's frames
 SMALL = bool(os.environ.get("GORK_DOS_SMALL_DISKS"))
 WINDOWS = os.environ.get("GORK_DOS_WINDOWS")
-WINDOWS2 = bool(WINDOWS and os.path.exists(os.path.join(WINDOWS, "WIN200.BIN")))
+# Windows 1 or 2: real mode
+WINDOWS2 = bool(WINDOWS and any(os.path.exists(os.path.join(WINDOWS, n))
+                                for n in ("WIN100.BIN", "WIN200.BIN")))
 FD = "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files"
 DOWNLOADS = [
     (FD + "/distributions/1.3/official/FD13-FloppyEdition.zip",
@@ -124,7 +128,7 @@ def wbox(c, shell):
 
 
 def windows2(c, windows, floppy):
-    """Put Windows 2.x on C: so that it starts a full-screen DOS box with
+    """Put Windows 1 or 2 on C: so that it starts a full-screen DOS box with
     WBOX.BAT in it; return the CONFIG.SYS lines it needs.
 
     Windows 2 runs every DOS program by its PIF, and one without a PIF in
@@ -158,7 +162,10 @@ def windows2(c, windows, floppy):
     with open(ini, "wb") as f:
         f.write(text.replace(b"\r\nrun=\r\n",
                              b"\r\nrun=C:\\GSHELL.COM\r\n"))
-    return "DEVICE=A:\\HIMEM.SYS\n"       # the one on the MS-DOS 4.01 disk
+    # HIMEM.SYS if the DOS disk has one (MS-DOS 4.01 does, 3.30 does not)
+    has = subprocess.run(["mdir", "-i", floppy, "::HIMEM.SYS"],
+                         capture_output=True).returncode == 0
+    return "DEVICE=A:\\HIMEM.SYS\n" if has else ""
 
 
 def build_images(zip_path):
@@ -207,10 +214,10 @@ def build_images(zip_path):
     other = os.environ.get("GORK_DOS_FLOPPY")
     windows = WINDOWS
     himem = ""
-    if windows and os.path.exists(os.path.join(windows, "WIN200.BIN")):
+    if WINDOWS2:
         himem = windows2(c, windows, other)
         rest = rest.replace("echo READY\n",
-                            "C:\\CWSDPMI -p\nC:\\WINDOWS\\WIN.COM\n")
+                            "C:\\CWSDPMI -p\ncd \\WINDOWS\nWIN\n")
     elif windows:                       # the checks run in a DOS box
         shutil.copytree(windows, os.path.join(c, "WINDOWS"))
         wbox(c, "A:\\COMMAND.COM")

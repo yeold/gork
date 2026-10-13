@@ -732,8 +732,9 @@ def check_config():
     proc = run_gork(8092, "hi", config="relay = 127.0.0.1:8092\ndefault_effort = igh\n")
     assert proc.returncode == 2 and "want default_effort" in proc.stderr, proc.stderr
 
-    proc = run_gork(8092, "hi", config=conf, mode=0o644, ANTHROPIC_API_KEY=None)
-    assert proc.returncode == 2 and "chmod 600" in proc.stderr, proc.stderr
+    if sys.platform != "cygwin":        # no such rule there: see main.c
+        proc = run_gork(8092, "hi", config=conf, mode=0o644, ANTHROPIC_API_KEY=None)
+        assert proc.returncode == 2 and "chmod 600" in proc.stderr, proc.stderr
 
     proc = run_gork(8092, "hi", config="relay = 127.0.0.1:8092\nrelya = x\n")
     assert proc.returncode == 2 and ":2:" in proc.stderr, proc.stderr

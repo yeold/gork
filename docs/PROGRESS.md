@@ -47,7 +47,8 @@ build on each system), README "Tested systems" (results table).
   the Jenkins tag build and the Actions run to finish.
 - New in v0.9-beta: a native Windows `gork.exe` (MinGW, PDCurses, Winsock
   1.1; `port.h`, `win.c`, `Makefile.w32`, `winbuild.sh`), one binary meant
-  for 9x and NT. Jenkins builds `gork-<version>-win32.zip` and runs
+  for 9x and NT. Jenkins builds `gork-<version>-win32-legacy.zip` (the
+  name since 2026-10-13; `win32` is the Cygwin package now) and runs
   `testing/wintest.py` under Wine; GitHub Actions cross-builds it and runs
   the same checks on Windows. Works on Windows 98 SE in QEMU (section
   below); NT 4 to XP and Windows 95 are untried. `port.h`
@@ -86,6 +87,74 @@ build on each system), README "Tested systems" (results table).
 6. Not attempted, and why: NeXTSTEP, SunOS 4, UnixWare/OpenServer, QNX,
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
+
+## Two Windows packages (2026-10-13)
+
+The user asked for a Cygwin build on the releases under the plain name,
+since the native one has no MCP.
+
+- `gork-<version>-win32.zip` is now the Cygwin build, packed by
+  `cygpack.sh` in the `cygwin` job of the GitHub workflow, which also
+  uploads it to the release on a tag (as the macOS packages: GitHub only,
+  not Forgejo). BUILD.md, "Cygwin", says what is in it and why it is laid
+  out as it is.
+- `gork-<version>-win32-legacy.zip` is the MinGW build Jenkins makes
+  (`winbuild.sh`), renamed. README and BUILD.md say it has no MCP.
+- `testing/cygpacktest.py` runs the unpacked package from `cmd` with
+  only Windows on the PATH: `--version`, then a config written in the
+  profile, `write_file` and a `run_command` through the package's `sh`
+  that also starts `cmd`. It passes on GitHub's runner (tried on a
+  `ci/try` branch).
+- Two things gork had to give up under Cygwin for it: the rule that a
+  config holding `api_key` must be mode 600 (a file made by a Windows
+  program shows group bits, and the package has no `chmod`), and the
+  wording of `run_command`'s description, which now says the Unix tools
+  may be missing.
+- Not done: the package's TUI has not been seen by anyone, MCP was not
+  tried from the package (only from the Cygwin build in its tree, by
+  `looptest.py`), and no release has been made with it: the first one
+  will be v1.0, and its Actions run is the first real upload.
+
+## Windows 2.03 and 1.04, MS-DOS 3.30 (2026-10-13)
+
+All nine `dostest.py` checks pass on each:
+
+- **Windows 2.03** on MS-DOS 4.01, with nothing changed in the test: it
+  is laid out as 2.11 is (`WIN200.BIN`, `PIF\WORD.PIF`, `run=`).
+- **MS-DOS 3.30** by itself (Dell's OEM release of 1988, from WinWorldPC:
+  "Microsoft MS-DOS 3.30 [Dell OEM] (3.5-720k)", disk 1 as
+  `GORK_DOS_FLOPPY`, with `GORK_DOS_SMALL_DISKS=1`). The oldest DOS gork
+  has run on. It has no HIMEM.SYS; CWSDPMI does without.
+- **Windows 1.04** (IBM's PS/2 release of 1987) on MS-DOS 3.30. On MS-DOS
+  4.01 Windows 1.04 starts, and then hangs with the hourglass whenever it
+  starts anything: Enter on a file in the MS-DOS Executive, `run=`, or a
+  program named after `WIN`. On 3.30 the route of Windows 2 works as it
+  is. `dostest.py` takes `WIN100.BIN` as well as `WIN200.BIN` for
+  "Windows 1 or 2", starts `WIN` from `C:\WINDOWS` (Windows 1 looks for
+  its files in the current directory: "Cannot find Windows startup
+  files"), and loads HIMEM.SYS only if the DOS disk has one.
+
+Installing them, for a repeat, in `/vm/wold` of the same volume:
+
+- `prepold4.py NAME` (`w203`, `w104`): as `prepwold.py`, but with MS-DOS
+  4.01 as the DOS and a disk it can read. Windows 2.03's Setup hangs on
+  MS-DOS 6.22, with a black screen; on 4.01 it runs. `runwold.sh NAME
+  -boot a`, then `setup`.
+- Windows 2.03 Setup: Enter, `h` (hard disk), Enter (the directory), Down
+  Down Enter (IBM AT or compatible), six times Down and Enter (VGA),
+  Enter (US keyboard), Down Enter (no mouse), Enter, `c` (no printer),
+  Enter (country), `f`.
+- Windows 1.04 Setup wants its disks in drive A: `c`, Enter, `c`, then
+  `change floppy0` to disk 1 and `c`; Enter (keyboard), Enter (no
+  pointing device), Backspace `2` Enter (PS/2 Model 50, 60, 80: VGA);
+  disk 2 and `c`; `n` (no printer); disk 3 and `c`.
+- The `WINDOWS` directory comes off with `mcopy -s -i c.img@@32256
+  ::WINDOWS tree/` (the partition starts at sector 63 here).
+- `/vm/reg.sh ZIP` now runs nine configurations: FreeDOS with the SPX
+  check, MS-DOS 6.22, 4.01 and 3.30, Windows 3.1 and 3.0 on 6.22, 2.11
+  and 2.03 on 4.01, and 1.04 on 3.30.
+- In QEMU's monitor `sendkey down` does nothing in Windows 1.04's MS-DOS
+  Executive, while letters and Alt-F do.
 
 ## Windows Me (2026-10-13)
 

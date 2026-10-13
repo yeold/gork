@@ -1,6 +1,8 @@
 #!/bin/sh
 # Cross-build gork.exe for Windows (9x and NT, 32-bit) with MinGW and pack
-# it as OUT/gork-<version>-win32.zip.  Fetches the PDCurses source into
+# it as OUT/gork-<version>-win32-legacy.zip ("legacy": the Cygwin build,
+# cygpack.sh, is the Windows package for current systems, and has MCP).
+# Fetches the PDCurses source into
 # WORK, checksum pinned.  Needs the i686 mingw-w64 gcc, curl, zip and make;
 # run from the source tree:  sh winbuild.sh [OUT] [WORK]
 set -eu
@@ -26,6 +28,6 @@ make -f Makefile.w32 CC="$HOST-gcc" PDCURSES="$WORK/PDCurses-3.9"
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
 cp gork.exe README.md docs/BUILD.md "$WORK/pack/"
-rm -f "$OUT/gork-$ver-win32.zip"
-(cd "$WORK/pack" && zip -q "$OUT/gork-$ver-win32.zip" *)
-echo "$OUT/gork-$ver-win32.zip"
+rm -f "$OUT/gork-$ver-win32-legacy.zip"
+(cd "$WORK/pack" && zip -q "$OUT/gork-$ver-win32-legacy.zip" *)
+echo "$OUT/gork-$ver-win32-legacy.zip"

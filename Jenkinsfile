@@ -64,7 +64,7 @@ pipeline {
                                 dpkg --add-architecture i386
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends wine wine32:i386 unzip python3 >/dev/null
-                                mkdir /tmp/w && cd /tmp/w && unzip -q /out/gork-*-win32.zip
+                                mkdir /tmp/w && cd /tmp/w && unzip -q /out/gork-*-win32-legacy.zip
                                 cd /src && python3 testing/wintest.py wine /tmp/w/gork.exe'
                         '''
                     }
