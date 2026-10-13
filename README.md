@@ -48,7 +48,7 @@ of `testing/looptest.py`.
 | macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
 | Windows (native, experimental; the `win32-legacy` package) | Windows NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, Me, 2000, XP SP3, 11, Server 2025; Wine 10 | |
 | Windows (Cygwin; the `win32` package) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | 64-bit Windows 10 and later only. The package was run on GitHub's Windows runner, batch mode only |
-| DOS (experimental) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | 16-bit real mode: requests do not fit in 640 K. Windows/386 2.x: not tried |
+| DOS (experimental) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | 16-bit real mode: requests do not fit in 640 K. Windows/386 2.11: it gives DOS programs no protected mode |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
 and i386 passes the whole suite: cross-built with Debian 13's toolchains
@@ -284,34 +284,18 @@ same: tools, skills, MCP servers and compacting. What differs:
 
 ### Without TCP/IP: SPX
 
-A machine on a NetWare-style network may have IPX and no TCP/IP at all.
-[gork-relay](https://github.com/yeold/gork-relay) listens on SPX as well
-as on TCP, and the DOS and Windows builds of gork can connect to it that
-way. Start the relay on the same network segment:
-
-```sh
-gork-relay -x eth:eth0 api.anthropic.com
-gork-relay: SPX at 00000000.525400A1B2C3:8443 on eth:eth0
-```
-
-and give gork the address it printed, network, node and socket, in hex:
+On an IPX network without TCP/IP, the DOS and Windows builds can reach a
+[gork-relay](https://github.com/yeold/gork-relay) over SPX. The relay
+prints its address when started with `-x`; give it to gork, in hex:
 
 ```ini
 relay = spx:0.525400A1B2C3:8443
 ```
 
-Network `0` is "this segment". Everything else is as with TCP: the same
-HTTP goes over the SPX connection.
-
-| Build | Needs | State |
-|---|---|---|
-| DOS | An IPX driver with SPX loaded: Novell's `IPXODI` or `IPX.COM`, or `PDIPX` on a packet driver. No packet driver for TCP/IP is needed then | Works with PDIPX on FreeDOS 1.3 in QEMU; `dostest.py` checks it when `GORK_RELAY` names a relay binary |
-| Windows | The IPX/SPX-compatible protocol installed (Windows 95 to XP have it; Vista and later do not) | Works on Windows Me in QEMU, by hand: the relay was started with `-n 1`, and Windows found the network number and the frame type by itself. Other Windows versions untried |
-| Unix | -- | Not there. Linux had SPX sockets only briefly, around 2.2, and current systems have no IPX |
-
-Token ring needs nothing from gork: it is the network card's driver that
-differs, under TCP/IP and under IPX alike. Nothing here has been tried on
-a real ring.
+DOS needs an IPX driver with SPX loaded (`IPXODI`, `IPX.COM`, or `PDIPX`
+on a packet driver); Windows 95 to XP need the IPX/SPX-compatible
+protocol installed. Tested with PDIPX on FreeDOS and on Windows Me. The
+Unix builds have no SPX.
 
 ### Config
 

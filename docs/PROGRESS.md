@@ -88,6 +88,27 @@ build on each system), README "Tested systems" (results table).
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
 
+## Windows 2.11/386: does not work (2026-10-13)
+
+Installed on MS-DOS 4.01 (`prepold4.py w211-386`; Setup as for 2.03, with
+the directory changed to `C:\WINDOWS`, "COMPAQ 80386-Based ... and
+compatibles", no mouse, `n` for AUTOEXEC.BAT, `c` to skip Memset). It is
+started with `WIN386`, or `WIN86` for real mode; there is no `WIN.COM`.
+
+- `WIN386`: the DOS box comes up as under Windows 2.11/286 (`GSHELL`,
+  `run=`), and gork ends at once: "Protected mode not accessible. Load
+  error: no DPMI". DOS programs run in virtual 8086 mode there, Windows
+  offers neither DPMI nor VCPI, and a resident CWSDPMI cannot switch
+  modes from inside. Nothing gork can do about it short of a 16-bit
+  build.
+- `WIN86`: "386 System not correctly installed", and no DOS box.
+- `dostest.py` was not changed for it. To repeat the first run, start
+  `WIN386` where `windows2()` has `WIN`.
+
+The user's rule from the same day, for the READMEs of gork and
+gork-relay: keep them short, only what a reader really needs, and nothing
+about token ring.
+
 ## Two Windows packages (2026-10-13)
 
 The user asked for a Cygwin build on the releases under the plain name,
