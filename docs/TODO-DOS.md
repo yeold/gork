@@ -8,8 +8,8 @@ they came about. What is left:
 
 - [ ] Real hardware: everything ran in QEMU. See
       [TODO-REAL.md](TODO-REAL.md).
-- [ ] Older DOS: MS-DOS 2.x and 3.0 to 3.2, PC DOS, and the 16-bit build
-      on MS-DOS 4.01 and DR-DOS. The oldest tried is MS-DOS 3.30.
+- [ ] Older DOS: MS-DOS 2.x, and the 16-bit build on DR-DOS. The oldest
+      tried is MS-DOS 3.30.
 - [ ] `IPXODI` and `IPX.COM` for SPX; only PDIPX was tried.
 - [ ] DHCP in the 16-bit build: Watt-32 is built without it there, to
       save memory, so the address goes in `WATTCP.CFG`.

@@ -7,6 +7,10 @@ needs (a C89 compiler, curses, BSD sockets, `fork`/`pipe`/`select`,
 `realpath`) and from what broke on the systems that work. Grouped by
 expected effort.
 
+Only major versions belong here, and versions that differ in something
+gork depends on: when one release of a line works, its point releases
+are taken to work too.
+
 ## Unix: probably `configure`, `make` and small fixes
 
 | OS | How to run it | What to expect |
@@ -29,8 +33,7 @@ expected effort.
 | OS | Route | What to expect |
 |---|---|---|
 | OS/2 (Warp 3 and 4, ArcaOS) | EMX with gcc, or kLIBC; runs in QEMU | EMX has `fork`, pipes, sockets and a curses port, so it is nearer to Unix than DOS is. |
-| Windows NT 3.1 and 3.5; Vista, 7, 8 and 10; the first Windows 98 | The `win32-legacy` build, in QEMU | Expected to work as their neighbours do. NT 3.1 and 3.5 will want `msvcrt.dll` added, as 3.51 did, and may refuse a program marked for Windows 4.0. |
-| Windows 1.01 to 1.03 | The DOS `gork.exe` in a DOS box, on MS-DOS 3.x | Should go as 1.04 does. |
+| Windows NT 3.1; Vista, 7, 8 and 10 | The `win32-legacy` build, in QEMU | Expected to work as their neighbours do. NT 3.1 will want `msvcrt.dll` added, as 3.51 did, and may refuse a program marked for Windows 4.0. |
 | BeOS R5 | x86 in QEMU | Haiku already works. BeOS has gcc 2.95 and sockets that are not file descriptors, so `select` on them is the risk. |
 | AmigaOS, MorphOS, AROS | ixemul or libnix with gcc; UAE, or AROS in QEMU | `fork` is emulated badly or not at all; sockets come from `bsdsocket.library`. |
 | z/OS (UNIX System Services) | No emulator route that is both free and licensed: Hercules runs z/OS, but only with IBM's media (ZD&T, a paid licence). IBM Z Xplore gives free shell accounts on a real z/OS; whether a compiler and outbound TCP are allowed there is the first thing to find out. The public-domain MVS 3.8j (TK4-, TK5) has no USS and is a different job. | USS is a certified Unix: `fork`, BSD sockets, `select`, `realpath` and a curses library are there, and the compiler is `xlc`/`c89` or `ibm-clang`. The wall is EBCDIC: character constants in the source become EBCDIC, while the HTTP headers and the JSON on the wire are ASCII, so gork must be built in ASCII mode (`-qascii` with `xlc`, `-fzos-le-char-mode=ascii` with `ibm-clang`) and its files tagged, or every literal compared against the network breaks. Expect curses and the terminal (3270 or an ssh pty, in EBCDIC) to be the next problem; start with batch mode. |
