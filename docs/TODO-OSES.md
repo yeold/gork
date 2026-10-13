@@ -1,10 +1,11 @@
 # TODO: operating systems still to test
 
-None of these has been tried. DOS, once on this list, now works: see
-[TODO-DOS.md](TODO-DOS.md). The notes are expectations, from what gork
+None of these has been tried. What works is in the
+[README table](../README.md#tested-systems), and what works only in an
+emulator so far in [TODO-REAL.md](TODO-REAL.md). The notes are expectations, from what gork
 needs (a C89 compiler, curses, BSD sockets, `fork`/`pipe`/`select`,
-`realpath`) and from what broke on the systems in the
-[README table](../README.md#tested-systems). Grouped by expected effort.
+`realpath`) and from what broke on the systems that work. Grouped by
+expected effort.
 
 ## Unix: probably `configure`, `make` and small fixes
 
@@ -13,24 +14,23 @@ needs (a C89 compiler, curses, BSD sockets, `fork`/`pipe`/`select`,
 | AIX (4.3, 5.x, 7.x) | QEMU `ppc64` runs AIX 7.2; older wants real RS/6000 hardware | System V curses as on Solaris. Needs gcc from the AIX Toolbox, or `xlc`. Sockets are in libc. |
 | HP-UX (10.20, 11.x) | QEMU `hppa` runs 10.20 to 11.11; Itanium needs real hardware. 11.11 was installed in QEMU, but no compiler for its PA-RISC 1.1 processor could be found: see [PROGRESS.md](PROGRESS.md) | System V curses (`-lcurses`, `-lHcurses` on old releases). The bundled `cc` is K&R only, so gcc is needed. |
 | IRIX (5.3, 6.5) | No good emulator; MAME's Indy boots but is slow. Real SGI hardware is the practical route | System V curses, MIPSpro `cc` or gcc. Should be close to Solaris. |
-| Minix 2.0 | x86 in QEMU | Minix 3.3.0 is done and works (see [PROGRESS.md](PROGRESS.md)). Minix 2 has its own small libc: check `select`, `realpath` and curses first. |
+| Minix 2.0 | x86 in QEMU | It has its own small libc: check `select`, `realpath` and curses first. |
 | Tru64 / OSF/1 | Alpha emulation in QEMU is limited; real hardware | Similar to the other System V systems. |
 | UnixWare, SCO OpenServer | x86 in QEMU | SVR4 and SVR3 curses; old SCO needs `-lsocket`, which `configure` already looks for. |
 | NeXTSTEP / OPENSTEP | x86 in QEMU, or the Previous emulator for 68k | 4.3BSD base with BSD curses only, so ncurses must be added as on NetBSD 1.0. |
 | SunOS 4, Ultrix, A/UX | QEMU `sparc` (SunOS 4.1.4), SIMH (VAX Ultrix), Shoebill (A/UX) | Pre-ANSI bundled compilers, so gcc. SunOS 4's libc lacks `strerror` and `memmove`. |
 | m68k Macintosh, with a Unix on it | QEMU's `q800` machine (a Quadra 800) runs Linux/m68k and NetBSD/mac68k, and newer QEMU is said to boot A/UX 3; Shoebill runs A/UX on an emulated Mac II. Not checked which of these work here | Linux/m68k (Debian ports) and NetBSD/mac68k should be `configure` and `make`, and would be the first 32-bit big-endian results. A/UX is System V with BSD sockets and a pre-ANSI `cc`, so it needs gcc (see the SunOS 4 row). The classic Mac OS on the same machines is a port: see below. |
-| Mac OS X (old) | `qemu-system-ppc` for 10.4 and 10.5 | Current macOS is done: it passes the whole suite on GitHub Actions. Should behave like FreeBSD. |
+| Mac OS X (old) | `qemu-system-ppc` for 10.4 and 10.5 | Should behave like FreeBSD. |
 | QNX (4, 6) | x86 in QEMU | QNX 6 is POSIX with ncurses; QNX 4 uses Watcom C. |
-| Linux with dietlibc | A cross toolchain | musl and uClibc are done and pass the whole suite. dietlibc has no curses port in common use; batch mode only, if at all. |
+| Linux with dietlibc | A cross toolchain | No curses port in common use; batch mode only, if at all. |
 
 ## Not Unix, but a POSIX layer exists
 
 | OS | Route | What to expect |
 |---|---|---|
 | OS/2 (Warp 3 and 4, ArcaOS) | EMX with gcc, or kLIBC; runs in QEMU | EMX has `fork`, pipes, sockets and a curses port, so it is nearer to Unix than DOS is. |
-| Windows NT (3.51, 4.0, 2000, XP, current) | Cygwin, or native with MinGW, PDCurses and Winsock | Cygwin is done on a current Windows: it passes the whole suite on GitHub Actions. A native `gork.exe` (MinGW, PDCurses, Winsock 1.1) exists, passes `wintest.py` under Wine and on a current Windows, and works on NT 3.51, Windows 95, 98 SE, NT 4.0, 2000 and XP. Native needed the same work as DOS: no `fork`, `CreateProcess` for commands, Winsock start-up, backslash paths. |
-| Windows 1.01 to 1.03 | The DJGPP `gork.exe` in a DOS box, on MS-DOS 3.x | Windows 1.04, 2.03 and 2.11/286 are done: all nine `dostest.py` checks pass in a full-screen DOS box, 1.04 on MS-DOS 3.30 and the 2.x ones on MS-DOS 4.01 (see [PROGRESS.md](PROGRESS.md) and [BUILD.md](BUILD.md)). The earlier 1.x releases should go as 1.04 does. Windows/386 2.11 works with the 16-bit build (`dos16`) only: it runs DOS programs in virtual 8086 mode and offers neither DPMI nor VCPI, so the 32-bit one cannot start there. |
-| Windows 9x | The DJGPP `gork.exe` in a DOS box, or MinGW with PDCurses and Winsock | Windows 95 OSR2 and 98 SE are done: the MinGW `gork.exe` works on both in QEMU, batch mode and TUI, on an emulated Pentium (see [PROGRESS.md](PROGRESS.md)); 95 needs `msvcrt.dll` added. The first Windows 95 (4.00.950) works as well. Windows Me is done too (the OEM CD and its key: see PROGRESS.md). Left: the first Windows 98 and a real 486. |
+| Windows NT 3.1 and 3.5; Vista, 7, 8 and 10; the first Windows 98 | The `win32-legacy` build, in QEMU | Expected to work as their neighbours do. NT 3.1 and 3.5 will want `msvcrt.dll` added, as 3.51 did, and may refuse a program marked for Windows 4.0. |
+| Windows 1.01 to 1.03 | The DOS `gork.exe` in a DOS box, on MS-DOS 3.x | Should go as 1.04 does. |
 | BeOS R5 | x86 in QEMU | Haiku already works. BeOS has gcc 2.95 and sockets that are not file descriptors, so `select` on them is the risk. |
 | AmigaOS, MorphOS, AROS | ixemul or libnix with gcc; UAE, or AROS in QEMU | `fork` is emulated badly or not at all; sockets come from `bsdsocket.library`. |
 | z/OS (UNIX System Services) | No emulator route that is both free and licensed: Hercules runs z/OS, but only with IBM's media (ZD&T, a paid licence). IBM Z Xplore gives free shell accounts on a real z/OS; whether a compiler and outbound TCP are allowed there is the first thing to find out. The public-domain MVS 3.8j (TK4-, TK5) has no USS and is a different job. | USS is a certified Unix: `fork`, BSD sockets, `select`, `realpath` and a curses library are there, and the compiler is `xlc`/`c89` or `ibm-clang`. The wall is EBCDIC: character constants in the source become EBCDIC, while the HTTP headers and the JSON on the wire are ASCII, so gork must be built in ASCII mode (`-qascii` with `xlc`, `-fzos-le-char-mode=ascii` with `ibm-clang`) and its files tagged, or every literal compared against the network breaks. Expect curses and the terminal (3270 or an ssh pty, in EBCDIC) to be the next problem; start with batch mode. |
@@ -56,7 +56,7 @@ reachable from C. These have them and are not listed above.
 
 | OS | Notes |
 |---|---|
-| GhostBSD | A FreeBSD desktop distribution; expected to behave like FreeBSD. DragonFly BSD and MidnightBSD are done and pass. |
+| GhostBSD | A FreeBSD desktop distribution; expected to behave like FreeBSD. |
 | Darwin / PureDarwin, iOS (jailbroken), Android (Termux, bionic libc) | Unix underneath; Termux has clang and ncurses packages. |
 | SerenityOS, Redox, Managarm, ToaruOS, Sortix | Hobby Unix-likes with a POSIX libc, sockets and an ncurses port; each is a small-libc test. |
 | ReactOS | Aims at NT compatibility; a native Windows build should run there. |
@@ -70,16 +70,13 @@ reachable from C. These have them and are not listed above.
 
 ## Suggested order
 
-1. Done: macOS and Cygwin (GitHub Actions), Minix 3 and musl.
-2. AIX and HP-UX in QEMU: System V variety beyond Solaris, and both emulate.
-3. OS/2 with EMX, then native Windows (NT and 9x): the Windows work overlaps
-   the DOS port, which is done (see [TODO-DOS.md](TODO-DOS.md)): its
-   `#ifdef __MSDOS__` changes show what a system without `fork` needs.
-4. IRIX, NeXTSTEP, SunOS 4, Minix 2: these depend on hardware or slow
+1. AIX and HP-UX in QEMU: System V variety beyond Solaris, and both emulate.
+2. OS/2 with EMX: nearer to Unix than DOS is.
+3. IRIX, NeXTSTEP, SunOS 4, Minix 2: these depend on hardware or slow
    emulators.
-5. Plan 9: batch mode only as a first goal.
-6. UEFI application: explore after the Windows work, reusing the DOS
-   decisions; batch mode in QEMU with OVMF first.
-   Then U-Boot and the other boot firmware: check each for TCP first;
-   U-Boot running `gork.efi` is the cheapest thing to try.
-7. Visopsys, ZealOS or Shrine: only for their own sake.
+4. Plan 9: batch mode only as a first goal.
+5. UEFI application: reuse the decisions of the DOS and Windows ports
+   (no `fork`, a polled timeout, odd path syntax); batch mode in QEMU with
+   OVMF first. Then U-Boot and the other boot firmware: check each for TCP
+   first; U-Boot running `gork.efi` is the cheapest thing to try.
+6. Visopsys, ZealOS or Shrine: only for their own sake.

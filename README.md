@@ -49,7 +49,7 @@ of `testing/looptest.py`.
 | Windows (native, experimental; the `win32-legacy` package) | Windows NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, Me, 2000, XP SP3, 11, Server 2025; Wine 10 | |
 | Windows (Cygwin; the `win32` package) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | 64-bit Windows 10 and later only. The package was run on GitHub's Windows runner, batch mode only |
 | DOS, 32-bit (experimental; the `dos` package) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | Windows/386 2.11: use the 16-bit build |
-| DOS, 16-bit (experimental; the `dos16` package) | MS-DOS 3.30, real mode, built with Open Watcom for the 8086 | MS-DOS 6.22, FreeDOS 1.3; in a DOS box under Windows 1.04, 2.11/386 and 3.1 | Run on an emulated 486 only: no 8086 or 286 was at hand. Small limits (below); no SPX |
+| DOS, 16-bit (experimental; the `dos16` package) | MS-DOS 3.30, real mode, built with Open Watcom for the 8086 | MS-DOS 6.22, FreeDOS 1.3; in a DOS box under Windows 1.04, 2.11/386 and 3.1 | Run on an emulated 486 only: no 8086 or 286 was at hand. Small limits (below) |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
 and i386 passes the whole suite: cross-built with Debian 13's toolchains
@@ -63,7 +63,9 @@ in QEMU or, for Debian 2.1 and 2.2, in Docker; macOS and Cygwin run on
 GitHub Actions (`.github/workflows/build.yml`), batch mode and the suite
 only. The oldest Linux and BSD systems are compiled by hand.
 [docs/BUILD.md](docs/BUILD.md) has the instructions for every system
-here, and [docs/TODO-OSES.md](docs/TODO-OSES.md) the ones still to try.
+here, [docs/TODO-OSES.md](docs/TODO-OSES.md) the ones still to try, and
+[docs/TODO-REAL.md](docs/TODO-REAL.md) the ones that have only met an
+emulator and want a run on real hardware.
 
 There are two DOS packages. `gork-<version>-dos.zip` needs a 386 and is
 the full program. `gork-<version>-dos16.zip` runs in real mode, in 640K,
@@ -299,8 +301,8 @@ prints its address when started with `-x`; give it to gork, in hex:
 relay = spx:0.525400A1B2C3:8443
 ```
 
-DOS needs an IPX driver with SPX loaded (`IPXODI`, `IPX.COM`, or `PDIPX`
-on a packet driver); Windows 95 to XP need the IPX/SPX-compatible
+DOS, either build, needs an IPX driver with SPX loaded (`IPXODI`,
+`IPX.COM`, or `PDIPX` on a packet driver); Windows 95 to XP need the IPX/SPX-compatible
 protocol installed. Tested with PDIPX on FreeDOS and on Windows Me. The
 Unix builds have no SPX.
 

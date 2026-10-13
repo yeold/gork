@@ -14,7 +14,9 @@ happened" is a useful report whether it worked or not. Say:
 - what worked: `gork --version`, a batch task, the TUI;
 - if `testing/looptest.py` could run there, what it printed.
 
-[docs/TODO-OSES.md](docs/TODO-OSES.md) lists the systems still to try.
+[docs/TODO-OSES.md](docs/TODO-OSES.md) lists the systems still to try, and
+[docs/TODO-REAL.md](docs/TODO-REAL.md) the ones that work in an emulator
+and have never run on real hardware.
 
 For a bug, give the command line, the config with the key removed, what
 you expected and what happened. `GORK_TRACE=1` shows the reply headers.

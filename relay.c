@@ -168,15 +168,10 @@ sock_err:
   return -1;
 }
 
-static int spx_connect(const char *host, int socket_no) {
-  (void)host;
-  (void)socket_no;
-  fprintf(stderr, "gork: SPX is not in the 16-bit build\n");
-  return -1;
-}
-
 static int write_all(int fd, const char *p, size_t n) {
   (void)fd;
+  if (spx)
+    return dosspx_write(p, n);
   while (n > 0) {
     int part = n > 8192 ? 8192 : (int)n;
     int w = sock_write(&sock16, (const BYTE *)p, part);
@@ -195,6 +190,10 @@ static void conn_close(int fd) {
   time_t end = time(NULL) + 2;
 
   (void)fd;
+  if (spx) {
+    dosspx_close();
+    return;
+  }
   sock_close(&sock16);
   while (tcp_tick(&sock16) && time(NULL) <= end)
     ;
@@ -209,9 +208,15 @@ static int read_to_eof(int fd, struct buf *b) {
 
   (void)fd;
   for (;;) {
-    if (open && !tcp_tick(&sock16))
-      open = 0;                 /* closed: what has arrived is still there */
-    r = sock_fastread(&sock16, (BYTE *)chunk, sizeof chunk);
+    if (spx) {
+      r = dosspx_read(chunk, sizeof chunk);
+      if (r == 0 || r == -1)
+        return r;
+    } else {
+      if (open && !tcp_tick(&sock16))
+        open = 0;               /* closed: what has arrived is still there */
+      r = sock_fastread(&sock16, (BYTE *)chunk, sizeof chunk);
+    }
     if (r > 0) {
       if (buf_add(b, chunk, (size_t)r) != 0) {
         fprintf(stderr, "gork: the reply is too large for the 16-bit "
@@ -294,78 +299,6 @@ static int tcp_connect(const char *host, long port) {
     return -1;
   }
   return fd;
-}
-
-/* "spx:NET.NODE" as the 4 and 6 bytes of an IPX address; 0 or -1. */
-static int spx_address(const char *host, unsigned char *net,
-                       unsigned char *node) {
-  const char *dot = strchr(host + 4, '.');
-  unsigned long v;
-  char part[9];
-  int i;
-
-  if (dot == NULL || dot == host + 4 || dot - (host + 4) > 8 ||
-      strlen(dot + 1) != 12 ||
-      strspn(host + 4, "0123456789abcdefABCDEF") != (size_t)(dot - host - 4) ||
-      strspn(dot + 1, "0123456789abcdefABCDEF") != 12)
-    return -1;
-  memcpy(part, host + 4, (size_t)(dot - host - 4));
-  part[dot - host - 4] = '\0';
-  v = strtoul(part, NULL, 16);
-  for (i = 3; i >= 0; i--, v >>= 8)
-    net[i] = (unsigned char)v;
-  for (i = 0; i < 6; i++) {
-    memcpy(part, dot + 1 + 2 * i, 2);
-    part[2] = '\0';
-    node[i] = (unsigned char)strtoul(part, NULL, 16);
-  }
-  return 0;
-}
-
-/* Connect to the relay's SPX socket.  A descriptor, or -1; -2 if aborted. */
-static int spx_connect(const char *host, int socket_no) {
-  unsigned char net[4], node[6];
-
-  if (spx_address(host, net, node) != 0) {
-    fprintf(stderr, "gork: bad SPX address '%s', want spx:NET.NODE:SOCKET "
-                    "in hex, as the relay prints it\n", host);
-    return -1;
-  }
-#if defined(__MSDOS__)
-  {
-    int rc = dosspx_open(net, node, (unsigned)socket_no, relay_abort);
-    return rc == 0 ? 0 : rc;
-  }
-#elif defined(_WIN32)
-  {
-    struct sockaddr_ipx addr;
-    int fd;
-
-    if (winsock_start() != 0)
-      return -1;
-    fd = socket(AF_IPX, SOCK_STREAM, NSPROTO_SPX);
-    if (fd < 0) {
-      fprintf(stderr, "gork: no SPX here (Winsock error %d): is the "
-                      "IPX/SPX protocol installed?\n", WSAGetLastError());
-      return -1;
-    }
-    memset(&addr, 0, sizeof addr);
-    addr.sa_family = AF_IPX;
-    memcpy(addr.sa_netnum, net, 4);
-    memcpy(addr.sa_nodenum, node, 6);
-    addr.sa_socket = htons((unsigned short)socket_no);
-    if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
-      sock_perror("SPX connect");
-      close(fd);
-      return -1;
-    }
-    return fd;
-  }
-#else
-  (void)socket_no;
-  fprintf(stderr, "gork: SPX is only in the DOS and Windows builds\n");
-  return -1;
-#endif
 }
 
 static int write_all(int fd, const char *p, size_t n) {
@@ -575,6 +508,78 @@ static int read_to_eof(int fd, struct buf *b) {
 }
 
 #endif /* GORK_DOS16 */
+
+/* "spx:NET.NODE" as the 4 and 6 bytes of an IPX address; 0 or -1. */
+static int spx_address(const char *host, unsigned char *net,
+                       unsigned char *node) {
+  const char *dot = strchr(host + 4, '.');
+  unsigned long v;
+  char part[9];
+  int i;
+
+  if (dot == NULL || dot == host + 4 || dot - (host + 4) > 8 ||
+      strlen(dot + 1) != 12 ||
+      strspn(host + 4, "0123456789abcdefABCDEF") != (size_t)(dot - host - 4) ||
+      strspn(dot + 1, "0123456789abcdefABCDEF") != 12)
+    return -1;
+  memcpy(part, host + 4, (size_t)(dot - host - 4));
+  part[dot - host - 4] = '\0';
+  v = strtoul(part, NULL, 16);
+  for (i = 3; i >= 0; i--, v >>= 8)
+    net[i] = (unsigned char)v;
+  for (i = 0; i < 6; i++) {
+    memcpy(part, dot + 1 + 2 * i, 2);
+    part[2] = '\0';
+    node[i] = (unsigned char)strtoul(part, NULL, 16);
+  }
+  return 0;
+}
+
+/* Connect to the relay's SPX socket.  A descriptor, or -1; -2 if aborted. */
+static int spx_connect(const char *host, int socket_no) {
+  unsigned char net[4], node[6];
+
+  if (spx_address(host, net, node) != 0) {
+    fprintf(stderr, "gork: bad SPX address '%s', want spx:NET.NODE:SOCKET "
+                    "in hex, as the relay prints it\n", host);
+    return -1;
+  }
+#if defined(__MSDOS__)
+  {
+    int rc = dosspx_open(net, node, (unsigned)socket_no, relay_abort);
+    return rc == 0 ? 0 : rc;
+  }
+#elif defined(_WIN32)
+  {
+    struct sockaddr_ipx addr;
+    int fd;
+
+    if (winsock_start() != 0)
+      return -1;
+    fd = socket(AF_IPX, SOCK_STREAM, NSPROTO_SPX);
+    if (fd < 0) {
+      fprintf(stderr, "gork: no SPX here (Winsock error %d): is the "
+                      "IPX/SPX protocol installed?\n", WSAGetLastError());
+      return -1;
+    }
+    memset(&addr, 0, sizeof addr);
+    addr.sa_family = AF_IPX;
+    memcpy(addr.sa_netnum, net, 4);
+    memcpy(addr.sa_nodenum, node, 6);
+    addr.sa_socket = htons((unsigned short)socket_no);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
+      sock_perror("SPX connect");
+      close(fd);
+      return -1;
+    }
+    return fd;
+  }
+#else
+  (void)socket_no;
+  fprintf(stderr, "gork: SPX is only in the DOS and Windows builds\n");
+  return -1;
+#endif
+}
 
 /* ------------------------------------------------------------------ */
 /* response parsing                                                   */

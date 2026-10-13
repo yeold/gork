@@ -4,6 +4,7 @@ Where the porting and testing work stands, written so another session can
 pick it up. Newest state first; update it as each step finishes.
 
 Related files: [TODO-OSES.md](TODO-OSES.md) (systems still to try),
+[TODO-REAL.md](TODO-REAL.md) (systems that work in an emulator only),
 [TODO-DOS.md](TODO-DOS.md) (the DOS port), [BUILD.md](BUILD.md) (how to
 build on each system), README "Tested systems" (results table).
 
@@ -125,7 +126,13 @@ protected mode to be had (Windows/386 2.x, and anything below a 386).
   sixth was refused with a message (cJSON prints at most 32K) and gork
   ended cleanly. With real token counts the compacting starts long
   before that; the fake API always reports 1000 tokens.
-- Left: a real 8086 or 286; SPX; older DOS.
+- SPX came the same day: `dosspx.c` has a real-mode half (its ECBs in a
+  buffer of its own, the driver called through INT 7Ah) beside the DPMI
+  one, and `check_spx` passes with the 16-bit zip.
+- The to-do lists were sorted out on the user's request: TODO-OSES.md
+  holds only what has not been tried, TODO-DOS.md only what is open, and
+  TODO-REAL.md is new: what works in an emulator and wants real hardware.
+- Left: a real 8086 or 286; older DOS.
 
 ## Windows 2.11/386: not with the 32-bit build (2026-10-13)
 

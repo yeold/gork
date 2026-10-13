@@ -327,7 +327,7 @@ no MCP.
 
 ## DOS
 
-Experimental; [TODO-DOS.md](TODO-DOS.md) has what works and what is left.
+Experimental; [TODO-DOS.md](TODO-DOS.md) has what is left.
 32-bit protected mode only: a 386 or better, built with
 [DJGPP](https://www.delorie.com/djgpp/), with PDCurses for the screen and
 Watt-32 for TCP/IP. Tested on FreeDOS 1.3, MS-DOS 3.30, 4.01 and 6.22,
@@ -384,8 +384,8 @@ program. Three things have to be arranged:
 Without TCP/IP, on an IPX network, gork can reach a
 [gork-relay](https://github.com/yeold/gork-relay) over SPX: load an IPX
 driver that has SPX (`IPXODI`, `IPX.COM`, or `PDIPX` after a packet
-driver) and set `relay = spx:NET.NODE:SOCKET`. `dostest.py` checks this
-when `GORK_RELAY` names a relay binary.
+driver) and set `relay = spx:NET.NODE:SOCKET`. Both DOS builds have it,
+and `dostest.py` checks it when `GORK_RELAY` names a relay binary.
 
 **The 16-bit build** (`gork-<version>-dos16.zip`) is the same source
 compiled with [Open Watcom](https://github.com/open-watcom/open-watcom-v2)
@@ -401,7 +401,6 @@ for it, on x86-64 Linux. What 640K and a 16-bit `int` change
   `run_command` return at most 8K, and `edit_file` takes files up to 30K.
 - Watt-32 is built without its optional parts: no BSD sockets (gork uses
   its own calls there), no DHCP, so the address goes in `WATTCP.CFG`.
-- No SPX.
 - The linker must not pack code segments into groups
   (`option packcode=1`), or Watt-32's interrupt code crashes at
   `sock_init()`, on some layouts and not on others.

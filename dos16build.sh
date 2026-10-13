@@ -70,7 +70,7 @@ fi
 # overfills the C library's code segment.
 obj=$WORK/obj
 rm -rf "$obj" && mkdir "$obj"
-for f in main.c relay.c tui.c cJSON/cJSON.c; do
+for f in main.c relay.c tui.c dosspx.c cJSON/cJSON.c; do
     n=$(basename "$f" .c)
     wcc -q -ml -bt=dos -os -fpc -w3 -wcd=200 -wcd=201 -zq -zc -zm -zt64 -nt="${n}_T" \
         -DCJSON_NESTING_LIMIT=40 -I"$WORK/pdcurses" -I"$WORK/watt/inc" \
@@ -81,7 +81,7 @@ done
 # runs astray: sock_init() then crashes or not, depending on the layout.
 (cd "$obj" && wlink option quiet system dos option packcode=1 \
     option packdata=1 option stack=24k option map=gork.map name gork.exe \
-    file main.obj,relay.obj,tui.obj,cJSON.obj \
+    file main.obj,relay.obj,tui.obj,dosspx.obj,cJSON.obj \
     library "$WORK/pdcurses/dos/pdcurses.lib","$WORK/watt/lib/wattcpwl.lib" 2>&1 |
     grep -v W1027 || true)
 test -s "$obj/gork.exe"

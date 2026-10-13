@@ -3,21 +3,28 @@
  * (Novell's IPX.COM or IPXODI.COM, or PDIPX over a packet driver).
  *
  * The driver runs in real mode and works on event control blocks (ECBs)
- * that it fills in the background, so the ECBs and their buffers live in
- * one block of DOS memory and are copied in and out.  No event service
- * routines: every ECB is polled, and the driver is given time in between.
- * One connection at a time, which is all relay.c needs.
+ * that it fills in the background.  For the 32-bit build the ECBs and
+ * their buffers live in one block of DOS memory and are copied in and
+ * out, and the driver is called through DPMI; the 16-bit build is in real
+ * mode itself, keeps them in a buffer of its own and calls INT 7Ah.  No
+ * event service routines: every ECB is polled, and the driver is given
+ * time in between.  One connection at a time, which is all relay.c needs.
  */
+#include <stddef.h>
+#include "port.h"
 #ifdef __MSDOS__
 
-#include <dpmi.h>
-#include <go32.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#ifdef GORK_DOS16
+#include <dos.h>
+#include <i86.h>
+#else
+#include <dpmi.h>
+#include <go32.h>
 #include <sys/movedata.h>
-
-#include "port.h"
+#endif
 
 #define HDR      42             /* IPX and SPX headers */
 #define DATA     534            /* 576, what every IPX path carries */
@@ -33,13 +40,79 @@ enum { H_LEN = 2, H_DEST = 6, H_CTL = 30, H_STREAM = 31, H_SEQ = 36 };
 
 #define STREAM_END 0xfe         /* the partner ended the connection */
 
-static int           seg, sel;          /* the DOS memory block */
-static unsigned      entry_seg, entry_off;
+static unsigned      seg, base;         /* where the slots are: seg:base */
 static unsigned      sock, conn;
 static int           is_open;
 static unsigned      rx_seq;            /* the packet due next */
 static char          pend[DATA];        /* received, not yet handed out */
 static size_t        pend_len, pend_off;
+
+#ifdef GORK_DOS16
+static unsigned char slots[NSLOTS * SLOT];
+
+static int mem_get(void) {
+    seg = FP_SEG((void far *) slots);
+    base = FP_OFF((void far *) slots);
+    return 0;
+}
+static void mem_free(void) {}
+
+static int ipx_there(void) {
+    union REGS r;
+
+    r.x.ax = 0x7a00;
+    int86(0x2f, &r, &r);
+    return r.h.al == 0xff;
+}
+
+static unsigned ipx(unsigned bx, unsigned ax, unsigned dx, int slot,
+                    unsigned *dx_out) {
+    union REGS   r;
+    struct SREGS sr;
+
+    segread(&sr);
+    r.x.bx = bx;
+    r.x.ax = ax;
+    r.x.dx = dx;
+    sr.es = seg;
+    r.x.si = base + slot * SLOT;
+    int86x(0x7a, &r, &r, &sr);
+    if (dx_out != NULL)
+        *dx_out = r.x.dx;
+    return r.h.al;
+}
+
+static void put(int slot, int off, const void *p, size_t n) {
+    memcpy(slots + slot * SLOT + off, p, n);
+}
+static void get(int slot, int off, void *p, size_t n) {
+    memcpy(p, slots + slot * SLOT + off, n);
+}
+#else
+static int           sel;               /* of the DOS memory block */
+static unsigned      entry_seg, entry_off;
+
+static int mem_get(void) {
+    int s = __dpmi_allocate_dos_memory((NSLOTS * SLOT + 15) / 16, &sel);
+
+    if (s < 0)
+        return -1;
+    seg = (unsigned) s;
+    base = 0;
+    return 0;
+}
+static void mem_free(void) { __dpmi_free_dos_memory(sel); }
+
+static int ipx_there(void) {
+    __dpmi_regs r;
+
+    memset(&r, 0, sizeof r);
+    r.x.ax = 0x7a00;
+    __dpmi_int(0x2f, &r);
+    entry_seg = r.x.es;
+    entry_off = r.x.di;
+    return r.h.al == 0xff;
+}
 
 static unsigned ipx(unsigned bx, unsigned ax, unsigned dx, int slot,
                     unsigned *dx_out) {
@@ -65,6 +138,8 @@ static void     put(int slot, int off, const void *p, size_t n) {
 static void     get(int slot, int off, void *p, size_t n) {
     dosmemget(seg * 16 + slot * SLOT + off, n, p);
 }
+#endif
+
 static unsigned byte_at(int slot, int off) {
     unsigned char b;
 
@@ -81,10 +156,10 @@ static void ecb_init(int slot, size_t data) {
     e[E_SOCKET] = (unsigned char) sock;         /* as the driver gave it */
     e[E_SOCKET + 1] = (unsigned char) (sock >> 8);
     e[E_NFRAG] = data ? 2 : 1;
-    f[0] = slot * SLOT + ECB;                   /* offset, segment, size */
+    f[0] = base + slot * SLOT + ECB;            /* offset, segment, size */
     f[1] = seg;
     f[2] = HDR;
-    f[3] = slot * SLOT + ECB + HDR;
+    f[3] = base + slot * SLOT + ECB + HDR;
     f[4] = seg;
     f[5] = (unsigned short) data;
     memcpy(e + E_FRAG, f, sizeof f);
@@ -124,38 +199,31 @@ void dosspx_close(void) {
         ecb_wait(LISTEN, 3, NULL);
     }
     ipx(0x0001, 0, sock, 0, NULL);              /* cancels what is posted */
-    __dpmi_free_dos_memory(sel);
+    mem_free();
     is_open = 0;
     conn = 0;
 }
 
 int dosspx_open(const unsigned char *net, const unsigned char *node,
                 unsigned socket, int (*stop)(void)) {
-    __dpmi_regs   r;
     unsigned char hdr[HDR];
     int           i, code;
 
-    memset(&r, 0, sizeof r);
-    r.x.ax = 0x7a00;
-    __dpmi_int(0x2f, &r);
-    if (r.h.al != 0xff) {
+    if (!ipx_there()) {
         fprintf(stderr, "gork: no IPX driver loaded\n");
         return -1;
     }
-    entry_seg = r.x.es;
-    entry_off = r.x.di;
     if (ipx(0x0010, 0, 0, 0, NULL) != 0xff) {
         fprintf(stderr, "gork: the IPX driver has no SPX\n");
         return -1;
     }
-    seg = __dpmi_allocate_dos_memory((NSLOTS * SLOT + 15) / 16, &sel);
-    if (seg < 0) {
+    if (mem_get() != 0) {
         fprintf(stderr, "gork: no DOS memory for SPX\n");
         return -1;
     }
     if (ipx(0x0000, 0, 0, 0, &sock) != 0) {     /* any free socket */
         fprintf(stderr, "gork: cannot open an IPX socket\n");
-        __dpmi_free_dos_memory(sel);
+        mem_free();
         return -1;
     }
     is_open = 1;
