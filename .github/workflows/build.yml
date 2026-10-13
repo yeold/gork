@@ -144,14 +144,19 @@ jobs:
   # Jenkins does it, then run on Windows.
   windows-build:
     runs-on: ubuntu-latest
+    # Debian stable, as Jenkins uses: gorknt3.exe needs a MinGW that can
+    # link against crtdll.dll, and the runner's own is too old for that.
+    container: debian:stable
     steps:
       - uses: actions/checkout@v5
-      - run: sudo apt-get -qq update && sudo apt-get -qq install -y gcc-mingw-w64-i686 zip
+      - run: apt-get -qq update && apt-get -qq install -y --no-install-recommends gcc-mingw-w64-i686 curl ca-certificates zip make
       - run: sh winbuild.sh out
       - uses: actions/upload-artifact@v4
         with:
           name: gork-win32
-          path: gork.exe
+          path: |
+            gork.exe
+            gorknt3.exe
 
   windows:
     needs: windows-build
@@ -166,6 +171,8 @@ jobs:
           name: gork-win32
       - run: ./gork.exe --version
       - run: python testing/wintest.py gork.exe 2>&1 | tee test.log
+      # the one for Windows NT 3.1, which uses crtdll.dll
+      - run: python testing/wintest.py gorknt3.exe 2>&1 | tee test.log
       - if: failure()
         run: |
           test -f test.log || exit 0

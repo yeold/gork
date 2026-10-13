@@ -444,6 +444,18 @@ and on the Windows of GitHub's runners, and the release zip of 0.9~beta is
 reported working on Windows 11, TUI included. Windows Vista to 10 were
 not tried; XP and 11, on either side of them, work.
 
+**Windows NT 3.1 and 3.5** take `gorknt3.exe`, which is in the same zip.
+They refuse a program marked for Windows 4.0, as `gork.exe` is, and no
+`msvcrt.dll` helps them: the one of a later Windows does not load there.
+`gorknt3.exe` is the same source marked for Windows 3.10 and linked
+against `crtdll.dll`, which every Windows NT has (`make -f Makefile.w32
+gorknt3.exe`; `nt3crt.c` has the four functions MinGW's library misses
+there). It passes `wintest.py` under Wine and on a current Windows, and on
+NT 3.1 in QEMU ran the batch round trip and the TUI. NT 3.1 installs no
+TCP/IP by itself: add it in the Network control panel, with a fixed
+address, as it has no DHCP. On a FAT disk it knows only 8.3 names. NT 3.5
+was not tried.
+
 **Windows 95 and NT 3.51 have no `msvcrt.dll`**, and gork.exe will not
 start without it ("A required .DLL file, MSVCRT.DLL, was not found"). Put a copy beside
 `gork.exe` or in the system directory; the ones from Windows 98 and NT 4

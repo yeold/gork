@@ -26,8 +26,21 @@ make -s -C "$WORK/PDCurses-3.9/wincon" \
 make -f Makefile.w32 CC="$HOST-gcc" PDCURSES="$WORK/PDCurses-3.9"
 "$HOST-strip" gork.exe
 
+# gorknt3.exe, for Windows NT 3.1 and 3.5: everything again, against
+# crtdll.dll (Makefile.w32 says why).
+if [ ! -d "$WORK/nt3/PDCurses-3.9" ]; then
+    mkdir -p "$WORK/nt3"
+    tar xzf "$f" -C "$WORK/nt3"
+fi
+make -s -C "$WORK/nt3/PDCurses-3.9/wincon" \
+    CC="$HOST-gcc -mcrtdll=crtdll -march=i486 -mtune=generic -D__USE_MINGW_ANSI_STDIO=0" \
+    AR="$HOST-ar" \
+    STRIP="$HOST-strip" pdcurses.a
+make -f Makefile.w32 CC="$HOST-gcc" PDCURSES_NT3="$WORK/nt3/PDCurses-3.9" gorknt3.exe
+"$HOST-strip" gorknt3.exe
+
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
-cp gork.exe README.md docs/BUILD.md LICENSE "$WORK/pack/"
+cp gork.exe gorknt3.exe README.md docs/BUILD.md LICENSE "$WORK/pack/"
 rm -f "$OUT/gork-$ver-win32-legacy.zip"
 (cd "$WORK/pack" && zip -q "$OUT/gork-$ver-win32-legacy.zip" *)
 echo "$OUT/gork-$ver-win32-legacy.zip"

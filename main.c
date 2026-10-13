@@ -584,8 +584,9 @@ static const char *save_file(const char *real, const char *data, size_t n)
 
     if (strlen(real) + 11 >= sizeof tmp) return "path too long";
     strcpy(tmp, real);
-#ifdef __MSDOS__
-    {   /* one extension only: NAME.EXT is written as NAME.g$$ */
+#ifdef GORK_NO_FORK
+    {   /* DOS has one extension only, and so has a FAT disk under Windows
+           NT 3.1: NAME.EXT is written as NAME.g$$ */
         char *dot = strrchr(tmp, '.'), *sl = strrchr(tmp, '/');
         if (dot != NULL && (sl == NULL || dot > sl)) *dot = '\0';
         strcat(tmp, ".g$$");

@@ -17,3 +17,15 @@ gork.exe: main.c relay.c tui.c win.c port.h cJSON/cJSON.c
 	$(CC) $(CFLAGS) -I$(PDCURSES) -o $@ \
 	    main.c relay.c tui.c win.c cJSON/cJSON.c \
 	    $(PDCURSES)/wincon/pdcurses.a -static-libgcc -lwsock32 -lm
+
+# The same for Windows NT 3.1 and 3.5: linked against crtdll.dll, which
+# they have (msvcrt.dll they have not, and a later one does not load
+# there), and marked as a program for Windows 3.10, since they refuse one
+# marked for 4.0.  PDCURSES_NT3 is a PDCurses built with -mcrtdll=crtdll.
+NT3      = -mcrtdll=crtdll -Wl,--major-subsystem-version,3 \
+           -Wl,--minor-subsystem-version,10 -Wl,--major-os-version,3 \
+           -Wl,--minor-os-version,10
+gorknt3.exe: main.c relay.c tui.c win.c nt3crt.c port.h cJSON/cJSON.c
+	$(CC) $(NT3) $(CFLAGS) -I$(PDCURSES_NT3) -o $@ \
+	    main.c relay.c tui.c win.c nt3crt.c cJSON/cJSON.c \
+	    $(PDCURSES_NT3)/wincon/pdcurses.a -static-libgcc -lwsock32 -lm

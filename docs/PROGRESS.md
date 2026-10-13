@@ -89,6 +89,58 @@ build on each system), README "Tested systems" (results table).
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
 
+## Windows NT 3.1 (2026-10-13)
+
+Works, with a program of its own: `gorknt3.exe`, in the legacy zip.
+
+- `gork.exe` is refused there (it is marked for Windows 4.0). Marked for
+  3.10 it loads, and then stops for the C runtime: NT 3.1 has no
+  `msvcrt.dll`, and Windows Me's wants `EnumSystemLocalesA`, which NT
+  3.1's kernel32 lacks. NT has `crtdll.dll`, and MinGW links against it
+  with `-mcrtdll=crtdll`; `nt3crt.c` supplies `_time32`, `_findfirst32`,
+  `_findnext32` and `_stat32`, which MinGW's own library calls and crtdll
+  has only under their old names. `_stat` needed its structure converted
+  (crtdll's `st_dev` is 16 bits): without that `list_dir` said "not a
+  directory".
+- One change for every Windows and DOS build came out of it: the
+  temporary file of a write is `NAME.g$$` there now, as on DOS. NT 3.1
+  on a FAT disk has no long file names, and `out.gork-tmp` was an
+  "Invalid argument".
+- Result on NT 3.1 (`ver`: "Windows NT Version 3.10"): `--version`, the
+  batch round trip of ten tool calls, all as on the other Windows, and
+  the TUI with approvals and colours (`tui-on-nt31.png`). Both programs
+  pass `wintest.py` under Wine.
+- NT 3.5 was not installed: it is expected to behave as 3.1 does.
+
+How, for a repeat, in `/vm/nt31` of the same volume (about an hour):
+
+- Media: WinWorldPC, "Windows NT 3.1 Workstation (3.10.511.1) (ISO)". No
+  product key.
+- NT 3.1 has no unattended and no floppy-less install. `prepnt31.py`
+  builds a DOS 6.22 boot floppy, a blank floppy, `c.img` and a `d.img`
+  with `I386`; `runnt31.sh -boot a` (QEMU `-cpu 486`, 32 MB, ISA NE2000
+  at 0x300, IRQ 3), then `winnt /s:d:\i386`. When it asks for a floppy,
+  `change floppy0` to `blank.img` and Enter; it copies the files and
+  wants a restart: stop the loop, start again with `FLOPPY=blank.img`.
+- Text mode: Enter, Enter (Express), Enter (C:), Enter (keep FAT), Enter
+  (`\winnt`); at "restart", quit QEMU.
+- Before the first boot from disk, the processor fix WinWorldPC's note
+  describes: in `C:\WINNT\SYSTEM32\INITIAL.INF` and `SETUP.INF`, replace
+  `STF_PROCESSOR = "" ? $(!LIBHANDLE) GetProcessor` by `STF_PROCESSOR =
+  $(ProcessorID_I486)` (with `mcopy` on the image). Then `-boot c`.
+- Graphical part: a name, Enter; a computer name, Enter; Enter
+  (language); Esc, Left, Enter (no printer); Enter (NE2000 at IRQ 3,
+  0x300); Left, Enter ("use them anyway"); Enter (workgroup); Enter,
+  Left, Enter (no Administrator password); Esc, Left, Enter (no local
+  account); Enter (time); a scratch floppy for the repair disk; Enter.
+- Log on: Ctrl-Alt-Del, `Administrator`, Enter. Commands through File,
+  Run in Program Manager (Alt-F, R); shut down with Alt-F, S, Enter.
+- TCP/IP: `control ncpa.cpl`, Alt-S, `t` (TCP/IP Protocol), Enter, the
+  path `d:\i386`, Enter (OK), then gateway 10.0.2.2, address 10.0.2.15,
+  mask 255.255.255.0 (Alt-D, Alt-I, Alt-U), Enter, restart.
+- `c-installed.img` is the finished disk; `floppy31/T31.BAT` the batch
+  run.
+
 ## A 16-bit DOS build (2026-10-13)
 
 The user wanted one: the 32-bit `gork.exe` cannot run where there is no
