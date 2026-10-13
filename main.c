@@ -2469,11 +2469,14 @@ int main(int argc, char **argv)
         return 2;
     }
     colon = strrchr(relay, ':');
-    c.relay_port = colon != NULL ? atoi(colon + 1) : 0;
+    /* spx:NET.NODE:SOCKET, an IPX address: its socket is in hex */
+    c.relay_port = colon == NULL ? 0 :
+        (int) strtol(colon + 1, NULL, strncmp(relay, "spx:", 4) == 0 ? 16 : 10);
     if (colon == NULL || colon == relay ||
         (size_t) (colon - relay) >= sizeof relay_host ||
         c.relay_port <= 0 || c.relay_port > 65535) {
-        fprintf(stderr, "gork: bad relay '%s', want host:port\n", relay);
+        fprintf(stderr, "gork: bad relay '%s', want host:port or "
+                        "spx:NET.NODE:SOCKET\n", relay);
         return 2;
     }
     memcpy(relay_host, relay, colon - relay);

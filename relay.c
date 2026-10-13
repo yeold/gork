@@ -12,6 +12,7 @@
 #include <string.h>
 #ifdef _WIN32
 #include <winsock.h>            /* 1.1: all that Windows 95 has */
+#include <wsipx.h>
 #else
 #include <netdb.h>
 #include <netinet/in.h>
@@ -51,6 +52,9 @@ static void sock_perror(const char *what) {
 int (*relay_abort)(void);
 int relay_timeout = 120;
 int relay_bearer;
+
+/* The connection is SPX and not TCP: on DOS, where it is no descriptor. */
+static int spx;
 
 /* ------------------------------------------------------------------ */
 /* growable byte buffer                                               */
@@ -120,11 +124,8 @@ static int install_alarm(void) {
 /* connect / read / write                                             */
 /* ------------------------------------------------------------------ */
 
-static int tcp_connect(const char *host, int port) {
-  struct hostent *he;
-  struct sockaddr_in addr;
-  int fd;
 #ifdef _WIN32
+static int winsock_start(void) {
   static int started;
   WSADATA wsa;
 
@@ -133,6 +134,18 @@ static int tcp_connect(const char *host, int port) {
     return -1;
   }
   started = 1;
+  return 0;
+}
+#endif
+
+static int tcp_connect(const char *host, int port) {
+  struct hostent *he;
+  struct sockaddr_in addr;
+  int fd;
+
+#ifdef _WIN32
+  if (winsock_start() != 0)
+    return -1;
 #endif
 
   memset(&addr, 0, sizeof addr);
@@ -171,8 +184,85 @@ static int tcp_connect(const char *host, int port) {
   return fd;
 }
 
+/* "spx:NET.NODE" as the 4 and 6 bytes of an IPX address; 0 or -1. */
+static int spx_address(const char *host, unsigned char *net,
+                       unsigned char *node) {
+  const char *dot = strchr(host + 4, '.');
+  unsigned long v;
+  char part[9];
+  int i;
+
+  if (dot == NULL || dot == host + 4 || dot - (host + 4) > 8 ||
+      strlen(dot + 1) != 12 ||
+      strspn(host + 4, "0123456789abcdefABCDEF") != (size_t)(dot - host - 4) ||
+      strspn(dot + 1, "0123456789abcdefABCDEF") != 12)
+    return -1;
+  memcpy(part, host + 4, (size_t)(dot - host - 4));
+  part[dot - host - 4] = '\0';
+  v = strtoul(part, NULL, 16);
+  for (i = 3; i >= 0; i--, v >>= 8)
+    net[i] = (unsigned char)v;
+  for (i = 0; i < 6; i++) {
+    memcpy(part, dot + 1 + 2 * i, 2);
+    part[2] = '\0';
+    node[i] = (unsigned char)strtoul(part, NULL, 16);
+  }
+  return 0;
+}
+
+/* Connect to the relay's SPX socket.  A descriptor, or -1; -2 if aborted. */
+static int spx_connect(const char *host, int socket_no) {
+  unsigned char net[4], node[6];
+
+  if (spx_address(host, net, node) != 0) {
+    fprintf(stderr, "gork: bad SPX address '%s', want spx:NET.NODE:SOCKET "
+                    "in hex, as the relay prints it\n", host);
+    return -1;
+  }
+#if defined(__MSDOS__)
+  {
+    int rc = dosspx_open(net, node, (unsigned)socket_no, relay_abort);
+    return rc == 0 ? 0 : rc;
+  }
+#elif defined(_WIN32)
+  {
+    struct sockaddr_ipx addr;
+    int fd;
+
+    if (winsock_start() != 0)
+      return -1;
+    fd = socket(AF_IPX, SOCK_STREAM, NSPROTO_SPX);
+    if (fd < 0) {
+      fprintf(stderr, "gork: no SPX here (Winsock error %d): is the "
+                      "IPX/SPX protocol installed?\n", WSAGetLastError());
+      return -1;
+    }
+    memset(&addr, 0, sizeof addr);
+    addr.sa_family = AF_IPX;
+    memcpy(addr.sa_netnum, net, 4);
+    memcpy(addr.sa_nodenum, node, 6);
+    addr.sa_socket = htons((unsigned short)socket_no);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
+      sock_perror("SPX connect");
+      close(fd);
+      return -1;
+    }
+    return fd;
+  }
+#else
+  (void)socket_no;
+  fprintf(stderr, "gork: SPX is only in the DOS and Windows builds\n");
+  return -1;
+#endif
+}
+
 static int write_all(int fd, const char *p, size_t n) {
   size_t off = 0;
+
+#ifdef __MSDOS__
+  if (spx)
+    return dosspx_write(p, n);
+#endif
 
   while (off < n) {
     ssize_t w = write(fd, p + off, n - off);
@@ -193,6 +283,16 @@ static int write_all(int fd, const char *p, size_t n) {
   return 0;
 }
 
+static void conn_close(int fd) {
+#ifdef __MSDOS__
+  if (spx) {
+    dosspx_close();
+    return;
+  }
+#endif
+  close(fd);
+}
+
 /* Returns 0 at EOF, -1 on error, -2 if relay_abort asked to stop. */
 static int read_to_eof(int fd, struct buf *b) {
   char chunk[READ_CHUNK];
@@ -200,6 +300,35 @@ static int read_to_eof(int fd, struct buf *b) {
   struct timeval tv;
   ssize_t r;
 
+#ifdef __MSDOS__
+  if (spx) {
+    clock_t asked = clock();
+
+    for (;;) {
+      int got = dosspx_read(chunk, sizeof chunk);
+
+      if (got == 0 || got == -1)
+        return got;
+      if (got > 0) {
+        if (buf_add(b, chunk, (size_t)got) != 0) {
+          fprintf(stderr, "gork: out of memory reading socket\n");
+          return -1;
+        }
+        continue;
+      }
+      if (deadline != 0 && time(NULL) >= deadline) {
+        fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
+                (unsigned long)b->len);
+        return -1;
+      }
+      if (relay_abort != NULL && clock() - asked > CLOCKS_PER_SEC / 5) {
+        asked = clock();
+        if (relay_abort())
+          return -2;
+      }
+    }
+  }
+#endif
   for (;;) {
     /* Wake every 200 ms so the user can abort a slow reply. */
 #ifndef GORK_NO_FORK
@@ -242,6 +371,11 @@ static int read_to_eof(int fd, struct buf *b) {
     }
     if (r == 0)
       return 0; /* clean EOF */
+#ifdef _WIN32
+    /* how the end of an SPX connection is reported */
+    if (spx && WSAGetLastError() == WSAEDISCON)
+      return 0;
+#endif
     if (errno == EINTR) {
       fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
               (unsigned long)b->len);
@@ -362,10 +496,12 @@ int relay_post(const char *relay_host, int relay_port, const char *api_host,
     return -1;
   }
 
-  fd = tcp_connect(relay_host, relay_port);
+  spx = strncmp(relay_host, "spx:", 4) == 0;
+  fd = spx ? spx_connect(relay_host, relay_port)
+           : tcp_connect(relay_host, relay_port);
   if (fd < 0) {
     buf_free(&raw);
-    return -1;
+    return fd == -2 ? -2 : -1;
   }
 
   alarm(relay_timeout);
@@ -374,13 +510,13 @@ int relay_post(const char *relay_host, int relay_port, const char *api_host,
   if (write_all(fd, head, strlen(head)) != 0 ||
       write_all(fd, body, body_len) != 0 || (rc = read_to_eof(fd, &raw)) != 0) {
     alarm(0);
-    close(fd);
+    conn_close(fd);
     buf_free(&raw);
     return rc == -2 ? -2 : -1;
   }
 
   alarm(0);
-  close(fd);
+  conn_close(fd);
 
   if (raw.len == 0) {
     fprintf(stderr, "gork: empty reply -- relay closed without data\n");

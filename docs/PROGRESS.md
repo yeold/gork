@@ -87,6 +87,43 @@ build on each system), README "Tested systems" (results table).
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
 
+## SPX, and gork-relay (2026-10-13)
+
+The user asked for IPX/SPX and token ring support, and for a relay of
+gork's own in a separate repository.
+
+- **gork-relay** (`~/gork-relay`; https://git.yeold.org/yeold/gork-relay,
+  GPL 3 or later; a GitHub repository of that name did not exist yet and
+  could not be created from here): what the socat line did, TCP in and TLS
+  out, and an SPX listener. IPX and SPX are done in user space on raw
+  frames, since Linux has had no IPX since 4.18. Links: a network
+  interface (packet socket, or libpcap) and frames in UDP datagrams, which
+  is what QEMU's `-netdev socket,udp=` sends. Its README has the state of
+  each part.
+- **gork**: `relay = spx:NET.NODE:SOCKET` (hex, as the relay prints it).
+  DOS: `dosspx.c` drives the IPX driver's SPX (far call from INT 2Fh
+  AX=7A00h, ECBs in DOS memory, polled). One thing found: the driver does
+  not fill the listen ECBs in the order they were posted, so packets are
+  taken by SPX sequence number. Windows: an `AF_IPX` stream socket in
+  `relay.c`; compiles, never run against a relay. Unix: refused with a
+  message.
+- Tested: `GORK_RELAY=/path/gork-relay python3 testing/dostest.py` adds a
+  check, `check_spx`: FreeDOS loads `PDIPX.COM` (Novell IPX/SPX 1.10 on
+  the packet driver, from the same Crynwr zip) and the card sits on a
+  QEMU hub with the user network and the relay. A tool round trip and a
+  24 KB reply pass, and TCP still works beside it.
+- Token ring: nothing in gork (it is the card's driver that differs). The
+  relay reads and writes 802.5 frames with source routes, checked only
+  against frames its own test builds: QEMU has no token ring card and
+  Linux no drivers since 3.5.
+- Left: SPX from the Windows build against NWLink (Windows 95 to XP);
+  `IPXODI` instead of PDIPX; the relay on Cygwin with Npcap; a real ring;
+  Jenkins does not build the relay, so `check_spx` runs only by hand.
+- Regression runs after this change, all passing: `looptest.py` (17),
+  `wintest.py` under Wine, `dostest.py` in the six configurations of the
+  section below and once more on FreeDOS with `GORK_RELAY`.
+- gork got its licence the same day: GPL 3 or later (`COPYING`).
+
 ## MS-DOS 4.01 and Windows 2.11 (2026-10-13)
 
 - **MS-DOS 4.01**: all nine `dostest.py` checks pass, after one fix in

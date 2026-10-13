@@ -8,7 +8,7 @@ WATT     = /dev/env/DJGPP/net/watt
 CFLAGS   = -std=gnu89 -O2 -Wall -W
 
 # mcp.c is left out: DOS cannot run MCP servers (see main.c).
-gork.exe: main.c relay.c tui.c cJSON/cJSON.c
+gork.exe: main.c relay.c tui.c dosspx.c port.h cJSON/cJSON.c
 	$(CC) $(CFLAGS) -I$(PDCURSES)/include -I$(WATT)/inc -o $@ \
-	    main.c relay.c tui.c cJSON/cJSON.c \
+	    main.c relay.c tui.c dosspx.c cJSON/cJSON.c \
 	    -L$(PDCURSES)/lib -L$(WATT)/lib -lpdcurses -lwatt -lm

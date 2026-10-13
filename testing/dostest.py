@@ -19,6 +19,10 @@ and the packet driver is the real-mode one loaded before it, with WINPKT.
 A WINDOWS directory of Windows 2.x (it has WIN200.BIN) is run in real mode
 instead, and needs the "Setup" disk of MS-DOS 4.01 as $GORK_DOS_FLOPPY
 and $GORK_DOS_SMALL_DISKS: Windows 2.11 runs no DOS program on MS-DOS 6.
+Name a gork-relay binary (https://github.com/yeold/gork-relay) in
+$GORK_RELAY to check SPX as well: the guest then loads PDIPX, Novell's
+IPX and SPX on the packet driver, and its network card is also wired to
+that relay, which passes what it gets on to the fake API.
 Set $GORK_DOS_SMALL_DISKS for MS-DOS 4.01 and the like, which read only
 disks laid out the old way.  The guest reaches the fake API on the host as
 10.0.2.2; the keyboard is typed and the screen read through the QEMU
@@ -31,6 +35,8 @@ VM = os.path.join(os.environ.get("GORK_VM",
                                  os.path.expanduser("~/.cache/gork-vm")),
                   "dostest")
 PORT = 8095
+RELAY = os.environ.get("GORK_RELAY")    # a gork-relay binary: check SPX too
+RELAY_PORT = 8097                       # where it takes the guest's frames
 SMALL = bool(os.environ.get("GORK_DOS_SMALL_DISKS"))
 WINDOWS = os.environ.get("GORK_DOS_WINDOWS")
 WINDOWS2 = bool(WINDOWS and os.path.exists(os.path.join(WINDOWS, "WIN200.BIN")))
@@ -175,6 +181,9 @@ def build_images(zip_path):
                        else "d:/shared;"),
         "BAD.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
                    "allow = c:/nope\n" % PORT,
+        # the relay's address, as it prints it: network 0 is this segment
+        "SPX.CNF": "relay = spx:0.02676F726B01:8443\nhost = fake.local\n"
+                   "timeout = 20\nretries = 0\n",
         "SECRET.TXT": "secret\n",
         "W/GORK.MD": "Always answer in haiku.\n",
         "W/IN.TXT": "inside\n",
@@ -191,6 +200,10 @@ def build_images(zip_path):
     boot = os.path.join(VM, "boot.img")
     rest = ("set WATTCP.CFG=C:\\\nset TEMP=C:\\TMP\nset GORK_ALLOW_RUN=1\n"
             "C:\nNE2000 0x60 5 0x300\ncd W\necho READY\n")
+    if RELAY:
+        sh("unzip", "-qoj", os.path.join(VM, "crynwr.zip"),
+           "DRIVERS/CRYNWR/PDIPX.COM", "-d", c)
+        rest = rest.replace("0x300\n", "0x300\nPDIPX\n")
     other = os.environ.get("GORK_DOS_FLOPPY")
     windows = WINDOWS
     himem = ""
@@ -295,15 +308,23 @@ class Guest:
         self.sock_path = os.path.join(VM, "mon.sock")
         if os.path.exists(self.sock_path):
             os.remove(self.sock_path)
+        net = ["-netdev", "user,id=n0"]
+        if RELAY:
+            # the card on a hub with both the user network and the relay
+            net = ["-netdev", "user,id=u0",
+                   "-netdev", "socket,id=s0,udp=127.0.0.1:%d,"
+                   "localaddr=127.0.0.1:%d" % (RELAY_PORT, RELAY_PORT + 1),
+                   "-netdev", "hubport,id=h0,hubid=0,netdev=u0",
+                   "-netdev", "hubport,id=h1,hubid=0,netdev=s0",
+                   "-netdev", "hubport,id=n0,hubid=0"]
         self.qemu = subprocess.Popen(
             ["qemu-system-i386", "-m", "32", "-display", "none", "-vga", "std",
              "-boot", "a", "-serial", "none",
              "-monitor", "unix:%s,server,nowait" % self.sock_path,
              "-drive", "file=%s,format=raw,if=floppy" % boot,
              "-drive", "file=%s,format=raw,if=ide,index=0" % disk,
-             "-drive", "file=%s,format=raw,if=ide,index=1" % disk2,
-             "-netdev", "user,id=n0",
-             "-device", "ne2k_isa,netdev=n0,iobase=0x300,irq=5"])
+             "-drive", "file=%s,format=raw,if=ide,index=1" % disk2] + net +
+            ["-device", "ne2k_isa,netdev=n0,iobase=0x300,irq=5"])
         for _ in range(50):
             if os.path.exists(self.sock_path):
                 break
@@ -489,6 +510,25 @@ def check_run(g):
     print("ok: run_command")
 
 
+def check_spx(g):
+    """A round trip over SPX to gork-relay, with a reply of many packets;
+    then the TCP relay again, since both go through one packet driver."""
+    del requests[:]
+    big = "0123456789abcdef" * 1500
+    script[:] = [tool("write_file", path="spx.txt", content="over spx\n"),
+                 text(big + " spx done")]
+    g.run("set GORK_CONFIG=c:\\spx.cnf")
+    s = g.run("..\\gork t", 120)
+    g.run("set GORK_CONFIG=")
+    assert "spx done" in s, s
+    assert "wrote 9 bytes" in results()[0]["content"], results()
+    assert "over spx" in g.run("type spx.txt")
+    del requests[:]
+    script[:] = [text("tcp again")]
+    assert "tcp again" in g.run("..\\gork t")
+    print("ok: SPX through gork-relay")
+
+
 def check_timeout(g):
     """A reply that never comes ends in a timeout, not a crash."""
     script[:] = [text("late", delay=12)]
@@ -538,6 +578,9 @@ def main():
     boot, disk, disk2 = build_images(os.path.abspath(zip_path))
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    relay = RELAY and subprocess.Popen(
+        [RELAY, "-p", "-t", "0", "-x", "udp:127.0.0.1:%d" % RELAY_PORT,
+         "127.0.0.1:%d" % PORT])
     g = Guest(boot, disk, disk2)
     try:
         if WINDOWS2:
@@ -561,11 +604,15 @@ def main():
             check_allow(g)
         check_long(g)
         check_run(g)
+        if RELAY:
+            check_spx(g)
         check_timeout(g)
         check_tui(g)
     finally:
         g.close()
         srv.shutdown()
+        if relay:
+            relay.terminate()
     # CR LF must have survived the edit: read the file back off the disk
     out = subprocess.run(["mtype", "-i", "%s@@%d" % (disk, (63 if SMALL else 2048) * 512),
                           "::W/TWO.TXT"], capture_output=True, check=True)

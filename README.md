@@ -72,6 +72,7 @@ here, and [docs/TODO-OSES.md](docs/TODO-OSES.md) the ones still to try.
 - [Run](#run)
   - [Interactive](#interactive)
   - [Local models](#local-models)
+  - [Without TCP/IP: SPX](#without-tcpip-spx)
   - [Config](#config)
   - [Rules](#rules)
   - [Skills](#skills)
@@ -142,7 +143,10 @@ Start a relay on a machine that can do TLS:
 socat TCP-LISTEN:8443,fork,reuseaddr OPENSSL:api.anthropic.com:443
 ```
 
-or, if you'd rather have a long-lived service, stunnel in client mode:
+or [gork-relay](https://github.com/yeold/gork-relay), which does the same
+(`gork-relay api.anthropic.com`) and can also be reached
+[without TCP/IP](#without-tcpip-spx), or, if you'd rather have a
+long-lived service, stunnel in client mode:
 
 ```ini
 [anthropic]
@@ -271,6 +275,37 @@ same: tools, skills, MCP servers and compacting. What differs:
 - A hosted service is HTTPS, so it needs a relay that forwards to it, as
   for Anthropic.
 
+### Without TCP/IP: SPX
+
+A machine on a NetWare-style network may have IPX and no TCP/IP at all.
+[gork-relay](https://github.com/yeold/gork-relay) listens on SPX as well
+as on TCP, and the DOS and Windows builds of gork can connect to it that
+way. Start the relay on the same network segment:
+
+```sh
+gork-relay -x eth:eth0 api.anthropic.com
+gork-relay: SPX at 00000000.525400A1B2C3:8443 on eth:eth0
+```
+
+and give gork the address it printed, network, node and socket, in hex:
+
+```ini
+relay = spx:0.525400A1B2C3:8443
+```
+
+Network `0` is "this segment". Everything else is as with TCP: the same
+HTTP goes over the SPX connection.
+
+| Build | Needs | State |
+|---|---|---|
+| DOS | An IPX driver with SPX loaded: Novell's `IPXODI` or `IPX.COM`, or `PDIPX` on a packet driver. No packet driver for TCP/IP is needed then | Works with PDIPX on FreeDOS 1.3 in QEMU; `dostest.py` checks it when `GORK_RELAY` names a relay binary |
+| Windows | The IPX/SPX-compatible protocol installed (Windows 95 to XP have it; Vista and later do not) | Written, compiles, **not yet run** against a relay |
+| Unix | -- | Not there. Linux had SPX sockets only briefly, around 2.2, and current systems have no IPX |
+
+Token ring needs nothing from gork: it is the network card's driver that
+differs, under TCP/IP and under IPX alike. Nothing here has been tried on
+a real ring.
+
 ### Config
 
 gork reads `~/.gork.conf`, or the file `GORK_CONFIG` names. One
@@ -295,7 +330,7 @@ servers, so there is no `mcp.json`.
 
 | Key | Env override | Default | Meaning |
 |---|---|---|---|
-| `relay` | -- | *(required)* | `host:port` gork connects to: the relay, or a local server |
+| `relay` | -- | *(required)* | `host:port` gork connects to: the relay, or a local server. Or `spx:NET.NODE:SOCKET`, a gork-relay on an IPX network: see [Without TCP/IP](#without-tcpip-spx) |
 | `api_key` | `ANTHROPIC_API_KEY` (`OPENAI_API_KEY` with `protocol = openai`) | *(required for anthropic.com and openai.com)* | Sent as the `x-api-key` header, or as `Authorization: Bearer` with `protocol = openai` |
 | `protocol` | `AGENT_PROTOCOL` | `anthropic` | Wire format: `anthropic` (Messages API) or `openai` (chat completions); see [Local models](#local-models) |
 | `model` | `AGENT_MODEL` | `claude-opus-5` | Model id |

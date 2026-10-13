@@ -358,6 +358,12 @@ things arranged:
 - The packet driver loaded before Windows, as usual. No `WINPKT`: there is
   only one machine.
 
+Without TCP/IP, on an IPX network, gork can reach a
+[gork-relay](https://github.com/yeold/gork-relay) over SPX: load an IPX
+driver that has SPX (`IPXODI`, `IPX.COM`, or `PDIPX` after a packet
+driver) and set `relay = spx:NET.NODE:SOCKET`. `dostest.py` checks this
+when `GORK_RELAY` names a relay binary.
+
 To run it, the machine needs:
 
 - `CWSDPMI.EXE` beside `gork.exe` (it is in the zip);

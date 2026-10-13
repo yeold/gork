@@ -13,6 +13,17 @@
 #define GORK_NO_FORK
 #endif
 
+#ifdef __MSDOS__
+/* SPX through the IPX driver (dosspx.c): one connection at a time.
+   dosspx_open(): 0, -1 with a message, or -2 if `stop` returned nonzero.
+   dosspx_read(): bytes read, 0 at the end, -1 on error, -3 if none yet. */
+int  dosspx_open(const unsigned char *net, const unsigned char *node,
+                 unsigned socket, int (*stop)(void));
+int  dosspx_write(const char *p, size_t n);
+int  dosspx_read(char *buf, size_t n);
+void dosspx_close(void);
+#endif
+
 #ifdef _WIN32
 /* realpath(): absolute, with forward slashes, ENOENT if nothing is there.
    ponytail: junctions and 8.3 short names are not resolved, so a junction
