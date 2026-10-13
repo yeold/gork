@@ -77,8 +77,8 @@ arm64, armhf, riscv64, s390x, ppc64el, powerpc, m68k, hppa), a macOS
 installer, and the DOS and Windows zips below. Everything else builds from
 the source tarball.
 
-There are two DOS packages. `gork-<version>-dos.zip` needs a 386 and is
-the full program. `gork-<version>-dos16.zip` runs in real mode, in 640K,
+There are two DOS packages, both without MCP servers.
+`gork-<version>-dos.zip` needs a 386 and is otherwise the full program. `gork-<version>-dos16.zip` runs in real mode, in 640K,
 on anything down to an 8086, and where no protected mode is to be had
 (Windows/386 2.x); there a conversation is kept to about 8000 tokens,
 compacted from 4000, and a tool returns at most 8K at a time.
@@ -88,7 +88,7 @@ There are two Windows packages:
 | Package | For | MCP servers | Commands run by |
 |---|---|---|---|
 | `gork-<version>-win32.zip` | 64-bit Windows 10 and later. The Cygwin build, with the Cygwin DLLs it needs; start `gork.cmd` | yes | a POSIX shell, `bin\sh.exe` in the package |
-| `gork-<version>-win32-legacy.zip` | Windows 95 and NT 3.51 up to Windows 11: one small 32-bit `gork.exe`. `gorknt3.exe` beside it is the same for NT 3.1 and 3.5 | **no**: it cannot start MCP servers, and ignores `mcp.json` | `cmd.exe` (`COMMAND.COM` on Windows 9x) |
+| `gork-<version>-win32-legacy.zip` | Windows 95 and NT 3.51 up to Windows 11: one small 32-bit `gork.exe`. `gorknt3.exe` beside it is the same for NT 3.1 and 3.5 | **no** (see [MCP servers](#mcp-servers)) | `cmd.exe` (`COMMAND.COM` on Windows 9x) |
 
 ## Contents
 
@@ -415,6 +415,18 @@ copied over:
   }
 }
 ```
+
+**Not in every build.** Starting a server needs `fork`, so MCP is there
+only where the system has it:
+
+| Build | MCP servers |
+|---|---|
+| Unix, from source or from a package: the `.deb`, the `.rpm`, the Linux binaries, macOS | yes |
+| Windows, `win32` package (Cygwin) | yes |
+| Windows, `win32-legacy` package (`gork.exe`, `gorknt3.exe`): Windows NT 3.1 to XP, 95 to Me | **no** |
+| DOS, `dos` and `dos16` packages | **no** |
+
+The builds without it ignore `mcp.json` and say nothing.
 
 At startup gork runs each server, asks for its tools, and offers them to the
 model as `mcp__<server>__<tool>`. In the TUI every MCP call asks for approval
