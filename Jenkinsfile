@@ -69,11 +69,12 @@ pipeline {
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl ca-certificates bzip2 unzip zip make >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh dosbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
-                            # and run it: FreeDOS in QEMU against a fake API
+                            # and run it: FreeDOS in QEMU against a fake API, with
+                            # a gork-relay for the SPX check
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates >/dev/null
-                                cd /src && GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos.zip'
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev >/dev/null
+                                cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos.zip'
                         '''
                     }
                 }
@@ -85,11 +86,12 @@ pipeline {
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl ca-certificates xz-utils zip >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh dos16build.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
-                            # the same checks as for the 32-bit one
+                            # the same checks as for the 32-bit one, with the
+                            # address from DHCP here
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates >/dev/null
-                                cd /src && GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16.zip'
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev >/dev/null
+                                cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_DOS_DHCP=1 GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16.zip'
                         '''
                     }
                 }
