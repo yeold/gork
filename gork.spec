@@ -1,5 +1,5 @@
 Name:           gork
-Version:        0.10~beta
+Version:        1.0
 Release:        1%{?dist}
 Summary:        Lightweight AI agent harness for old and obscure operating systems
 # cJSON, which is vendored, is MIT
