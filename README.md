@@ -48,7 +48,8 @@ of `testing/looptest.py`.
 | macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
 | Windows (native, experimental; the `win32-legacy` package) | Windows NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, Me, 2000, XP SP3, 11, Server 2025; Wine 10 | |
 | Windows (Cygwin; the `win32` package) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | 64-bit Windows 10 and later only. The package was run on GitHub's Windows runner, batch mode only |
-| DOS (experimental) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | 16-bit real mode: requests do not fit in 640 K. Windows/386 2.11: it gives DOS programs no protected mode |
+| DOS, 32-bit (experimental; the `dos` package) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | Windows/386 2.11: use the 16-bit build |
+| DOS, 16-bit (experimental; the `dos16` package) | MS-DOS 3.30, real mode, built with Open Watcom for the 8086 | MS-DOS 6.22, FreeDOS 1.3; in a DOS box under Windows 1.04, 2.11/386 and 3.1 | Run on an emulated 486 only: no 8086 or 286 was at hand. Small limits (below); no SPX |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
 and i386 passes the whole suite: cross-built with Debian 13's toolchains
@@ -63,6 +64,12 @@ GitHub Actions (`.github/workflows/build.yml`), batch mode and the suite
 only. The oldest Linux and BSD systems are compiled by hand.
 [docs/BUILD.md](docs/BUILD.md) has the instructions for every system
 here, and [docs/TODO-OSES.md](docs/TODO-OSES.md) the ones still to try.
+
+There are two DOS packages. `gork-<version>-dos.zip` needs a 386 and is
+the full program. `gork-<version>-dos16.zip` runs in real mode, in 640K,
+on anything down to an 8086, and where no protected mode is to be had
+(Windows/386 2.x); there a conversation is kept to about 8000 tokens,
+compacted from 4000, and a tool returns at most 8K at a time.
 
 There are two Windows packages:
 
@@ -471,6 +478,7 @@ interrupt it too.
 | [port.h](port.h), [win.c](win.c) | What differs without `fork` (DOS, Windows); the Windows replacements for POSIX calls |
 | [Makefile.dj](Makefile.dj), [dosbuild.sh](dosbuild.sh), [Makefile.w32](Makefile.w32), [winbuild.sh](winbuild.sh) | The DOS (DJGPP) and Windows (MinGW) cross builds |
 | [cygpack.sh](cygpack.sh) | Packs the Cygwin build as the `win32` zip |
+| [dos16build.sh](dos16build.sh), [dos16/](dos16/) | The 16-bit DOS build (Open Watcom), and two generated files Watt-32 needs for it |
 | [dosspx.c](dosspx.c) | SPX on DOS, through the IPX driver |
 | [configure.ac](configure.ac), [Makefile.am](Makefile.am) | Build: curses detection, compiler flags, sources |
 | [cJSON/](cJSON/) | Vendored JSON parser |

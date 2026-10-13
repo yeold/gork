@@ -88,7 +88,46 @@ build on each system), README "Tested systems" (results table).
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
 
-## Windows 2.11/386: does not work (2026-10-13)
+## A 16-bit DOS build (2026-10-13)
+
+The user wanted one: the 32-bit `gork.exe` cannot run where there is no
+protected mode to be had (Windows/386 2.x, and anything below a 386).
+
+- `sh dos16build.sh` makes `gork-<version>-dos16.zip`: Open Watcom 2
+  (snapshot of 2026-10-01, pinned), large model, 8086 code; Watt-32
+  (pinned commit) built for the large model with `-DOPT_DEFINED`; PDCurses
+  3.9. Jenkins has a `dos16` stage that builds it and runs `dostest.py`.
+  Tried from scratch in a clean `debian:stable` container.
+- Source: `GORK_DOS16` in `port.h` (set for Watcom's 16-bit compiler,
+  with `__MSDOS__`). `relay.c` has a transport of its own on Watt-32's
+  native calls (`tcp_open`, `sock_fastread`, `tcp_tick`), since the 16-bit
+  library has no BSD sockets. `main.c`: smaller limits, `PATH_MAX` 144, a
+  `realpath()` of its own (`dos16_realpath`: the library's `_fullpath()`
+  leaves ".." in, which the confinement check caught), remove before
+  rename. `tui.c`: curses attributes in a `chtype`, no termios.
+- Two things that cost time. The linker error "segment _TEXT exceeds
+  64k": the C library's code is one segment, and the 8087 emulator
+  overfilled it, hence `-fpc`. And crashes at `sock_init()` that came and
+  went with every rebuild (invalid opcode, a hang, DOS errors): wlink
+  packs code segments into groups, and Watt-32's interrupt code does not
+  survive that; `option packcode=1`. Watcom's `_heapchk()` reports a bad
+  heap even in an empty program, so it was no help.
+- It needs `dos16/watcom.err` and `dos16/syserr.c`: Watt-32's makefiles
+  want them, and they are printed by a DOS program of Watt-32's
+  (`util/wc_err.exe -e`, `-s`); made once in DOSBox and kept in the
+  repository.
+- Passes the nine checks on FreeDOS 1.3, MS-DOS 3.30 and 6.22, and in a
+  DOS box under Windows 2.11/386 (the point of it), 1.04 and 3.1.
+  `dostest.py` takes a zip without `CWSDPMI.EXE`, and starts `WIN386`
+  where a Windows directory has it. `/vm/reg16.sh ZIP` runs those six.
+- Memory, tried once (`/vm/s16/stress.py`: the model reads a 7K file
+  eight times): requests of 2.7K, 10K, 17K, 24K and 31.6K went out, the
+  sixth was refused with a message (cJSON prints at most 32K) and gork
+  ended cleanly. With real token counts the compacting starts long
+  before that; the fake API always reports 1000 tokens.
+- Left: a real 8086 or 286; SPX; older DOS.
+
+## Windows 2.11/386: not with the 32-bit build (2026-10-13)
 
 Installed on MS-DOS 4.01 (`prepold4.py w211-386`; Setup as for 2.03, with
 the directory changed to `C:\WINDOWS`, "COMPAQ 80386-Based ... and
@@ -99,11 +138,10 @@ started with `WIN386`, or `WIN86` for real mode; there is no `WIN.COM`.
   `run=`), and gork ends at once: "Protected mode not accessible. Load
   error: no DPMI". DOS programs run in virtual 8086 mode there, Windows
   offers neither DPMI nor VCPI, and a resident CWSDPMI cannot switch
-  modes from inside. Nothing gork can do about it short of a 16-bit
-  build.
+  modes from inside. The 16-bit build, made the same day (above), runs
+  there.
 - `WIN86`: "386 System not correctly installed", and no DOS box.
-- `dostest.py` was not changed for it. To repeat the first run, start
-  `WIN386` where `windows2()` has `WIN`.
+- `dostest.py` starts `WIN386` where the directory has it.
 
 The user's rule from the same day, for the READMEs of gork and
 gork-relay: keep them short, only what a reader really needs, and nothing

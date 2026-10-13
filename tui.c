@@ -20,12 +20,12 @@
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
-#ifndef _WIN32
+#include "port.h"
+#if !defined(_WIN32) && !defined(GORK_DOS16)
 #include <termios.h>
 #endif
 #include <curses.h>
 
-#include "port.h"
 #include "relay.h"              /* struct buf */
 #include "tui.h"
 
@@ -51,7 +51,11 @@ static struct buf   partial;            /* captured output not yet a line */
 static struct line *lines;
 static size_t       nlines, cap_lines;
 static int          scroll_rows;        /* rows scrolled up from the bottom */
+#ifdef GORK_DOS16               /* attributes do not fit a 16-bit int */
+static chtype       style_attr[NSTYLES];
+#else
 static int          style_attr[NSTYLES];
+#endif
 static const char  *status_text = "";
 static const char  *hint_text = HINT_IDLE;
 static char         input[4096];
@@ -467,7 +471,7 @@ int tui_confirm(const char *title, const char *detail)
    reader that tells them apart would have to steal the prompts' input. */
 void tui_suspend(void)
 {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(GORK_DOS16)
     struct termios t;
 #endif
 
@@ -481,7 +485,7 @@ void tui_suspend(void)
 #endif
     draw();
     reset_shell_mode();
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(GORK_DOS16)
     if (tcgetattr(0, &t) == 0) {
         t.c_cc[VINTR] = 27;
         tcsetattr(0, TCSANOW, &t);

@@ -39,7 +39,7 @@ void buf_free(struct buf *b);
  * A non-200 status is NOT a failure here -- the body carries the API's error
  * JSON, which the caller should report. Check the return value.
  */
-int relay_post(const char *relay_host, int relay_port,
+int relay_post(const char *relay_host, long relay_port,
                const char *api_host, const char *path, const char *api_key,
                const char *body, size_t body_len,
                struct buf *resp);

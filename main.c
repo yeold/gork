@@ -56,17 +56,19 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifndef _WIN32
+#include "port.h"
+#if !defined(_WIN32) && !defined(GORK_DOS16)
 #include <sys/wait.h>
 #endif
+#ifndef GORK_DOS16
 #include <sys/time.h>
+#endif
 #include <dirent.h>
 #include <signal.h>
 #include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "port.h"
 #include "relay.h"
 #include "tui.h"
 #include "mcp.h"
@@ -76,8 +78,61 @@
    ponytail: a fixed 4096 there; realpath() into a buffer of that size is
    only safe while paths stay shorter.  Use realpath(p, NULL) if that ever
    matters. */
+#ifdef GORK_DOS16               /* DOS paths are short, and so is the stack */
+#undef PATH_MAX
+#define PATH_MAX 144
+#define mkdir(dir, mode) mkdir(dir)
+#endif
 #ifndef PATH_MAX
 #define PATH_MAX 4096
+#endif
+
+#ifdef GORK_DOS16
+#include <ctype.h>
+/* As DJGPP's realpath(): c:/dir/file, whether it exists or not.  The
+   library's _fullpath() adds the drive and the current directory, but it
+   takes only backslashes and leaves ".." in the path, which would lead out
+   of the working directory.  So "." and ".." are taken out here. */
+char *dos16_realpath(const char *path, char *out)
+{
+    char  in[PATH_MAX], *p, *w, *start;
+
+    if (strlen(path) >= sizeof in) {
+        errno = ENAMETOOLONG;
+        return NULL;
+    }
+    strcpy(in, path);
+    for (p = in; *p != '\0'; p++)
+        if (*p == '/') *p = '\\';
+    if (_fullpath(out, in, PATH_MAX) == NULL || out[1] != ':') {
+        errno = ENOENT;
+        return NULL;
+    }
+    for (p = out; *p != '\0'; p++)
+        *p = *p == '\\' ? '/' : (char) tolower((unsigned char) *p);
+
+    /* out is "c:/a/./b/../c": copy it over itself, one name at a time */
+    start = w = out + 2;
+    p = out + 2;
+    while (*p != '\0') {
+        size_t n;
+
+        while (*p == '/') p++;
+        n = strcspn(p, "/");
+        if (n == 2 && p[0] == '.' && p[1] == '.') {
+            while (w > start && *--w != '/')    /* drop the last name */
+                ;
+        } else if (n > 0 && !(n == 1 && p[0] == '.')) {
+            *w++ = '/';
+            memmove(w, p, n);
+            w += n;
+        }
+        p += n;
+    }
+    if (w == start) *w++ = '/';                 /* the root: "c:/" */
+    *w = '\0';
+    return out;
+}
 #endif
 
 /* configure passes VERSION; this is for builds by hand and Makefile.dj.
@@ -131,7 +186,11 @@
    with thinking off the model sometimes writes a tool call into its visible
    text instead of emitting a tool_use block, which this loop would silently
    treat as a finished turn. */
+#ifdef GORK_DOS16               /* the reply has to fit in memory: see below */
+#define MAX_TOKENS    3000
+#else
 #define MAX_TOKENS    16000
+#endif
 
 /* Defaults for `max_turns` (ceiling on tool round-trips per task, so a model
    that loops on a failing tool burns a bounded number of requests) and
@@ -143,12 +202,24 @@
 /* Defaults for `context_window` (tokens the model can take) and
    `auto_compact` (compact once the context passes this percentage of the
    window; 0 turns it off). */
+#ifdef GORK_DOS16
+/* 16-bit DOS: a request is one block of memory, no block passes 64K, and
+   cJSON prints none over 32K (INT_MAX).  So the conversation is kept well
+   under that: compacting starts at 4000 tokens, some 16K of JSON, and the
+   tools return little at a time. */
+#define CTX_WINDOW    "8000"
+#define AUTO_COMPACT  "50"
+#define TOOL_READ_MAX 8192
+#define TOOL_RUN_MAX  8192
+#define TOOL_EDIT_MAX 30000
+#else
 #define CTX_WINDOW    "200000"
 #define AUTO_COMPACT  "80"
 
 #define TOOL_READ_MAX 65536     /* refuse to inline a file bigger than this */
 #define TOOL_RUN_MAX  65536     /* command output beyond this is cut off */
 #define TOOL_EDIT_MAX 1048576   /* edit_file works on files up to this size */
+#endif
 #define MAX_ALLOW     8         /* `allow` directories in the config */
 #define LIST_MAX      2000      /* list_dir entries before it stops */
 #define LIST_DEPTH    8         /* list_dir recursion limit */
@@ -544,7 +615,7 @@ static const char *save_file(const char *real, const char *data, size_t n)
         goto fail;
     }
     if (stat(real, &st) == 0) chmod(tmp, st.st_mode & 07777);
-#ifdef _WIN32
+#if defined(_WIN32) || defined(GORK_DOS16)
     /* rename() does not replace a file here.  ponytail: not atomic; if the
        second rename fails the old file is gone. */
     if (rename(tmp, real) != 0 && (remove(real) != 0 || rename(tmp, real) != 0)) {
@@ -1752,7 +1823,7 @@ static int ask_trust(const char *file, const char *home)
 
 struct conn {
     const char *relay_host;
-    int         relay_port;
+    long        relay_port;
     const char *api_host, *path, *key;
     const char *system;                 /* GORK.md, or NULL */
     const char *mcp_config;             /* ~/.gork/mcp.json, or NULL */
@@ -2064,7 +2135,13 @@ static cJSON *post(const struct conn *c, cJSON *messages)
     body = cJSON_PrintUnformatted(req);
     cJSON_Delete(req);                  /* messages was held by reference */
     if (body == NULL) {
+#ifdef GORK_DOS16
+        fprintf(stderr, "gork: the conversation has grown too large for "
+                        "the 16-bit build (a request is at most 32K): "
+                        "/compact or /new\n");
+#else
         fprintf(stderr, "gork: out of memory serialising request\n");
+#endif
         return NULL;
     }
 
@@ -2436,10 +2513,12 @@ int main(int argc, char **argv)
         return 2;
     }
 #ifdef __MSDOS__
+#ifdef __DJGPP__
     /* Only the mode and the size are used.  For the rest DJGPP's stat()
        reads tables inside DOS, and on MS-DOS 4.01 it page-faults there. */
     _djstat_flags = _STAT_INODE | _STAT_EXEC_EXT | _STAT_EXEC_MAGIC |
                     _STAT_DIRSIZE | _STAT_ROOT_TIME | _STAT_WRITEBIT;
+#endif
     /* DOS sets no HOME: use the directory gork.exe is in. */
     if (getenv("HOME") == NULL && strlen(argv[0]) < PATH_MAX) {
         static char h[PATH_MAX + 8];
@@ -2478,7 +2557,7 @@ int main(int argc, char **argv)
     colon = strrchr(relay, ':');
     /* spx:NET.NODE:SOCKET, an IPX address: its socket is in hex */
     c.relay_port = colon == NULL ? 0 :
-        (int) strtol(colon + 1, NULL, strncmp(relay, "spx:", 4) == 0 ? 16 : 10);
+        strtol(colon + 1, NULL, strncmp(relay, "spx:", 4) == 0 ? 16 : 10);
     if (colon == NULL || colon == relay ||
         (size_t) (colon - relay) >= sizeof relay_host ||
         c.relay_port <= 0 || c.relay_port > 65535) {

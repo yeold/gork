@@ -9,8 +9,24 @@
 /* One program at a time: run_command waits for the command with no timeout
    and no interrupt, there are no MCP servers, the request timeout is polled
    instead of a SIGALRM, and an open file cannot be unlinked. */
+/* The 16-bit DOS build (Open Watcom, large model, real mode): DOS as the
+   DJGPP build is, with what 640K and a 16-bit int change.  No buffer can
+   pass 64K, so everything that grows is capped: see GORK_DOS16 in main.c. */
+#if defined(__WATCOMC__) && defined(__I86__)
+#define GORK_DOS16
+#ifndef __MSDOS__
+#define __MSDOS__
+#endif
+#endif
+
 #if defined(__MSDOS__) || defined(_WIN32)
 #define GORK_NO_FORK
+#endif
+
+#ifdef GORK_DOS16
+/* realpath(): absolute, lower case, with forward slashes, as DJGPP's. */
+char *dos16_realpath(const char *path, char *out);
+#define realpath dos16_realpath
 #endif
 
 #ifdef __MSDOS__

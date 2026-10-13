@@ -51,6 +51,22 @@ pipeline {
                         '''
                     }
                 }
+                stage('dos16') {
+                    steps {
+                        sh '''
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl ca-certificates xz-utils zip >/dev/null
+                                cp -r /src /tmp/src && cd /tmp/src
+                                sh dos16build.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
+                            # the same checks as for the 32-bit one
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates >/dev/null
+                                cd /src && GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16.zip'
+                        '''
+                    }
+                }
                 stage('windows') {
                     steps {
                         sh '''

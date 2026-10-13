@@ -117,6 +117,12 @@ Testing and release
 - [x] `mcp.c` is left out of `gork.exe`.
 - [x] MS-DOS 6.22: `GORK_DOS_FLOPPY=<install disk 1> python3
       testing/dostest.py` passes all eight checks.
+- [x] A 16-bit, real-mode build (`dos16build.sh`, Open Watcom): passes
+      the nine checks; see BUILD.md and PROGRESS.md.
+- [ ] The 16-bit build on a real 8086 or 286 (QEMU has nothing below a
+      486), and on MS-DOS 2.x and 3.0 to 3.2.
+- [ ] SPX in the 16-bit build: `dosspx.c` goes through DPMI; in real mode
+      it can call the IPX driver directly.
 - [x] MS-DOS 3.30 (Dell's, 1988): passes all nine checks, with
       `GORK_DOS_SMALL_DISKS=1`. The oldest DOS tried.
 - [x] MS-DOS 4.01: passes all nine checks (`GORK_DOS_FLOPPY=<its "Setup"

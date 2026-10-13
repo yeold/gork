@@ -10,9 +10,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "port.h"
 #ifdef _WIN32
 #include <winsock.h>            /* 1.1: all that Windows 95 has */
 #include <wsipx.h>
+#elif defined(GORK_DOS16)
+#include <tcp.h>                /* Watt-32's own calls: its 16-bit library
+                                   has no BSD sockets */
 #else
 #include <netdb.h>
 #include <netinet/in.h>
@@ -22,7 +26,6 @@
 #include <unistd.h>
 #endif
 
-#include "port.h"
 #include "relay.h"
 
 #ifdef GORK_NO_FORK
@@ -47,6 +50,7 @@ static void sock_perror(const char *what) {
 #endif
 
 #define BUF_INITIAL 8192
+#define BUF_LIMIT 61440u        /* 16-bit DOS: the most one buffer holds */
 #define READ_CHUNK 4096
 
 int (*relay_abort)(void);
@@ -76,8 +80,16 @@ int buf_add(struct buf *b, const char *src, size_t n) {
   if (want > b->cap) {
     size_t ncap = b->cap;
     char *np;
+#ifdef GORK_DOS16
+    /* no block of memory passes 64K, and size_t wraps there */
+    if (want > BUF_LIMIT || want < b->len)
+      return -1;
+    while (ncap < want)
+      ncap = ncap > BUF_LIMIT / 2 ? BUF_LIMIT : ncap * 2;
+#else
     while (ncap < want)
       ncap *= 2;
+#endif
     np = (char *)realloc(b->p, ncap);
     if (np == NULL)
       return -1;
@@ -100,7 +112,7 @@ void buf_free(struct buf *b) {
 /* timeout: unblock a stuck syscall with EINTR, no SA_RESTART         */
 /* ------------------------------------------------------------------ */
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(GORK_DOS16)
 #define install_alarm() 0
 #else
 static void on_alarm(int sig) { (void)sig; }
@@ -124,6 +136,106 @@ static int install_alarm(void) {
 /* connect / read / write                                             */
 /* ------------------------------------------------------------------ */
 
+#ifdef GORK_DOS16
+/* One connection at a time, on Watt-32's own socket.  It is polled:
+   tcp_tick() is what makes the library run. */
+static tcp_Socket sock16;
+
+static int tcp_connect(const char *host, long port) {
+  static int started;
+  DWORD ip;
+  int status = 0;
+
+  if (!started && sock_init() != 0) {
+    fprintf(stderr, "gork: no network: is a packet driver loaded?\n");
+    return -1;
+  }
+  started = 1;
+  ip = resolve((char *)host);           /* a name, or a dotted address */
+  if (ip == 0) {
+    fprintf(stderr, "gork: cannot resolve %s\n", host);
+    return -1;
+  }
+  if (!tcp_open(&sock16, 0, ip, (WORD)port, NULL)) {
+    fprintf(stderr, "gork: connect: no route to %s\n", host);
+    return -1;
+  }
+  sock_wait_established(&sock16, sock_delay, NULL, &status);
+  return 0;
+sock_err:
+  fprintf(stderr, "gork: connect: %s\n",
+          status == -1 ? sockerr(&sock16) : "timed out");
+  return -1;
+}
+
+static int spx_connect(const char *host, int socket_no) {
+  (void)host;
+  (void)socket_no;
+  fprintf(stderr, "gork: SPX is not in the 16-bit build\n");
+  return -1;
+}
+
+static int write_all(int fd, const char *p, size_t n) {
+  (void)fd;
+  while (n > 0) {
+    int part = n > 8192 ? 8192 : (int)n;
+    int w = sock_write(&sock16, (const BYTE *)p, part);
+
+    if (w <= 0) {
+      fprintf(stderr, "gork: write: %s\n", sockerr(&sock16));
+      return -1;
+    }
+    p += w;
+    n -= (size_t)w;
+  }
+  return 0;
+}
+
+static void conn_close(int fd) {
+  time_t end = time(NULL) + 2;
+
+  (void)fd;
+  sock_close(&sock16);
+  while (tcp_tick(&sock16) && time(NULL) <= end)
+    ;
+  sock_abort(&sock16);
+}
+
+/* Returns 0 at EOF, -1 on error, -2 if relay_abort asked to stop. */
+static int read_to_eof(int fd, struct buf *b) {
+  static char chunk[1024];
+  clock_t asked = clock();
+  int r, open = 1;
+
+  (void)fd;
+  for (;;) {
+    if (open && !tcp_tick(&sock16))
+      open = 0;                 /* closed: what has arrived is still there */
+    r = sock_fastread(&sock16, (BYTE *)chunk, sizeof chunk);
+    if (r > 0) {
+      if (buf_add(b, chunk, (size_t)r) != 0) {
+        fprintf(stderr, "gork: the reply is too large for the 16-bit "
+                        "build (%lu bytes so far)\n", (unsigned long)b->len);
+        return -1;
+      }
+      continue;
+    }
+    if (!open)
+      return 0;
+    if (deadline != 0 && time(NULL) >= deadline) {
+      fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
+              (unsigned long)b->len);
+      return -1;
+    }
+    if (relay_abort != NULL && clock() - asked > CLOCKS_PER_SEC / 5) {
+      asked = clock();
+      if (relay_abort())
+        return -2;
+    }
+  }
+}
+#else /* not GORK_DOS16 */
+
 #ifdef _WIN32
 static int winsock_start(void) {
   static int started;
@@ -138,7 +250,7 @@ static int winsock_start(void) {
 }
 #endif
 
-static int tcp_connect(const char *host, int port) {
+static int tcp_connect(const char *host, long port) {
   struct hostent *he;
   struct sockaddr_in addr;
   int fd;
@@ -462,6 +574,8 @@ static int read_to_eof(int fd, struct buf *b) {
   }
 }
 
+#endif /* GORK_DOS16 */
+
 /* ------------------------------------------------------------------ */
 /* response parsing                                                   */
 /* ------------------------------------------------------------------ */
@@ -517,7 +631,7 @@ static int find_status(const char *p, size_t len) {
 
 /* ------------------------------------------------------------------ */
 
-int relay_post(const char *relay_host, int relay_port, const char *api_host,
+int relay_post(const char *relay_host, long relay_port, const char *api_host,
                const char *path, const char *api_key, const char *body,
                size_t body_len, struct buf *resp) {
   struct buf raw;
@@ -569,7 +683,7 @@ int relay_post(const char *relay_host, int relay_port, const char *api_host,
   }
 
   spx = strncmp(relay_host, "spx:", 4) == 0;
-  fd = spx ? spx_connect(relay_host, relay_port)
+  fd = spx ? spx_connect(relay_host, (int)relay_port)
            : tcp_connect(relay_host, relay_port);
   if (fd < 0) {
     buf_free(&raw);

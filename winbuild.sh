@@ -27,7 +27,7 @@ make -f Makefile.w32 CC="$HOST-gcc" PDCURSES="$WORK/PDCurses-3.9"
 "$HOST-strip" gork.exe
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
-cp gork.exe README.md docs/BUILD.md "$WORK/pack/"
+cp gork.exe README.md docs/BUILD.md LICENSE "$WORK/pack/"
 rm -f "$OUT/gork-$ver-win32-legacy.zip"
 (cd "$WORK/pack" && zip -q "$OUT/gork-$ver-win32-legacy.zip" *)
 echo "$OUT/gork-$ver-win32-legacy.zip"

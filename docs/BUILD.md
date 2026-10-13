@@ -387,6 +387,30 @@ driver that has SPX (`IPXODI`, `IPX.COM`, or `PDIPX` after a packet
 driver) and set `relay = spx:NET.NODE:SOCKET`. `dostest.py` checks this
 when `GORK_RELAY` names a relay binary.
 
+**The 16-bit build** (`gork-<version>-dos16.zip`) is the same source
+compiled with [Open Watcom](https://github.com/open-watcom/open-watcom-v2)
+for real mode and the large memory model: it needs no 386, no DPMI and no
+`CWSDPMI.EXE`, only DOS, a packet driver and about 400K of free memory.
+`sh dos16build.sh` downloads the compiler and builds Watt-32 and PDCurses
+for it, on x86-64 Linux. What 640K and a 16-bit `int` change
+(`GORK_DOS16` in the source):
+
+- No block of memory passes 64K and cJSON prints at most 32K, so the
+  conversation is kept small: `context_window` defaults to 8000 tokens
+  and `auto_compact` to 50, a reply to 3000 tokens, `read_file` and
+  `run_command` return at most 8K, and `edit_file` takes files up to 30K.
+- Watt-32 is built without its optional parts: no BSD sockets (gork uses
+  its own calls there), no DHCP, so the address goes in `WATTCP.CFG`.
+- No SPX.
+- The linker must not pack code segments into groups
+  (`option packcode=1`), or Watt-32's interrupt code crashes at
+  `sock_init()`, on some layouts and not on others.
+
+It passes the nine `dostest.py` checks, TUI included, on FreeDOS, MS-DOS
+3.30 and 6.22 and in a DOS box under Windows 1.04, 2.11/386 and 3.1. All
+of that on QEMU's 486: it is compiled for the 8086, but no 8086 or 286
+has run it.
+
 To run it, the machine needs:
 
 - `CWSDPMI.EXE` beside `gork.exe` (it is in the zip);

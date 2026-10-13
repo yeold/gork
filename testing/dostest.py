@@ -31,7 +31,7 @@ only disks laid out the old way.  The guest reaches the fake API on the host as
 monitor.
 """
 import glob, hashlib, http.server, json, os, re, shutil, socket, struct
-import subprocess, sys, threading, time, urllib.request
+import subprocess, sys, threading, time, urllib.request, zipfile
 
 VM = os.path.join(os.environ.get("GORK_VM",
                                  os.path.expanduser("~/.cache/gork-vm")),
@@ -175,7 +175,10 @@ def build_images(zip_path):
     shutil.rmtree(c, ignore_errors=True)
     os.makedirs(os.path.join(c, "W", "_GORK", "SKILLS", "DEPLOY"))
     os.makedirs(os.path.join(c, "TMP"))
-    sh("unzip", "-qo", zip_path, "gork.exe", "CWSDPMI.EXE", "-d", c)
+    # the 16-bit zip (dos16build.sh) has no CWSDPMI: it needs none
+    dpmi = "CWSDPMI.EXE" in zipfile.ZipFile(zip_path).namelist()
+    sh("unzip", "-qo", zip_path, "gork.exe", *(["CWSDPMI.EXE"] if dpmi else []),
+       "-d", c)
     sh("unzip", "-qoj", os.path.join(VM, "crynwr.zip"),
        "DRIVERS/CRYNWR/NE2000.COM", "-d", c)
     files = {
@@ -217,7 +220,11 @@ def build_images(zip_path):
     if WINDOWS2:
         himem = windows2(c, windows, other)
         rest = rest.replace("echo READY\n",
-                            "C:\\CWSDPMI -p\ncd \\WINDOWS\nWIN\n")
+                            ("C:\\CWSDPMI -p\n" if dpmi else "") +
+                            "cd \\WINDOWS\n%s\n" %
+                            # Windows/386 is started with WIN386
+                            ("WIN386" if os.path.exists(
+                                os.path.join(windows, "WIN386.EXE")) else "WIN"))
     elif windows:                       # the checks run in a DOS box
         shutil.copytree(windows, os.path.join(c, "WINDOWS"))
         wbox(c, "A:\\COMMAND.COM")
