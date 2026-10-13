@@ -39,6 +39,16 @@ make -s -C "$WORK/nt3/PDCurses-3.9/wincon" \
 make -f Makefile.w32 CC="$HOST-gcc" PDCURSES_NT3="$WORK/nt3/PDCurses-3.9" gorknt3.exe
 "$HOST-strip" gorknt3.exe
 
+# One program for everything from a 486 up: no instruction in it may be
+# newer.  The compiler is told so (-march=i486); this looks at what the
+# libraries brought in.
+for e in gork.exe gorknt3.exe; do
+    if "$HOST-objdump" -d "$e" | grep -E '[[:space:]](cmov|fcmov|fcomi|fucomi)' >&2; then
+        echo "winbuild.sh: $e has instructions a 486 lacks" >&2
+        exit 1
+    fi
+done
+
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
 cp gork.exe gorknt3.exe README.md docs/BUILD.md LICENSE "$WORK/pack/"
 rm -f "$OUT/gork-$ver-win32-legacy.zip"

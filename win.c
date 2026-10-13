@@ -233,3 +233,13 @@ double strtod(const char *s, char **end)
     if (end != NULL) *end = (char *) s + n;
     return d;
 }
+
+/* MinGW's start-up code calls this to apply "runtime pseudo-relocations",
+   of which gork has none: Makefile.w32 links with
+   --disable-runtime-pseudo-reloc, so the linker would say if it had.  The
+   library's own version is left out by defining it here, and with it the
+   only two instructions in gork.exe that a 486 does not have (cmov:
+   Debian ships that code built for the Pentium Pro). */
+void _pei386_runtime_relocator(void)
+{
+}

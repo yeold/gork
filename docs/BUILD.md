@@ -467,9 +467,10 @@ installs TCP/IP unless asked: add the protocol in the Network control
 panel. NT 3.51 sets no `USERPROFILE`, so there `gork.cnf` goes beside
 `gork.exe`, as on Windows 9x.
 
-It is compiled for the 486, but two instructions of MinGW's start-up code,
-which Debian ships built for the Pentium Pro, remain; a Pentium did not
-run into them, a real 486 was not tried.
+It is compiled for the 486, and `winbuild.sh` checks that no instruction
+newer than that is left in either program (MinGW's start-up code brought
+two, which `win.c` now keeps out). It has still only run on emulated
+processors, never on a real 486.
 
 On Linux, `winbuild.sh` downloads the PDCurses source and leaves
 `gork-<version>-win32-legacy.zip` in `out/` ("legacy" since the
