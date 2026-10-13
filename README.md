@@ -590,3 +590,6 @@ version. It comes with no warranty. The full text is in [LICENSE](LICENSE).
 
 The vendored [cJSON](cJSON/) is under the MIT licence, which is at the top
 of its files.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to send reports and
+changes.
