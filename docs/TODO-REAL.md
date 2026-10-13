@@ -55,4 +55,3 @@ not come from an emulator.
 |---|---|---|
 | The `eth:` link | A tap device on Linux | A real network card on a real segment |
 | On Cygwin, with Npcap | Not at all | Everything |
-| Token ring framing | Frames its own test builds | A ring |
