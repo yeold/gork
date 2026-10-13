@@ -586,7 +586,7 @@ minimal echo server), and `req.json` (a sample request body).
 gork is free software: you can redistribute it and modify it under the
 terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
-version. It comes with no warranty. The full text is in [COPYING](COPYING).
+version. It comes with no warranty. The full text is in [LICENSE](LICENSE).
 
 The vendored [cJSON](cJSON/) is under the MIT licence, which is at the top
 of its files.

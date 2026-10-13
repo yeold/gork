@@ -25,7 +25,7 @@ vendored cJSON, and talks plaintext HTTP/1.0 to a TLS relay.
 %make_install
 
 %files
-%license COPYING
+%license LICENSE
 %doc README.md
 %{_bindir}/gork
 %{_datadir}/icons/hicolor/256x256/apps/gork.png

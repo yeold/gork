@@ -169,7 +169,7 @@ gork's own in a separate repository.
 - Regression runs after this change, all passing: `looptest.py` (17),
   `wintest.py` under Wine, `dostest.py` in the six configurations of the
   section below and once more on FreeDOS with `GORK_RELAY`.
-- gork got its licence the same day: GPL 3 or later (`COPYING`).
+- gork got its licence the same day: GPL 3 or later (`LICENSE`).
 
 ## MS-DOS 4.01 and Windows 2.11 (2026-10-13)
 
