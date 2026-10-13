@@ -2,8 +2,8 @@ Name:           gork
 Version:        0.10~beta
 Release:        1%{?dist}
 Summary:        Lightweight AI agent harness for old and obscure operating systems
-# ponytail: placeholder until gork picks a license (cJSON is MIT)
-License:        unspecified
+# cJSON, which is vendored, is MIT
+License:        GPL-3.0-or-later AND MIT
 URL:            https://github.com/yeold/gork
 Source0:        %{name}-%{version}.tar.gz
 BuildRequires:  gcc make ncurses-devel
@@ -25,6 +25,7 @@ vendored cJSON, and talks plaintext HTTP/1.0 to a TLS relay.
 %make_install
 
 %files
+%license COPYING
 %doc README.md
 %{_bindir}/gork
 %{_datadir}/icons/hicolor/256x256/apps/gork.png

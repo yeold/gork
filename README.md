@@ -82,6 +82,7 @@ here, and [docs/TODO-OSES.md](docs/TODO-OSES.md) the ones still to try.
 - [Adding a tool](#adding-a-tool)
 - [Testing](#testing)
 - [Known gaps](#known-gaps)
+- [Licence](#licence)
 
 ## Why a relay
 
@@ -544,3 +545,13 @@ minimal echo server), and `req.json` (a sample request body).
   `relay.c`.
 - `relaytest.c` still carries its own copy of the transport rather than
   linking `relay.c`.
+
+## Licence
+
+gork is free software: you can redistribute it and modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. It comes with no warranty. The full text is in [COPYING](COPYING).
+
+The vendored [cJSON](cJSON/) is under the MIT licence, which is at the top
+of its files.
