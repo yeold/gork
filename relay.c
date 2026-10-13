@@ -139,6 +139,215 @@ static int install_alarm(void) {
 #endif
 
 /* ------------------------------------------------------------------ */
+/* response parsing                                                   */
+/* ------------------------------------------------------------------ */
+
+/* Offset of the body after CRLF CRLF, or 0 if the separator is absent. */
+static size_t find_body(const char *p, size_t len) {
+  size_t i;
+
+  if (len < 4)
+    return 0;
+  for (i = 0; i + 3 < len; i++) {
+    if (p[i] == '\r' && p[i + 1] == '\n' && p[i + 2] == '\r' &&
+        p[i + 3] == '\n')
+      return i + 4;
+  }
+  return 0;
+}
+
+/* Case-insensitive substring search. Header blocks are small, so a naive
+   scan is fine; `needle` must already be lowercase.
+   ponytail: O(n*m), only ever run over response headers. */
+static int ci_contains(const char *hay, size_t hlen, const char *needle) {
+  size_t nlen = strlen(needle);
+  size_t i, j;
+
+  if (nlen == 0 || hlen < nlen)
+    return 0;
+  for (i = 0; i + nlen <= hlen; i++) {
+    for (j = 0; j < nlen; j++) {
+      if (tolower((unsigned char)hay[i + j]) != needle[j])
+        break;
+    }
+    if (j == nlen)
+      return 1;
+  }
+  return 0;
+}
+
+/* "HTTP/1.1 429 Too Many Requests" -> 429, or -1 if unparseable. */
+static int find_status(const char *p, size_t len) {
+  size_t i;
+  int code;
+
+  if (len < 12 || memcmp(p, "HTTP/", 5) != 0)
+    return -1;
+  for (i = 5; i < len && p[i] != ' '; i++)
+    ;
+  if (i + 3 >= len)
+    return -1;
+  code = atoi(p + i + 1);
+  return (code >= 100 && code < 600) ? code : -1;
+}
+
+/* ------------------------------------------------------------------ */
+/* the reply, as it arrives                                           */
+/* ------------------------------------------------------------------ */
+
+void (*relay_stream)(const char *p, size_t n);
+
+/* What is known of the reply so far.  The headers are kept; the body goes
+   to relay_stream as it comes, if that is set and the status is 200, and
+   into `body` otherwise.  A chunked body is decoded on the way: HTTP/1.0
+   was asked for so that there would be none, but servers send them. */
+static struct {
+  struct buf head;
+  struct buf *body;
+  size_t head_len;      /* 0 until the headers are complete */
+  unsigned long total;  /* bytes received, for the messages */
+  int status;
+  int chunked, cstate, blank;
+  int have_len;         /* a Content-Length was given */
+  unsigned long left;   /* bytes still due: of the chunk, or of the body */
+  int done;             /* the reply is complete; no need to wait for EOF */
+} rx;
+
+enum { C_SIZE, C_EXT, C_DATA, C_AFTER, C_TRAILER };
+
+/* The value of header `name` (lowercase), or NULL. */
+static const char *header(const char *name) {
+  size_t n = strlen(name), i = 0, j;
+
+  while (i < rx.head_len) {
+    for (j = 0; j < n && i + j < rx.head_len; j++)
+      if (tolower((unsigned char)rx.head.p[i + j]) != name[j])
+        break;
+    if (j == n && rx.head.p[i + n] == ':')
+      return rx.head.p + i + n + 1;
+    while (i < rx.head_len && rx.head.p[i] != '\n')
+      i++;
+    i++;
+  }
+  return NULL;
+}
+
+static int rx_emit(const char *p, size_t n) {
+  if (n == 0)
+    return 0;
+  if (relay_stream != NULL && rx.status == 200) {
+    relay_stream(p, n);
+    return 0;
+  }
+  return buf_add(rx.body, p, n);
+}
+
+static int rx_body(const char *p, size_t n) {
+  if (!rx.chunked) {
+    if (rx.have_len) {
+      if (n >= rx.left) {
+        n = (size_t)rx.left;
+        rx.done = 1;
+      }
+      rx.left -= n;
+    }
+    return rx_emit(p, n);
+  }
+  while (n > 0 && !rx.done) {
+    int c = (unsigned char)*p;
+
+    switch (rx.cstate) {
+    case C_SIZE:                /* the length, in hex */
+      if (isxdigit(c)) {
+        rx.left = rx.left * 16 +
+                  (unsigned long)(isdigit(c) ? c - '0' : tolower(c) - 'a' + 10);
+        break;
+      }
+      rx.cstate = C_EXT;
+      /* fall through */
+    case C_EXT:                 /* and whatever else is on that line */
+      if (c == '\n') {
+        rx.cstate = rx.left > 0 ? C_DATA : C_TRAILER;
+        rx.blank = 1;
+      }
+      break;
+    case C_DATA: {
+      size_t m = n < rx.left ? n : (size_t)rx.left;
+
+      if (rx_emit(p, m) != 0)
+        return -1;
+      rx.left -= m;
+      if (rx.left == 0)
+        rx.cstate = C_AFTER;
+      p += m;
+      n -= m;
+      continue;
+    }
+    case C_AFTER:               /* the line end after the data */
+      if (c == '\n')
+        rx.cstate = C_SIZE;
+      break;
+    case C_TRAILER:             /* after the last chunk: to an empty line */
+      if (c == '\n') {
+        if (rx.blank)
+          rx.done = 1;
+        rx.blank = 1;
+      } else if (c != '\r') {
+        rx.blank = 0;
+      }
+      break;
+    }
+    p++;
+    n--;
+  }
+  return 0;
+}
+
+/* Take in what was just received.  0: go on reading; 1: the reply is
+   complete; -1: failed, and said so. */
+static int rx_take(const char *p, size_t n) {
+  const char *v;
+  size_t off;
+  int rc;
+
+  rx.total += n;
+  if (rx.head_len != 0) {
+    rc = rx_body(p, n);
+  } else {
+    if (buf_add(&rx.head, p, n) != 0) {
+      fprintf(stderr, "gork: out of memory reading socket\n");
+      return -1;
+    }
+    off = find_body(rx.head.p, rx.head.len);
+    if (off == 0)
+      return 0;
+    rx.head_len = off;
+    rx.status = find_status(rx.head.p, off);
+    v = header("transfer-encoding");
+    rx.chunked = v != NULL && ci_contains(v, strcspn(v, "\r\n"), "chunked");
+    v = header("content-length");
+    if (v != NULL && !rx.chunked) {
+      rx.have_len = 1;
+      rx.left = strtoul(v, NULL, 10);
+      if (rx.left == 0)
+        rx.done = 1;
+    }
+    rc = rx_body(rx.head.p + off, rx.head.len - off);
+    rx.head.len = off;
+  }
+  if (rc != 0) {
+#ifdef GORK_DOS16
+    fprintf(stderr, "gork: the reply is too large for the 16-bit build "
+                    "(%lu bytes so far)\n", rx.total);
+#else
+    fprintf(stderr, "gork: out of memory reading socket\n");
+#endif
+    return -1;
+  }
+  return rx.done;
+}
+
+/* ------------------------------------------------------------------ */
 /* connect / read / write                                             */
 /* ------------------------------------------------------------------ */
 
@@ -207,7 +416,7 @@ static void conn_close(int fd) {
 }
 
 /* Returns 0 at EOF, -1 on error, -2 if relay_abort asked to stop. */
-static int read_to_eof(int fd, struct buf *b) {
+static int read_to_eof(int fd) {
   static char chunk[1024];
   clock_t asked = clock();
   int r, open = 1;
@@ -224,18 +433,17 @@ static int read_to_eof(int fd, struct buf *b) {
       r = sock_fastread(&sock16, (BYTE *)chunk, sizeof chunk);
     }
     if (r > 0) {
-      if (buf_add(b, chunk, (size_t)r) != 0) {
-        fprintf(stderr, "gork: the reply is too large for the 16-bit "
-                        "build (%lu bytes so far)\n", (unsigned long)b->len);
-        return -1;
-      }
+      int rc = rx_take(chunk, (size_t)r);
+
+      if (rc != 0)
+        return rc > 0 ? 0 : -1;
       continue;
     }
     if (!open)
       return 0;
     if (deadline != 0 && time(NULL) >= deadline) {
       fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
-              (unsigned long)b->len);
+              rx.total);
       return -1;
     }
     if (relay_abort != NULL && clock() - asked > CLOCKS_PER_SEC / 5) {
@@ -345,38 +553,10 @@ static void conn_close(int fd) {
 }
 
 #ifdef _WIN32
-static size_t find_body(const char *p, size_t len);
-
-/* Has the whole reply arrived, going by its Content-Length?  0 as well
-   when the header is missing. */
-static int reply_complete(const struct buf *b) {
-  size_t body = find_body(b->p, b->len), i;
-
-  if (body == 0)
-    return 0;
-  for (i = 0; i + 16 < body; i++) {
-    if ((i == 0 || b->p[i - 1] == '\n') &&
-        tolower((unsigned char)b->p[i]) == 'c' &&
-        tolower((unsigned char)b->p[i + 7]) == '-' &&
-        tolower((unsigned char)b->p[i + 8]) == 'l' &&
-        b->p[i + 14] == ':') {
-      char name[15];
-      size_t j;
-
-      for (j = 0; j < 14; j++)
-        name[j] = (char)tolower((unsigned char)b->p[i + j]);
-      name[14] = '\0';
-      if (strcmp(name, "content-length") == 0)
-        return b->len - body >= (size_t)strtoul(b->p + i + 15, NULL, 10);
-    }
-  }
-  return 0;
-}
-
 /* SPX on Windows.  Windows Me never reports the end of an SPX connection
-   to select(), so the socket is polled, and the reply is also taken as
-   complete when its Content-Length has arrived. */
-static int spx_read_to_eof(int fd, struct buf *b) {
+   to select(), so the socket is polled; rx_take() knows the reply is
+   complete from its Content-Length. */
+static int spx_read_to_eof(int fd) {
   char chunk[READ_CHUNK];
   u_long on = 1;
   DWORD asked = GetTickCount();
@@ -386,25 +566,23 @@ static int spx_read_to_eof(int fd, struct buf *b) {
   for (;;) {
     r = recv(fd, chunk, sizeof chunk, 0);
     if (r > 0) {
-      if (buf_add(b, chunk, (size_t)r) != 0) {
-        fprintf(stderr, "gork: out of memory reading socket\n");
-        return -1;
-      }
-      if (reply_complete(b))
-        return 0;
+      int rc = rx_take(chunk, (size_t)r);
+
+      if (rc != 0)
+        return rc > 0 ? 0 : -1;
       continue;
     }
     if (r == 0)
       return 0;
     if (WSAGetLastError() != WSAEWOULDBLOCK) {
-      if (WSAGetLastError() == WSAEDISCON || reply_complete(b))
+      if (WSAGetLastError() == WSAEDISCON)
         return 0;
       sock_perror("read from socket");
       return -1;
     }
     if (deadline != 0 && time(NULL) >= deadline) {
       fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
-              (unsigned long)b->len);
+              rx.total);
       return -1;
     }
     if (relay_abort != NULL && GetTickCount() - asked >= 200) {
@@ -418,7 +596,7 @@ static int spx_read_to_eof(int fd, struct buf *b) {
 #endif
 
 /* Returns 0 at EOF, -1 on error, -2 if relay_abort asked to stop. */
-static int read_to_eof(int fd, struct buf *b) {
+static int read_to_eof(int fd) {
   char chunk[READ_CHUNK];
   fd_set rd;
   struct timeval tv;
@@ -434,15 +612,15 @@ static int read_to_eof(int fd, struct buf *b) {
       if (got == 0 || got == -1)
         return got;
       if (got > 0) {
-        if (buf_add(b, chunk, (size_t)got) != 0) {
-          fprintf(stderr, "gork: out of memory reading socket\n");
-          return -1;
-        }
+        int rc = rx_take(chunk, (size_t)got);
+
+        if (rc != 0)
+          return rc > 0 ? 0 : -1;
         continue;
       }
       if (deadline != 0 && time(NULL) >= deadline) {
         fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
-                (unsigned long)b->len);
+                rx.total);
         return -1;
       }
       if (relay_abort != NULL && clock() - asked > CLOCKS_PER_SEC / 5) {
@@ -455,7 +633,7 @@ static int read_to_eof(int fd, struct buf *b) {
 #endif
 #ifdef _WIN32
   if (spx)
-    return spx_read_to_eof(fd, b);
+    return spx_read_to_eof(fd);
 #endif
   for (;;) {
     /* Wake every 200 ms so the user can abort a slow reply. */
@@ -472,7 +650,7 @@ static int read_to_eof(int fd, struct buf *b) {
 #ifdef GORK_NO_FORK
         if (deadline != 0 && time(NULL) >= deadline) {
           fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
-                  (unsigned long)b->len);
+                  rx.total);
           return -1;
         }
 #endif
@@ -483,7 +661,7 @@ static int read_to_eof(int fd, struct buf *b) {
       if (r < 0) {
         if (errno == EINTR)
           fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
-                  (unsigned long)b->len);
+                  rx.total);
         else
           sock_perror("select");
         return -1;
@@ -491,17 +669,17 @@ static int read_to_eof(int fd, struct buf *b) {
     }
     r = read(fd, chunk, sizeof chunk);
     if (r > 0) {
-      if (buf_add(b, chunk, (size_t)r) != 0) {
-        fprintf(stderr, "gork: out of memory reading socket\n");
-        return -1;
-      }
+      int rc = rx_take(chunk, (size_t)r);
+
+      if (rc != 0)
+        return rc > 0 ? 0 : -1;
       continue;
     }
     if (r == 0)
       return 0; /* clean EOF */
     if (errno == EINTR) {
       fprintf(stderr, "gork: timeout on socket after %lu bytes\n",
-              (unsigned long)b->len);
+              rx.total);
       return -1;
     }
 #ifdef _WIN32
@@ -588,74 +766,22 @@ static int spx_connect(const char *host, int socket_no) {
 }
 
 /* ------------------------------------------------------------------ */
-/* response parsing                                                   */
-/* ------------------------------------------------------------------ */
-
-/* Offset of the body after CRLF CRLF, or 0 if the separator is absent. */
-static size_t find_body(const char *p, size_t len) {
-  size_t i;
-
-  if (len < 4)
-    return 0;
-  for (i = 0; i + 3 < len; i++) {
-    if (p[i] == '\r' && p[i + 1] == '\n' && p[i + 2] == '\r' &&
-        p[i + 3] == '\n')
-      return i + 4;
-  }
-  return 0;
-}
-
-/* Case-insensitive substring search. Header blocks are small, so a naive
-   scan is fine; `needle` must already be lowercase.
-   ponytail: O(n*m), only ever run over response headers. */
-static int ci_contains(const char *hay, size_t hlen, const char *needle) {
-  size_t nlen = strlen(needle);
-  size_t i, j;
-
-  if (nlen == 0 || hlen < nlen)
-    return 0;
-  for (i = 0; i + nlen <= hlen; i++) {
-    for (j = 0; j < nlen; j++) {
-      if (tolower((unsigned char)hay[i + j]) != needle[j])
-        break;
-    }
-    if (j == nlen)
-      return 1;
-  }
-  return 0;
-}
-
-/* "HTTP/1.1 429 Too Many Requests" -> 429, or -1 if unparseable. */
-static int find_status(const char *p, size_t len) {
-  size_t i;
-  int code;
-
-  if (len < 12 || memcmp(p, "HTTP/", 5) != 0)
-    return -1;
-  for (i = 5; i < len && p[i] != ' '; i++)
-    ;
-  if (i + 3 >= len)
-    return -1;
-  code = atoi(p + i + 1);
-  return (code >= 100 && code < 600) ? code : -1;
-}
-
-/* ------------------------------------------------------------------ */
 
 int relay_post(const char *relay_host, long relay_port, const char *api_host,
                const char *path, const char *api_key, const char *body,
                size_t body_len, struct buf *resp) {
-  struct buf raw, head;
+  struct buf head;
   char num[32];
   int fd;
   int status, rc;
-  size_t body_off;
 
   if (buf_init(resp) != 0) {
     fprintf(stderr, "gork: out of memory\n");
     return -1;
   }
-  if (buf_init(&raw) != 0) {
+  memset(&rx, 0, sizeof rx);
+  rx.body = resp;
+  if (buf_init(&rx.head) != 0) {
     fprintf(stderr, "gork: out of memory\n");
     return -1;
   }
@@ -677,13 +803,13 @@ int relay_post(const char *relay_host, long relay_port, const char *api_host,
       add(&head, "Content-Length: ") != 0 || add(&head, num) != 0 ||
       add(&head, "\r\nConnection: close\r\n\r\n") != 0) {
     fprintf(stderr, "gork: out of memory\n");
-    buf_free(&raw);
+    buf_free(&rx.head);
     return -1;
   }
 
   if (install_alarm() != 0) {
     buf_free(&head);
-    buf_free(&raw);
+    buf_free(&rx.head);
     return -1;
   }
 
@@ -692,7 +818,7 @@ int relay_post(const char *relay_host, long relay_port, const char *api_host,
            : tcp_connect(relay_host, relay_port);
   if (fd < 0) {
     buf_free(&head);
-    buf_free(&raw);
+    buf_free(&rx.head);
     return fd == -2 ? -2 : -1;
   }
 
@@ -700,11 +826,11 @@ int relay_post(const char *relay_host, long relay_port, const char *api_host,
 
   rc = -1;
   if (write_all(fd, head.p, head.len) != 0 ||
-      write_all(fd, body, body_len) != 0 || (rc = read_to_eof(fd, &raw)) != 0) {
+      write_all(fd, body, body_len) != 0 || (rc = read_to_eof(fd)) != 0) {
     alarm(0);
     conn_close(fd);
     buf_free(&head);
-    buf_free(&raw);
+    buf_free(&rx.head);
     return rc == -2 ? -2 : -1;
   }
   buf_free(&head);
@@ -712,48 +838,31 @@ int relay_post(const char *relay_host, long relay_port, const char *api_host,
   alarm(0);
   conn_close(fd);
 
-  if (raw.len == 0) {
+  if (rx.total == 0) {
     fprintf(stderr, "gork: empty reply -- relay closed without data\n");
-    buf_free(&raw);
+    buf_free(&rx.head);
     return -1;
   }
-
-  body_off = find_body(raw.p, raw.len);
-  if (body_off == 0) {
+  if (rx.head_len == 0) {
     fprintf(stderr, "gork: no header/body separator in reply\n");
-    buf_free(&raw);
+    buf_free(&rx.head);
     return -1;
   }
-
-  status = find_status(raw.p, raw.len);
+  status = rx.status;
   if (status < 0) {
     fprintf(stderr, "gork: unparseable status line\n");
-    buf_free(&raw);
+    buf_free(&rx.head);
     return -1;
   }
-
-  /* We ask for HTTP/1.0 with Connection: close precisely so the reply is
-     unchunked and "read to EOF" is correct framing. A server that chunks
-     anyway leaves chunk-size lines embedded in the body, which would
-     surface much later as a baffling JSON parse error -- so say it here.
-     ponytail: detect only. If a server you need does this, dechunking is
-     ~30 lines right here. */
-  if (ci_contains(raw.p, body_off, "transfer-encoding")) {
-    fprintf(stderr, "gork: server replied with a chunked body; gork "
-                    "asked for HTTP/1.0 and cannot decode it\n");
-    buf_free(&raw);
+  if (rx.chunked && !rx.done) {
+    fprintf(stderr, "gork: the reply ended in the middle of a chunk\n");
+    buf_free(&rx.head);
     return -1;
   }
 
   if (getenv("GORK_TRACE") != NULL)
-    fwrite(raw.p, 1, body_off, stderr);
+    fwrite(rx.head.p, 1, rx.head_len, stderr);
 
-  if (buf_add(resp, raw.p + body_off, raw.len - body_off) != 0) {
-    fprintf(stderr, "gork: out of memory\n");
-    buf_free(&raw);
-    return -1;
-  }
-
-  buf_free(&raw);
+  buf_free(&rx.head);
   return status;
 }

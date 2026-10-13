@@ -129,7 +129,7 @@ away. That is the deal gork makes to run at all on hardware this old.
 
 HTTP/1.0 with `Connection: close` is deliberate: the server then replies
 unchunked and closes the socket, so "read until EOF" is complete and correct
-framing. That removes the fiddliest part of HTTP from the code.
+framing. A server that sends a chunked reply all the same is understood.
 
 ## Build
 
@@ -349,6 +349,7 @@ servers, so there is no `mcp.json`.
 | `retries` | `AGENT_RETRIES` | `2` | Extra attempts for a request that hits a network error, 429 or 5xx (0..10) |
 | `context_window` | `AGENT_CONTEXT_WINDOW` | `200000` | Tokens the model can take; set it to the loaded context length for a local model |
 | `auto_compact` | `AGENT_AUTO_COMPACT` | `80` | Compact once the context passes this percentage of `context_window` (0 = never, max 99) |
+| `stream` | `AGENT_STREAM` | `auto` | Whether the reply is asked for as a stream and shown as it arrives: `yes`, `no`, or `auto`, which is yes in the TUI and no in batch mode. A server that answers whole all the same is fine |
 | `timeout` | `AGENT_TIMEOUT` | `120` | Seconds one API request, MCP tool call or `run_command` may take before it fails |
 | `default_effort` | `AGENT_DEFAULT_EFFORT` | *(unset: model default)* | Reasoning effort at startup: `low`, `medium`, `high`, `xhigh` or `max`, sent as `output_config.effort` (`reasoning_effort` with `protocol = openai`); `/effort` changes it in the TUI |
 
@@ -498,13 +499,9 @@ interrupt it too.
   trust prompt, approvals, Esc and `/quit`; the rest was checked by hand.
 - **Path confinement is check-then-open.** A symlink swapped in between can
   escape it. That stops a model, not a hostile local user.
-- **No streaming.** Replies are read to EOF, so a long generation is a long
-  silence. Fine for a batch harness, poor for interactive use -- and more
-  noticeable against a slow local model than against the API.
-- **No chunked decoding.** gork asks for HTTP/1.0 so replies come back
-  unchunked. A server that chunks anyway is detected and reported by name
-  rather than failing as a JSON error; decoding it would be ~30 lines in
-  `relay.c`.
+- **Streaming is new, and untried against the real services.** It
+  passes against the test servers, for both protocols; `stream = no` turns
+  it off if a server's stream does not agree with gork.
 
 ## Working on gork
 

@@ -47,6 +47,15 @@ Two details the loop depends on, both easy to break by "tidying":
   succeeds, the call never runs, and nothing reports an error. `max_tokens`
   caps thinking and response text together.
 
+With `"stream": true` the reply comes as server-sent events instead.
+`relay.c` hands the body over as it arrives (`relay_stream`), and the
+`stream_*` functions in `main.c` print the text and put the pieces back
+together into the message a whole reply would have been, since that is
+what has to go back verbatim: text, thinking with its signature, and tool
+calls whose JSON arrives in parts. For `protocol = openai` the chunks are
+gathered into a whole chat completion and converted as one. A reply that
+turns out to be plain JSON is taken as it is.
+
 `max_turns` bounds the loop so a model stuck on a failing tool burns a
 bounded number of requests. A request that fails with a network error, 429
 or 5xx is retried up to `retries` times, waiting 2, 4, 8, ... seconds (at

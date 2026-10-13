@@ -53,9 +53,9 @@ the system's libc all the same (tried on Alpine, which has none).
 
 | Suite | What it runs |
 |---|---|
-| `python3 testing/looptest.py ./gork` | The Unix build against fake APIs: 17 checks |
+| `python3 testing/looptest.py ./gork` | The Unix build against fake APIs: 20 checks |
 | `python3 testing/wintest.py [wine] gork.exe` | The legacy Windows programs, batch mode |
-| `python3 testing/dostest.py ZIP` | Either DOS zip on FreeDOS in QEMU: nine checks, the TUI among them |
+| `python3 testing/dostest.py ZIP` | Either DOS zip on FreeDOS in QEMU: ten checks, the TUI among them |
 | `sh testing/linuxtest.sh OUT` | Every Linux binary, under qemu-user |
 | `python testing\cygpacktest.py DIR` | The Cygwin package, without Cygwin |
 

@@ -355,7 +355,7 @@ only disks laid out the old way).
 
 **Under Windows 3.0 and 3.1** the DOS `gork.exe` runs in a DOS box, in 386
 enhanced mode: Windows provides the protected mode there, so `CWSDPMI.EXE`
-is not used. It passes the same nine checks (`GORK_DOS_WINDOWS` names an
+is not used. It passes the same ten checks (`GORK_DOS_WINDOWS` names an
 installed `WINDOWS` directory for `dostest.py`). Load the packet driver
 before Windows, and `WINPKT` after it (`WINPKT 0x60`, from the same Crynwr
 collection): without `WINPKT`, gork dies at its first disk access during a
@@ -363,7 +363,7 @@ request and the network is dead afterwards. The Windows `gork.exe` is of
 no use here: Windows 3.x cannot run 32-bit console programs, with or
 without Win32s.
 
-**Under Windows 1 and 2** it passes the nine checks as well: Windows 1.04
+**Under Windows 1 and 2** it passes the ten checks as well: Windows 1.04
 on MS-DOS 3.30, Windows 2.03 and 2.11 (the 286 edition) on MS-DOS 4.01.
 Each wants a DOS of its time: Windows 2.11 runs no DOS program at all on
 MS-DOS 6, and Windows 1.04 hangs on MS-DOS 4.01 as soon as it starts a
@@ -405,7 +405,7 @@ for it, on x86-64 Linux. What 640K and a 16-bit `int` change
   (`option packcode=1`), or Watt-32's interrupt code crashes at
   `sock_init()`, on some layouts and not on others.
 
-It passes the nine `dostest.py` checks, TUI included, on FreeDOS, MS-DOS
+It passes the ten `dostest.py` checks, TUI included, on FreeDOS, MS-DOS
 3.30 and 6.22 and in a DOS box under Windows 1.04, 2.11/386 and 3.1. All
 of that on QEMU's 486: it is compiled for the 8086, but no 8086 or 286
 has run it.

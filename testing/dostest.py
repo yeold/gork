@@ -76,6 +76,38 @@ def text(s, delay=0):
             "usage": {"input_tokens": 1200, "output_tokens": 9}}
 
 
+def events(msg):
+    """A whole reply as the event stream it is when `"stream": true` asked
+    for it: text and tool input each in two pieces."""
+    out = [{"type": "message_start", "message": {
+        "id": msg.get("id", "m"), "role": "assistant", "content": [],
+        "usage": {"input_tokens": msg.get("usage", {}).get("input_tokens", 0),
+                  "output_tokens": 1}}}]
+    for i, b in enumerate(msg["content"]):
+        if b["type"] == "text":
+            t, h = b["text"], len(b["text"]) // 2
+            out.append({"type": "content_block_start", "index": i,
+                        "content_block": {"type": "text", "text": ""}})
+            out += [{"type": "content_block_delta", "index": i,
+                     "delta": {"type": "text_delta", "text": p}}
+                    for p in (t[:h], t[h:])]
+        else:
+            j = json.dumps(b["input"])
+            out.append({"type": "content_block_start", "index": i,
+                        "content_block": dict(b, input={})})
+            out += [{"type": "content_block_delta", "index": i,
+                     "delta": {"type": "input_json_delta", "partial_json": p}}
+                    for p in (j[:len(j) // 2], j[len(j) // 2:])]
+        out.append({"type": "content_block_stop", "index": i})
+    out.append({"type": "message_delta",
+                "delta": {"stop_reason": msg["stop_reason"]},
+                "usage": {"output_tokens": msg.get("usage", {}).get("output_tokens", 0)}})
+    out.append({"type": "message_stop"})
+    return b"".join(b"event: %s\ndata: %s\n\n" % (e["type"].encode(),
+                                                   json.dumps(e).encode())
+                    for e in out)
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
 
@@ -84,13 +116,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         requests.append(json.loads(self.rfile.read(n)))
         rep = dict(script.pop(0) if script else text("unscripted"))
         time.sleep(rep.pop("delay", 0))
-        body = json.dumps(rep).encode()
+        # The TUI asks for a stream, and `stream = yes` does: it gets one.
+        stream = bool(requests[-1].get("stream"))
+        body = events(rep) if stream else json.dumps(rep).encode()
         try:
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
+            if stream:
+                self.send_header("Content-Type", "text/event-stream")
+            else:
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            for i in range(0, len(body), 300):
+                self.wfile.write(body[i:i + 300])
+                self.wfile.flush()
         except OSError:
             pass                        # the client aborted
 
@@ -191,6 +230,8 @@ def build_images(zip_path):
                        else "d:/shared;"),
         "BAD.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
                    "allow = c:/nope\n" % PORT,
+        "STREAM.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
+                      "timeout = 20\nretries = 0\nstream = yes\n" % PORT,
         # the relay's address, as it prints it: network 0 is this segment
         "SPX.CNF": "relay = spx:0.02676F726B01:8443\nhost = fake.local\n"
                    "timeout = 20\nretries = 0\n",
@@ -404,8 +445,17 @@ class Guest:
         self.wait(r"^C:\\W>$", 10)
         # A DOS box under Windows echoes late: see the command on the
         # screen before Enter, or the bare prompt passes for its end.
-        self.type(line)
-        self.wait(re.escape(line[-8:]) + "$", 20)
+        # And it can lose a key: Esc drops the line, to type it again.
+        for attempt in range(3):
+            self.type(line)
+            try:                        # (a long line wraps: its end)
+                self.wait(re.escape(line[-60:]) + "$", 20)
+                break
+            except AssertionError:
+                if attempt == 2:
+                    raise
+                self.key("esc")
+                time.sleep(1)
         self.type("\n")
         time.sleep(1)
         return self.wait(r"C:\\W>$", secs)
@@ -543,6 +593,22 @@ def check_spx(g):
     print("ok: SPX through gork-relay")
 
 
+def check_stream(g):
+    """`stream = yes`: a tool call and an answer arrive as an event stream,
+    in pieces, and do what they would have done whole."""
+    del requests[:]
+    script[:] = [tool("write_file", path="str.txt", content="streamed\n"),
+                 text("stream done")]
+    g.run("set GORK_CONFIG=c:\\stream.cnf")
+    s = g.run("..\\gork t", 120)
+    g.run("set GORK_CONFIG=")
+    assert requests[0].get("stream") is True, requests[0].keys()
+    assert "stream done" in s, s
+    assert "wrote 9 bytes" in results()[0]["content"], results()
+    assert "streamed" in g.run("type str.txt")
+    print("ok: a streamed reply")
+
+
 def check_timeout(g):
     """A reply that never comes ends in a timeout, not a crash."""
     script[:] = [text("late", delay=12)]
@@ -561,7 +627,11 @@ def check_tui(g):
     g.type("..\\gork\n")
     g.wait("Trust this directory")
     g.type("y\n")
-    g.wait("Enter send")
+    try:
+        g.wait("Enter send", 15)
+    except AssertionError:              # a busy host can lose a key
+        g.type("\n")
+        g.wait("Enter send")
     g.type("hix\b\n")
     g.wait("Allow write_file")
     g.type("y")
@@ -621,6 +691,7 @@ def main():
             check_allow(g)
         check_long(g)
         check_run(g)
+        check_stream(g)
         if RELAY:
             check_spx(g)
         check_timeout(g)

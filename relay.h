@@ -45,6 +45,11 @@ int relay_post(const char *relay_host, long relay_port,
 
 extern int (*relay_abort)(void);
 
+/* If set, the body of a reply with status 200 is handed to it piece by
+   piece as it arrives, and `resp` stays empty: for streamed replies.  A
+   reply with any other status still ends up in `resp`. */
+extern void (*relay_stream)(const char *p, size_t n);
+
 /* Nonzero: send the key as `Authorization: Bearer` (and none if it is empty)
    instead of `x-api-key`, and no anthropic-version.  For `protocol = openai`. */
 extern int relay_bearer;

@@ -29,7 +29,7 @@
  *   api_key  x-api-key header       env ANTHROPIC_API_KEY
  *   allow    extra directories the file tools may use, `:`-separated
  *   max_turns, retries, context_window, auto_compact, default_effort,
- *   timeout
+ *   timeout, stream
  *            (see README)
  * A set environment variable beats the file.
  *
@@ -275,7 +275,7 @@ static char *kstrdup(const char *s)
 /* The environment beats ~/.gork.conf, which beats the default. */
 enum { CFG_RELAY, CFG_MODEL, CFG_HOST, CFG_PATH, CFG_KEY, CFG_ALLOW,
        CFG_TURNS, CFG_RETRIES, CFG_WINDOW, CFG_COMPACT, CFG_EFFORT,
-       CFG_TIMEOUT, CFG_PROTOCOL, NCFG };
+       CFG_TIMEOUT, CFG_PROTOCOL, CFG_STREAM, NCFG };
 
 static const struct {
     const char *name, *env, *fallback;
@@ -292,7 +292,8 @@ static const struct {
     { "auto_compact", "AGENT_AUTO_COMPACT", AUTO_COMPACT      },
     { "default_effort", "AGENT_DEFAULT_EFFORT", ""            },
     { "timeout", "AGENT_TIMEOUT",     "120"               },
-    { "protocol", "AGENT_PROTOCOL",   "anthropic"         }
+    { "protocol", "AGENT_PROTOCOL",   "anthropic"         },
+    { "stream",  "AGENT_STREAM",      "auto"              }
 };
 
 /* `protocol = openai`: speak chat completions instead of the Messages API. */
@@ -422,7 +423,7 @@ static int load_config(void)
             fprintf(stderr, "gork: %s:%d: expected `key = value`, key one of "
                             "relay, model, host, path, api_key, allow, max_turns, retries, "
                             "context_window, auto_compact, default_effort, timeout, "
-                            "protocol\n", path, n);
+                            "protocol, stream\n", path, n);
             fclose(f);
             return -1;
         }
@@ -2134,6 +2135,410 @@ static void wait_secs(int n)
         sleep(1);
 }
 
+/* ------------------------------------------------------------------ */
+/* streamed replies                                                   */
+/* ------------------------------------------------------------------ */
+
+/*
+ * With `"stream": true` the reply comes as server-sent events: lines of
+ * `data: {json}`, each a small piece.  The text is printed as it comes,
+ * and the pieces are put back together into the message a plain reply
+ * would have been, since that is what goes back to the model, tool_use
+ * and thinking blocks included.  A server that ignores the request and
+ * answers with plain JSON is taken as it is.
+ */
+#define STREAM_CALLS 16         /* tool calls in one OpenAI reply */
+
+static int want_stream;         /* the `stream` setting, resolved */
+static int no_stream;           /* this request's text is not for the user */
+static int streamed_said = -1;  /* text blocks the last post() printed
+                                   itself; -1: none, the caller prints */
+static struct {
+    struct buf line;            /* the unfinished line of the stream */
+    struct buf acc;             /* text, thinking or tool input so far */
+    struct buf sig;             /* signature of a thinking block */
+    struct buf plain;           /* the whole body, when it is no stream */
+    struct buf args[STREAM_CALLS];      /* OpenAI: arguments of each call */
+    int        sse;             /* -1 not known yet, 0 plain JSON, 1 events */
+    cJSON     *root;            /* the message being put together */
+    cJSON     *block;           /* its content block that is open */
+    cJSON     *calls;           /* OpenAI: the tool calls so far */
+    char       finish[32];      /* OpenAI: finish_reason */
+    int        said, midline, printed, failed, done, oom;
+} st;
+
+static void stream_reset(void)
+{
+    int i;
+
+    st.oom = 0;
+    if (st.line.p == NULL) {            /* first use */
+        if (buf_init(&st.line) != 0 || buf_init(&st.acc) != 0 ||
+            buf_init(&st.sig) != 0 || buf_init(&st.plain) != 0)
+            st.oom = 1;
+    }
+    st.line.len = st.acc.len = st.sig.len = st.plain.len = 0;
+    for (i = 0; i < STREAM_CALLS; i++)  /* these come into being when used */
+        if (st.args[i].p != NULL) {
+            st.args[i].len = 0;
+            st.args[i].p[0] = '\0';
+        }
+    if (st.acc.p != NULL) st.acc.p[0] = '\0';
+    if (st.sig.p != NULL) st.sig.p[0] = '\0';
+    cJSON_Delete(st.root);
+    cJSON_Delete(st.calls);
+    st.root = st.block = st.calls = NULL;
+    st.finish[0] = '\0';
+    st.sse = -1;
+    st.said = st.midline = st.printed = st.failed = st.done = 0;
+}
+
+/* A piece of the answer, on the screen at once. */
+static void stream_text(const char *t)
+{
+    if (*t == '\0') return;
+#ifdef _WIN32
+    if (isatty(1)) {
+        char *shown = kstrdup(t);
+
+        if (shown != NULL) {
+            shown[win_utf8_to_console(shown, strlen(shown), 0)] = '\0';
+            fputs(shown, stdout);
+            free(shown);
+        }
+    } else
+#endif
+    fputs(t, stdout);
+    fflush(stdout);
+    st.midline = st.printed = 1;
+}
+
+static void stream_text_end(void)
+{
+    if (!st.midline) return;
+    putchar('\n');
+    fflush(stdout);
+    st.midline = 0;
+    st.said++;
+}
+
+static const char *str_of(cJSON *obj, const char *name)
+{
+    cJSON *v = cJSON_GetObjectItem(obj, name);
+
+    return cJSON_IsString(v) ? v->valuestring : "";
+}
+
+/* Give object `obj` the string `value` under `name`, replacing what is there. */
+static void set_string(cJSON *obj, const char *name, const char *value)
+{
+    cJSON *v = cJSON_CreateString(value);
+
+    if (v == NULL) {
+        st.oom = 1;
+        return;
+    }
+    if (cJSON_GetObjectItem(obj, name) != NULL)
+        cJSON_ReplaceItemInObject(obj, name, v);
+    else
+        cJSON_AddItemToObject(obj, name, v);
+}
+
+/* One event of the Messages API. */
+static void stream_anthropic(cJSON *ev)
+{
+    const char *type = str_of(ev, "type"), *dt;
+    cJSON      *v, *d, *u;
+
+    if (strcmp(type, "message_start") == 0) {
+        cJSON_Delete(st.root);
+        st.root = cJSON_CreateObject();
+        if (st.root == NULL || cJSON_AddArrayToObject(st.root, "content") == NULL) {
+            st.oom = 1;
+            return;
+        }
+        u = cJSON_Duplicate(cJSON_GetObjectItem(
+                cJSON_GetObjectItem(ev, "message"), "usage"), 1);
+        if (u != NULL) cJSON_AddItemToObject(st.root, "usage", u);
+    } else if (st.root == NULL) {
+        if (strcmp(type, "error") == 0) goto error;
+        return;                         /* nothing to add it to */
+    } else if (strcmp(type, "content_block_start") == 0) {
+        st.block = cJSON_Duplicate(cJSON_GetObjectItem(ev, "content_block"), 1);
+        if (st.block == NULL) {
+            st.oom = 1;
+            return;
+        }
+        cJSON_AddItemToArray(cJSON_GetObjectItem(st.root, "content"), st.block);
+        st.acc.len = st.sig.len = 0;
+        st.acc.p[0] = st.sig.p[0] = '\0';
+        if (strcmp(str_of(st.block, "type"), "text") == 0) {
+            dt = str_of(st.block, "text");
+            if (buf_add(&st.acc, dt, strlen(dt)) != 0) st.oom = 1;
+            stream_text(dt);
+        }
+    } else if (strcmp(type, "content_block_delta") == 0) {
+        d = cJSON_GetObjectItem(ev, "delta");
+        dt = str_of(d, "type");
+        if (st.block == NULL) return;
+        if (strcmp(dt, "text_delta") == 0) {
+            dt = str_of(d, "text");
+            stream_text(dt);
+        } else if (strcmp(dt, "input_json_delta") == 0) {
+            dt = str_of(d, "partial_json");
+        } else if (strcmp(dt, "thinking_delta") == 0) {
+            dt = str_of(d, "thinking");
+        } else if (strcmp(dt, "signature_delta") == 0) {
+            dt = str_of(d, "signature");
+            if (buf_add(&st.sig, dt, strlen(dt)) != 0) st.oom = 1;
+            return;
+        } else {
+            return;
+        }
+        if (buf_add(&st.acc, dt, strlen(dt)) != 0) st.oom = 1;
+    } else if (strcmp(type, "content_block_stop") == 0) {
+        if (st.block == NULL) return;
+        dt = str_of(st.block, "type");
+        if (strcmp(dt, "text") == 0) {
+            set_string(st.block, "text", st.acc.p);
+            stream_text_end();
+        } else if (strcmp(dt, "thinking") == 0) {
+            set_string(st.block, "thinking", st.acc.p);
+            if (st.sig.len > 0) set_string(st.block, "signature", st.sig.p);
+        } else if (strcmp(dt, "tool_use") == 0) {
+            v = st.acc.len > 0 ? cJSON_Parse(st.acc.p) : NULL;
+            if (!cJSON_IsObject(v)) {   /* the tool reports what is missing */
+                cJSON_Delete(v);
+                v = cJSON_CreateObject();
+            }
+            if (v == NULL)
+                st.oom = 1;
+            else if (cJSON_GetObjectItem(st.block, "input") != NULL)
+                cJSON_ReplaceItemInObject(st.block, "input", v);
+            else
+                cJSON_AddItemToObject(st.block, "input", v);
+        }
+        st.block = NULL;
+    } else if (strcmp(type, "message_delta") == 0) {
+        dt = str_of(cJSON_GetObjectItem(ev, "delta"), "stop_reason");
+        if (*dt != '\0') set_string(st.root, "stop_reason", dt);
+        u = cJSON_GetObjectItem(st.root, "usage");
+        if (u == NULL) u = cJSON_AddObjectToObject(st.root, "usage");
+        cJSON_ArrayForEach(v, cJSON_GetObjectItem(ev, "usage")) {
+            if (u == NULL || !cJSON_IsNumber(v) || v->string == NULL) continue;
+            d = cJSON_CreateNumber(v->valuedouble);
+            if (d == NULL)
+                st.oom = 1;
+            else if (cJSON_GetObjectItem(u, v->string) != NULL)
+                cJSON_ReplaceItemInObject(u, v->string, d);
+            else
+                cJSON_AddItemToObject(u, v->string, d);
+        }
+    } else if (strcmp(type, "message_stop") == 0) {
+        st.done = 1;
+    } else if (strcmp(type, "error") == 0) {
+        goto error;
+    }
+    return;
+
+error:
+    fprintf(stderr, "gork: the API reported an error in the reply: %s\n",
+            str_of(cJSON_GetObjectItem(ev, "error"), "message"));
+    st.failed = 1;
+}
+
+/* One chunk of the OpenAI chat completions API. */
+static void stream_openai(cJSON *ev)
+{
+    cJSON      *choice = cJSON_GetArrayItem(cJSON_GetObjectItem(ev, "choices"), 0);
+    cJSON      *delta = cJSON_GetObjectItem(choice, "delta");
+    cJSON      *v, *call, *fn, *mine;
+    const char *t;
+    int         i;
+
+    v = cJSON_GetObjectItem(ev, "error");
+    if (v != NULL && !cJSON_IsNull(v)) {
+        fprintf(stderr, "gork: the API reported an error in the reply: %s\n",
+                cJSON_IsString(v) ? v->valuestring : str_of(v, "message"));
+        st.failed = 1;
+        return;
+    }
+    v = cJSON_GetObjectItem(ev, "usage");       /* the last chunk has it */
+    if (cJSON_IsObject(v)) {
+        if (st.root == NULL) st.root = cJSON_CreateObject();
+        if (st.root != NULL) {
+            cJSON_DeleteItemFromObject(st.root, "usage");
+            cJSON_AddItemToObject(st.root, "usage", cJSON_Duplicate(v, 1));
+        }
+    }
+    t = str_of(delta, "content");
+    if (*t != '\0') {
+        if (buf_add(&st.acc, t, strlen(t)) != 0) st.oom = 1;
+        stream_text(t);
+    }
+    cJSON_ArrayForEach(call, cJSON_GetObjectItem(delta, "tool_calls")) {
+        v = cJSON_GetObjectItem(call, "index");
+        i = cJSON_IsNumber(v) ? v->valueint : 0;
+        if (i < 0 || i >= STREAM_CALLS) continue;
+        if (st.calls == NULL) st.calls = cJSON_CreateArray();
+        while (st.calls != NULL && cJSON_GetArraySize(st.calls) <= i) {
+            mine = cJSON_CreateObject();
+            if (mine == NULL || cJSON_AddObjectToObject(mine, "function") == NULL) {
+                cJSON_Delete(mine);
+                st.oom = 1;
+                return;
+            }
+            cJSON_AddItemToArray(st.calls, mine);
+        }
+        mine = cJSON_GetArrayItem(st.calls, i);
+        if (mine == NULL) {
+            st.oom = 1;
+            return;
+        }
+        t = str_of(call, "id");
+        if (*t != '\0') set_string(mine, "id", t);
+        fn = cJSON_GetObjectItem(call, "function");
+        t = str_of(fn, "name");
+        if (*t != '\0') set_string(cJSON_GetObjectItem(mine, "function"), "name", t);
+        t = str_of(fn, "arguments");
+        if ((st.args[i].p == NULL && buf_init(&st.args[i]) != 0) ||
+            buf_add(&st.args[i], t, strlen(t)) != 0)
+            st.oom = 1;
+    }
+    t = str_of(choice, "finish_reason");
+    if (*t != '\0' && strlen(t) < sizeof st.finish) strcpy(st.finish, t);
+}
+
+static void stream_line(char *l)
+{
+    cJSON *ev;
+
+    if (strncmp(l, "data:", 5) != 0) return;    /* event:, comments, blanks */
+    l += 5;
+    while (*l == ' ') l++;
+    if (getenv("GORK_TRACE") != NULL) fprintf(stderr, "%s\n", l);
+    if (strcmp(l, "[DONE]") == 0) {
+        st.done = 1;
+        return;
+    }
+    ev = cJSON_Parse(l);
+    if (ev == NULL) return;
+    if (openai)
+        stream_openai(ev);
+    else
+        stream_anthropic(ev);
+    cJSON_Delete(ev);
+}
+
+/* relay.c hands the body here as it arrives. */
+static void stream_feed(const char *p, size_t n)
+{
+    char  *nl;
+    size_t used;
+
+    if (st.oom) return;                 /* stream_result() says so */
+    if (st.sse < 0) {
+        while (n > 0 && (*p == ' ' || *p == '\r' || *p == '\n' || *p == '\t')) {
+            p++;
+            n--;
+        }
+        if (n == 0) return;
+        st.sse = *p != '{';
+    }
+    if (!st.sse) {
+        if (buf_add(&st.plain, p, n) != 0) st.oom = 1;
+        return;
+    }
+    if (buf_add(&st.line, p, n) != 0) {
+        st.oom = 1;
+        return;
+    }
+    used = 0;
+    while ((nl = (char *) memchr(st.line.p + used, '\n',
+                                 st.line.len - used)) != NULL) {
+        *nl = '\0';
+        if (nl > st.line.p + used && nl[-1] == '\r') nl[-1] = '\0';
+        stream_line(st.line.p + used);
+        used = (size_t) (nl - st.line.p) + 1;
+    }
+    memmove(st.line.p, st.line.p + used, st.line.len - used);
+    st.line.len -= used;
+    st.line.p[st.line.len] = '\0';
+}
+
+/* The message, once the reply is over: as a plain reply's root would be.
+   NULL, with a message, if it did not arrive whole. */
+static cJSON *stream_result(void)
+{
+    cJSON *root, *msg, *choice, *choices, *call;
+    int    i;
+
+    stream_text_end();
+    streamed_said = st.said;
+    if (st.oom) {
+        fprintf(stderr, "gork: out of memory reading reply\n");
+        return NULL;
+    }
+    if (st.failed) return NULL;
+    if (st.sse < 0) {
+        fprintf(stderr, "gork: the reply was empty\n");
+        return NULL;
+    }
+    if (!st.sse) {                      /* the server did not stream */
+        streamed_said = -1;
+        if (getenv("GORK_TRACE") != NULL) fprintf(stderr, "%s\n", st.plain.p);
+        root = cJSON_Parse(st.plain.p);
+        if (root == NULL) {
+            fprintf(stderr, "gork: reply was not valid JSON\n");
+            return NULL;
+        }
+        return openai ? from_openai(root) : root;
+    }
+    if (!openai) {
+        if (st.root == NULL || cJSON_GetObjectItem(st.root, "stop_reason") == NULL) {
+            fprintf(stderr, "gork: the reply stopped before its end\n");
+            return NULL;
+        }
+        root = st.root;
+        st.root = st.block = NULL;
+        return root;
+    }
+
+    /* OpenAI: build what a whole reply would have been, and convert that. */
+    if (!st.done && st.finish[0] == '\0') {
+        fprintf(stderr, "gork: the reply stopped before its end\n");
+        return NULL;
+    }
+    root = st.root != NULL ? st.root : cJSON_CreateObject();
+    st.root = NULL;
+    choices = root != NULL ? cJSON_AddArrayToObject(root, "choices") : NULL;
+    choice = cJSON_CreateObject();
+    msg = choice != NULL ? cJSON_AddObjectToObject(choice, "message") : NULL;
+    if (choices == NULL || msg == NULL ||
+        cJSON_AddStringToObject(msg, "content", st.acc.p) == NULL ||
+        (st.finish[0] != '\0' &&
+         cJSON_AddStringToObject(choice, "finish_reason", st.finish) == NULL)) {
+        cJSON_Delete(choice);
+        cJSON_Delete(root);
+        fprintf(stderr, "gork: out of memory reading reply\n");
+        return NULL;
+    }
+    cJSON_AddItemToArray(choices, choice);
+    if (st.calls != NULL) {
+        i = 0;
+        cJSON_ArrayForEach(call, st.calls)
+        {
+            set_string(cJSON_GetObjectItem(call, "function"), "arguments",
+                       st.args[i].p != NULL ? st.args[i].p : "");
+            i++;
+        }
+        cJSON_AddItemToObject(msg, "tool_calls", st.calls);
+        st.calls = NULL;
+    }
+    return from_openai(root);
+}
+
+
 /* Send the conversation and return the parsed 200 reply, or NULL after
    reporting the failure.  Network errors, rate limits and overload (429,
    5xx, 529) are often gone a few seconds later, so those are retried;
@@ -2143,13 +2548,23 @@ static cJSON *post(const struct conn *c, cJSON *messages)
     cJSON      *req, *root, *usage;
     char       *body;
     struct buf  resp;
-    int         status, try, wait;
+    int         status, try, wait, stream = want_stream && !no_stream;
 
+    streamed_said = -1;
     req = build_request(messages, c->system);
     if (req != NULL && openai) {
         root = to_openai(req);
         cJSON_Delete(req);
         req = root;
+    }
+    if (req != NULL && stream) {
+        /* stream_options: or an OpenAI server leaves the token counts out */
+        root = openai ? cJSON_AddObjectToObject(req, "stream_options") : req;
+        if (cJSON_AddTrueToObject(req, "stream") == NULL || root == NULL ||
+            (openai && cJSON_AddTrueToObject(root, "include_usage") == NULL)) {
+            cJSON_Delete(req);
+            req = NULL;
+        }
     }
     if (req == NULL) {
         fprintf(stderr, "gork: out of memory building request\n");
@@ -2169,9 +2584,15 @@ static cJSON *post(const struct conn *c, cJSON *messages)
     }
 
     for (try = 0; ; try++) {
+        if (stream) {
+            stream_reset();
+            relay_stream = stream_feed;
+        }
         status = relay_post(c->relay_host, c->relay_port, c->api_host,
                             c->path, c->key, body, strlen(body), &resp);
-        if (status == -2 || try >= c->retries ||
+        relay_stream = NULL;
+        /* no second attempt once part of an answer is on the screen */
+        if (status == -2 || try >= c->retries || (stream && st.printed) ||
             (status >= 0 && status != 429 && status < 500))
             break;
         if (status > 0) report_api_error(status, resp.p);
@@ -2188,6 +2609,7 @@ static cJSON *post(const struct conn *c, cJSON *messages)
     }
     free(body);
     if (status < 0) {
+        if (stream) stream_text_end();
         buf_free(&resp);
         return NULL;
     }
@@ -2196,16 +2618,22 @@ static cJSON *post(const struct conn *c, cJSON *messages)
         buf_free(&resp);
         return NULL;
     }
-    if (getenv("GORK_TRACE") != NULL)
-        fprintf(stderr, "%s\n", resp.p);
+    if (stream) {
+        buf_free(&resp);
+        root = stream_result();
+        if (root == NULL) return NULL;
+    } else {
+        if (getenv("GORK_TRACE") != NULL)
+            fprintf(stderr, "%s\n", resp.p);
 
-    root = cJSON_Parse(resp.p);
-    buf_free(&resp);
-    if (root == NULL) {
-        fprintf(stderr, "gork: reply was not valid JSON\n");
-        return NULL;
+        root = cJSON_Parse(resp.p);
+        buf_free(&resp);
+        if (root == NULL) {
+            fprintf(stderr, "gork: reply was not valid JSON\n");
+            return NULL;
+        }
+        if (openai && (root = from_openai(root)) == NULL) return NULL;
     }
-    if (openai && (root = from_openai(root)) == NULL) return NULL;
 
     usage = cJSON_GetObjectItem(root, "usage");
     if (usage != NULL) {
@@ -2284,7 +2712,9 @@ static int compact(const struct conn *c, cJSON *messages, int resume)
         goto oom;
     }
 
+    no_stream = 1;                      /* the summary is not for the screen */
     root = post(c, tmp);
+    no_stream = 0;
     cJSON_Delete(tmp);
     if (root == NULL) {
         fprintf(stderr, "gork: compacting failed\n");
@@ -2375,7 +2805,8 @@ static int run_task(const struct conn *c, cJSON *messages)
             return 0;
         }
 
-        said = print_text_blocks(content);
+        /* a streamed reply's text is on the screen already */
+        said = streamed_said >= 0 ? streamed_said : print_text_blocks(content);
 
         /* The assistant turn goes back verbatim -- tool_use and thinking
            blocks included, unedited -- or the next request is rejected. */
@@ -2570,6 +3001,15 @@ int main(int argc, char **argv)
         return 2;
     }
     relay_bearer = openai;
+    /* auto: in the TUI, where someone is watching; not in batch mode */
+    if (strcmp(cfg(CFG_STREAM), "auto") == 0) {
+        want_stream = argc == 1;
+    } else if (strcmp(cfg(CFG_STREAM), "yes") == 0) {
+        want_stream = 1;
+    } else if (strcmp(cfg(CFG_STREAM), "no") != 0) {
+        fprintf(stderr, "gork: want stream auto, yes or no\n");
+        return 2;
+    }
 
     relay = cfg(CFG_RELAY);
     if (relay == NULL) {

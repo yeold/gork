@@ -48,6 +48,8 @@ static char         cap_name[TMPNAM_MAX];   /* DOS cannot unlink it open */
 static long         cap_off;                /* how far it has been read */
 #endif
 static struct buf   partial;            /* captured output not yet a line */
+static int          open_line = -1;     /* index of the line that shows it */
+static size_t       open_len;           /* and how long it was then */
 static struct line *lines;
 static size_t       nlines, cap_lines;
 static int          scroll_rows;        /* rows scrolled up from the bottom */
@@ -316,7 +318,7 @@ void tui_drain(void)
 {
     char   chunk[4096];
     char  *start, *nl;
-    int    n;
+    int    n, was = scroll_rows;
     size_t rest;
 
     if (!active) return;
@@ -336,6 +338,16 @@ void tui_drain(void)
     cap_off = lseek(cap_rfd, 0L, SEEK_CUR);
 #endif
 
+    /* The unfinished line was shown as it stood (a streamed reply grows
+       word by word): take that out again, it is about to be redone. */
+    if (open_line >= 0 && (size_t) open_line < nlines) {
+        free(lines[open_line].text);
+        memmove(lines + open_line, lines + open_line + 1,
+                (nlines - (size_t) open_line - 1) * sizeof *lines);
+        nlines--;
+    }
+    open_line = -1;
+
     start = partial.p;
     while ((nl = (char *) memchr(start, '\n',
                                  partial.len - (start - partial.p))) != NULL) {
@@ -347,6 +359,19 @@ void tui_drain(void)
     memmove(partial.p, start, rest);
     partial.len = rest;
     partial.p[rest] = '\0';
+    if (rest > 0) {
+        size_t before = nlines;
+
+        add_line(style_of(partial.p), partial.p, rest);
+        if (nlines > before) {
+            /* nothing new: leave the view where the user scrolled it */
+            if (open_line >= 0 && (size_t) open_line == before &&
+                rest == open_len)
+                scroll_rows = was;
+            open_line = (int) before;
+            open_len = rest;
+        }
+    }
 
     draw();
 }

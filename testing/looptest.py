@@ -750,17 +750,38 @@ def check_config():
 
 # ------------------------------------------------------------- chunked
 
+def chunked(body, sizes=(1, 10, 3)):
+    """`body` in HTTP chunks: the given sizes, then the rest, with a chunk
+    extension and a trailer thrown in."""
+    out, i = b"", 0
+    for n in list(sizes) + [len(body)]:
+        part, body = body[:n], body[n:]
+        if not part:
+            break
+        out += b"%X%s\r\n%s\r\n" % (len(part), b";x=y" if i == 1 else b"", part)
+        i += 1
+    return out + b"0\r\nX-Trailer: 1\r\n\r\n"
+
+
 def check_chunked():
-    """A chunked reply must name itself, not surface as a JSON parse error."""
+    """A chunked reply is decoded, whatever the pieces it arrives in; one
+    that breaks off in a chunk is an error, not half an answer."""
+    body = json.dumps({"id": "m", "stop_reason": "end_turn",
+                       "content": [{"type": "text", "text": "chunks are fine"}]}).encode()
+    cut = [False]
+
     class H(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"
 
         def do_POST(self):
             self.rfile.read(int(self.headers["content-length"]))
-            self.wfile.write(b"HTTP/1.1 200 OK\r\n"
-                             b"Content-Type: application/json\r\n"
-                             b"Transfer-Encoding: chunked\r\n\r\n"
-                             b"5\r\n{\"id\"\r\n0\r\n\r\n")
+            out = (b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                   b"Transfer-Encoding: chunked\r\n\r\n" + chunked(body))
+            if cut[0]:
+                out = out[:len(out) - 40]
+            for i in range(0, len(out), 7):         # in small pieces
+                self.wfile.write(out[i:i + 7])
+                self.wfile.flush()
 
         def log_message(self, *a):
             pass
@@ -768,14 +789,292 @@ def check_chunked():
     srv = serve(H, 8094)
     try:
         proc = run_gork(8094, "hi")
+        cut[0] = True
+        short = run_gork(8094, "hi", config="relay = 127.0.0.1:8094\nretries = 0\n")
     finally:
         srv.shutdown()
 
-    assert proc.returncode != 0, "chunked reply should fail"
-    assert "chunked" in proc.stderr, f"unhelpful error: {proc.stderr!r}"
-    assert "JSON" not in proc.stderr, f"leaked past the check: {proc.stderr!r}"
+    assert proc.returncode == 0 and proc.stdout == "chunks are fine\n", \
+        (proc.stdout, proc.stderr)
+    assert short.returncode != 0 and "chunk" in short.stderr, short.stderr
+    assert "JSON" not in short.stderr, short.stderr
 
-    print("ok: chunked reply diagnosed")
+    print("ok: chunked reply decoded")
+
+
+# ------------------------------------------------------------ streaming
+
+def sse(handler, events, chunks=False):
+    """Send `events` (dicts, or strings sent as they are) as an event
+    stream, a few bytes at a time."""
+    out = b""
+    for ev in events:
+        if isinstance(ev, str):
+            out += ev.encode()
+        else:
+            out += b"event: %s\ndata: %s\n\n" % (ev.get("type", "x").encode(),
+                                               json.dumps(ev).encode())
+    head = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+    if chunks:
+        out = chunked(out, sizes=(5, 40, 9, 200))
+        head += b"Transfer-Encoding: chunked\r\n"
+    handler.wfile.write(head + b"\r\n")
+    for i in range(0, len(out), 11):
+        handler.wfile.write(out[i:i + 11])
+        handler.wfile.flush()
+
+
+def text_events(text, stop="end_turn", pieces=3):
+    """The events of a reply that is one block of text."""
+    n = max(1, len(text) // pieces)
+    parts = [text[i:i + n] for i in range(0, len(text), n)]
+    return ([{"type": "message_start", "message": {
+                  "id": "m", "role": "assistant", "content": [],
+                  "usage": {"input_tokens": 900, "output_tokens": 1}}},
+             {"type": "content_block_start", "index": 0,
+              "content_block": {"type": "text", "text": ""}}, {"type": "ping"}] +
+            [{"type": "content_block_delta", "index": 0,
+              "delta": {"type": "text_delta", "text": p}} for p in parts] +
+            [{"type": "content_block_stop", "index": 0},
+             {"type": "message_delta", "delta": {"stop_reason": stop},
+              "usage": {"output_tokens": 30}},
+             {"type": "message_stop"}])
+
+
+def check_stream():
+    """`stream = yes`: the pieces of a streamed reply are printed and put
+    back together into the message a plain reply would have been -- text,
+    thinking with its signature, and a tool call whose JSON came in parts.
+    The same through chunked transfer.  Batch mode does not ask for it."""
+    turns = []
+    want = [{"type": "thinking", "thinking": "Let me look.", "signature": "c2ln"},
+            {"type": "text", "text": "Reading it—now."},
+            {"type": "tool_use", "id": "toolu_9", "name": "read_file",
+             "input": {"path": "testing/req.json"}}]
+    first = [
+        {"type": "message_start", "message": {
+            "id": "m1", "role": "assistant", "content": [],
+            "usage": {"input_tokens": 1200, "cache_read_input_tokens": 50,
+                      "output_tokens": 1}}},
+        {"type": "content_block_start", "index": 0,
+         "content_block": {"type": "thinking", "thinking": "", "signature": ""}},
+        {"type": "content_block_delta", "index": 0,
+         "delta": {"type": "thinking_delta", "thinking": "Let me "}},
+        {"type": "content_block_delta", "index": 0,
+         "delta": {"type": "thinking_delta", "thinking": "look."}},
+        {"type": "content_block_delta", "index": 0,
+         "delta": {"type": "signature_delta", "signature": "c2ln"}},
+        {"type": "content_block_stop", "index": 0},
+        {"type": "content_block_start", "index": 1,
+         "content_block": {"type": "text", "text": ""}},
+        {"type": "ping"},
+        {"type": "content_block_delta", "index": 1,
+         "delta": {"type": "text_delta", "text": "Reading "}},
+        ": a comment line\n\n",
+        {"type": "content_block_delta", "index": 1,
+         "delta": {"type": "text_delta", "text": "it—now."}},
+        {"type": "content_block_stop", "index": 1},
+        {"type": "content_block_start", "index": 2,
+         "content_block": {"type": "tool_use", "id": "toolu_9",
+                           "name": "read_file", "input": {}}},
+        {"type": "content_block_delta", "index": 2,
+         "delta": {"type": "input_json_delta", "partial_json": ""}},
+        {"type": "content_block_delta", "index": 2,
+         "delta": {"type": "input_json_delta", "partial_json": "{\"path\": \"test"}},
+        {"type": "content_block_delta", "index": 2,
+         "delta": {"type": "input_json_delta", "partial_json": "ing/req.json\"}"}},
+        {"type": "content_block_stop", "index": 2},
+        {"type": "message_delta", "delta": {"stop_reason": "tool_use"},
+         "usage": {"output_tokens": 77}},
+        {"type": "message_stop"}]
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            req = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            turns.append(req)
+            n = len(turns)
+            if not req.get("stream"):
+                reply(self, {"id": "m", "stop_reason": "end_turn",
+                             "content": [{"type": "text", "text": "not streamed"}]})
+            elif n in (1, 3):
+                sse(self, first, chunks=n == 3)
+            elif n == 5:                # a server that takes no notice
+                reply(self, {"id": "m", "stop_reason": "end_turn",
+                             "content": [{"type": "text", "text": "plain after all"}]})
+            elif n == 6:
+                sse(self, text_events("half an ans")[:5] +
+                    [{"type": "error", "error": {"type": "overloaded_error",
+                                                 "message": "Overloaded"}}])
+            elif n == 7:                # the connection drops in mid-reply
+                sse(self, text_events("cut off here")[:5])
+            else:
+                sse(self, text_events("all done"), chunks=n == 4)
+
+        def log_message(self, *a):
+            pass
+
+    conf = "relay = 127.0.0.1:8099\nstream = yes\nretries = 0\n"
+    srv = serve(H, 8099)
+    try:
+        runs = [run_gork(8099, "go", config=conf) for _ in range(2)]
+        plain = run_gork(8099, "go", config=conf)
+        error = run_gork(8099, "go", config=conf)
+        dropped = run_gork(8099, "go", config=conf)
+        batch = run_gork(8099, "go")
+        bad = run_gork(8099, "go", config="relay = 127.0.0.1:8099\nstream = maybe\n")
+    finally:
+        srv.shutdown()
+
+    for k, proc in enumerate(runs):
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stdout == "Reading it—now.\nall done\n", proc.stdout
+        a, b = turns[2 * k], turns[2 * k + 1]
+        assert a["stream"] is True
+        # the reply went back as it was, block for block
+        assert b["messages"][1] == {"role": "assistant", "content": want}, \
+            b["messages"][1]
+        res = b["messages"][2]["content"]
+        assert res[0]["tool_use_id"] == "toolu_9" and "claude-sonnet-5" in res[0]["content"]
+    assert plain.stdout == "plain after all\n", (plain.stdout, plain.stderr)
+    assert error.returncode != 0 and "Overloaded" in error.stderr, error.stderr
+    assert error.stdout == "half a\n", error.stdout     # what had come
+    assert dropped.returncode != 0 and "before its end" in dropped.stderr, dropped.stderr
+    assert "stream" not in turns[7] and batch.stdout == "not streamed\n", batch.stdout
+    assert bad.returncode == 2 and "want stream" in bad.stderr, bad.stderr
+
+    print("ok: streamed replies, plain and chunked")
+
+
+def check_stream_openai():
+    """The same for `protocol = openai`: content and tool calls in deltas,
+    the arguments in parts, the token counts in a last chunk."""
+    turns = []
+
+    def chunk(delta=None, finish=None, **more):
+        d = {"id": "c", "object": "chat.completion.chunk",
+             "choices": [] if delta is None and finish is None else
+                        [{"index": 0, "delta": delta or {}, "finish_reason": finish}]}
+        d.update(more)
+        return "data: %s\n\n" % json.dumps(d)
+
+    first = [chunk({"role": "assistant", "content": ""}),
+             chunk({"content": "Look"}), chunk({"content": "ing."}),
+             chunk({"tool_calls": [{"index": 0, "id": "call_7", "type": "function",
+                                    "function": {"name": "read_file", "arguments": ""}}]}),
+             chunk({"tool_calls": [{"index": 0, "function": {"arguments": "{\"path\":"}}]}),
+             chunk({"tool_calls": [{"index": 0, "function": {"arguments": " \"testing/req.json\"}"}}]}),
+             chunk(finish="tool_calls"),
+             chunk(usage={"prompt_tokens": 800, "completion_tokens": 20}),
+             "data: [DONE]\n\n"]
+    second = [chunk({"role": "assistant", "content": "It is "}),
+              chunk({"content": "a request."}), chunk(finish="stop"),
+              "data: [DONE]\n\n"]
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            turns.append(json.loads(self.rfile.read(int(self.headers["content-length"]))))
+            sse(self, first if len(turns) == 1 else second, chunks=len(turns) == 2)
+
+        def log_message(self, *a):
+            pass
+
+    srv = serve(H, 8100)
+    try:
+        proc = run_gork(8100, "go", config="relay = 127.0.0.1:8100\n"
+                        "protocol = openai\npath = /v1/chat/completions\n"
+                        "stream = yes\n", ANTHROPIC_API_KEY=None)
+    finally:
+        srv.shutdown()
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == "Looking.\nIt is a request.\n", proc.stdout
+    assert turns[0]["stream"] is True
+    assert turns[0]["stream_options"] == {"include_usage": True}
+    msgs = turns[1]["messages"]
+    call = msgs[-2]["tool_calls"][0]
+    assert msgs[-2]["content"] == "Looking." and call["id"] == "call_7"
+    assert call["function"]["name"] == "read_file"
+    assert json.loads(call["function"]["arguments"]) == {"path": "testing/req.json"}
+    assert msgs[-1]["role"] == "tool" and msgs[-1]["tool_call_id"] == "call_7"
+
+    print("ok: streamed replies, protocol = openai")
+
+
+def check_tui_stream():
+    """In the TUI a reply is asked for as a stream and shows as it comes:
+    the first words are on the screen while the rest is still on its way."""
+    turns, go_on = [], threading.Event()
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            turns.append(json.loads(self.rfile.read(int(self.headers["content-length"]))))
+            ev = text_events("EARLY words, and the LATER ones", pieces=2)
+            sse(self, ev[:4])
+            go_on.wait(10)
+            for e in ev[4:]:
+                self.wfile.write(b"data: %s\n\n" % json.dumps(e).encode())
+            self.wfile.flush()
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 8101), H)
+    srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8101\n")
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        out, step, early, deadline = b"", 0, False, time.time() + 20
+        while time.time() < deadline and step < 4:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 4096)
+                except OSError:
+                    break
+            if step == 0 and b"Enter send" in out:
+                os.write(fd, b"hi\r")
+                step = 1
+            elif step == 1 and b"EARLY words" in out:
+                early = b"LATER" not in out
+                go_on.set()
+                step = 2
+            elif step == 2 and b"LATER ones" in out:
+                step = 3
+            elif step == 3 and idle_after(out, b"LATER ones"):
+                os.write(fd, b"/quit\r")
+                step = 4
+        go_on.set()
+        if step < 4:
+            os.kill(pid, 9)
+        status = reap(pid, fd)
+    srv.shutdown()
+
+    text = out.decode(errors="replace")
+    assert step == 4, (step, text[-2000:])
+    assert early, "the first words came only with the last"
+    assert os.waitstatus_to_exitcode(status) == 0
+    assert turns[0]["stream"] is True
+
+    print("ok: the TUI shows a reply as it arrives")
+
 
 # ------------------------------------------------------------- compact
 
@@ -1102,6 +1401,9 @@ check_skills()
 check_mcp()
 check_config()
 check_chunked()
+check_stream()
+check_stream_openai()
+check_tui_stream()
 check_auto_compact()
 check_tui_abort()
 check_tui_tty_prompt()

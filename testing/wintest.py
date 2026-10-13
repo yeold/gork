@@ -38,13 +38,51 @@ def run_gork(task, cwd, config=None, **env_extra):
                           timeout=120, env=env)
 
 
-def reply(handler, obj):
-    body = json.dumps(obj).encode()
+def reply(handler, obj, stream=False):
+    """`obj` as the reply: whole, or as an event stream if that was asked."""
+    body = events(obj) if stream else json.dumps(obj).encode()
     handler.send_response(200)
-    handler.send_header("content-type", "application/json")
-    handler.send_header("content-length", str(len(body)))
+    if stream:
+        handler.send_header("content-type", "text/event-stream")
+    else:
+        handler.send_header("content-type", "application/json")
+        handler.send_header("content-length", str(len(body)))
     handler.end_headers()
-    handler.wfile.write(body)
+    for i in range(0, len(body), 500):
+        handler.wfile.write(body[i:i + 500])
+        handler.wfile.flush()
+
+def events(msg):
+    """A whole reply as the event stream it is when `"stream": true` asked
+    for it: text and tool input each in two pieces."""
+    out = [{"type": "message_start", "message": {
+        "id": msg.get("id", "m"), "role": "assistant", "content": [],
+        "usage": {"input_tokens": msg.get("usage", {}).get("input_tokens", 0),
+                  "output_tokens": 1}}}]
+    for i, b in enumerate(msg["content"]):
+        if b["type"] == "text":
+            t, h = b["text"], len(b["text"]) // 2
+            out.append({"type": "content_block_start", "index": i,
+                        "content_block": {"type": "text", "text": ""}})
+            out += [{"type": "content_block_delta", "index": i,
+                     "delta": {"type": "text_delta", "text": p}}
+                    for p in (t[:h], t[h:])]
+        else:
+            j = json.dumps(b["input"])
+            out.append({"type": "content_block_start", "index": i,
+                        "content_block": dict(b, input={})})
+            out += [{"type": "content_block_delta", "index": i,
+                     "delta": {"type": "input_json_delta", "partial_json": p}}
+                    for p in (j[:len(j) // 2], j[len(j) // 2:])]
+        out.append({"type": "content_block_stop", "index": i})
+    out.append({"type": "message_delta",
+                "delta": {"stop_reason": msg["stop_reason"]},
+                "usage": {"output_tokens": msg.get("usage", {}).get("output_tokens", 0)}})
+    out.append({"type": "message_stop"})
+    return b"".join(b"event: %s\ndata: %s\n\n" % (e["type"].encode(),
+                                                   json.dumps(e).encode())
+                    for e in out)
+
 
 
 def tool_server(port, calls, turns):
@@ -55,13 +93,15 @@ def tool_server(port, calls, turns):
         def do_POST(self):
             req = json.loads(self.rfile.read(int(self.headers["content-length"])))
             turns.append(({k.lower(): v for k, v in self.headers.items()}, req))
+            stream = bool(req.get("stream"))
             if len(turns) == 1:
                 reply(self, {"id": "m1", "stop_reason": "tool_use", "content": [
                     {"type": "tool_use", "id": f"t{i}", "name": n, "input": a}
-                    for i, (n, a) in enumerate(calls)]})
+                    for i, (n, a) in enumerate(calls)]}, stream)
             else:
                 reply(self, {"id": "m2", "stop_reason": "end_turn",
-                             "content": [{"type": "text", "text": "done"}]})
+                             "content": [{"type": "text", "text": "done"}]},
+                      stream)
 
         def log_message(self, *a):
             pass
@@ -160,6 +200,28 @@ def check_run_command():
         assert res["t1"]["content"].endswith("[exit 3]") and res["t1"].get("is_error"), res["t1"]
 
     print("ok: run_command")
+
+
+def check_stream():
+    """`stream = yes`: tool calls and the answer arrive as an event stream
+    and come out as they would whole."""
+    turns = []
+    with tempfile.TemporaryDirectory() as tmp:
+        work = os.path.join(tmp, "work")
+        os.mkdir(work)
+        srv = tool_server(8086, [("write_file", {"path": "s.txt", "content": "streamed\n"}),
+                                 ("read_file", {"path": "s.txt"})], turns)
+        try:
+            proc = run_gork("go", work, config="relay = 127.0.0.1:8086\nstream = yes\n")
+        finally:
+            srv.shutdown()
+        assert proc.returncode == 0, proc.stderr
+        assert turns[0][1]["stream"] is True
+        r = results(turns)
+        assert "wrote" in r["t0"]["content"], r
+        assert r["t1"]["content"] == "streamed\n", r
+        assert proc.stdout.replace("\r\n", "\n") == "done\n", repr(proc.stdout)
+    print("ok: a streamed reply")
 
 
 def check_home():
@@ -269,6 +331,7 @@ assert out.returncode == 0 and out.stdout.startswith("gork "), out
 print("ok: --version")
 check_files()
 check_run_command()
+check_stream()
 check_home()
 check_text()
 check_timeout()
