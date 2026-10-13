@@ -3,6 +3,9 @@ AC_CONFIG_SRCDIR([main.c])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 AC_PROG_CC
 AM_PROG_CC_C_O          # old automake needs it for cJSON/cJSON.c
+# 32-bit Linux: without this, readdir() and stat() fail on file systems
+# with 64-bit inode numbers, and list_dir shows an empty directory.
+AC_SYS_LARGEFILE
 
 # No system curses.h but a private ncurses in ~/local (see README)?  Use it.
 # Explicit CPPFLAGS/LDFLAGS on the configure line still win.

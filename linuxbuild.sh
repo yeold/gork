@@ -48,7 +48,11 @@ for a in $ARCHES; do
          make install.libs install.includes >>"$b/ncurses.log" 2>&1) ||
             { tail -20 "$b/ncurses.log"; exit 1; }
     fi
-    "$host-gcc" -std=gnu89 -O2 -static -DVERSION="\"$ver\"" \
+    # _FILE_OFFSET_BITS: on a 32-bit CPU, a directory on a file system
+    # with 64-bit inode numbers (XFS, btrfs, overlayfs) otherwise reads as
+    # empty, and stat() fails there.
+    "$host-gcc" -std=gnu89 -O2 -static -D_FILE_OFFSET_BITS=64 \
+        -DVERSION="\"$ver\"" \
         -I"$b/nc/include/ncursesw" -I"$b/nc/include" -o "$b/gork" \
         main.c relay.c tui.c mcp.c cJSON/cJSON.c \
         -L"$b/nc/lib" -lncursesw -lm 2>"$b/link.log" ||
