@@ -399,8 +399,12 @@ for it, on x86-64 Linux. What 640K and a 16-bit `int` change
   conversation is kept small: `context_window` defaults to 8000 tokens
   and `auto_compact` to 50, a reply to 3000 tokens, `read_file` and
   `run_command` return at most 8K, and `edit_file` takes files up to 30K.
-- Watt-32 is built without its optional parts: no BSD sockets (gork uses
-  its own calls there), no DHCP, so the address goes in `WATTCP.CFG`.
+- Watt-32 is built without its optional parts, DHCP excepted (`my_ip =
+  dhcp` in `WATTCP.CFG`; 16K): no BSD sockets, gork uses its own calls
+  there.
+- Before a command runs, the unused heap goes back to DOS (`_heapmin()`):
+  FreeDOS without an XMS driver leaves 496K, of which gork takes 300K,
+  and its command interpreter did not fit beside it otherwise.
 - The linker must not pack code segments into groups
   (`option packcode=1`), or Watt-32's interrupt code crashes at
   `sock_init()`, on some layouts and not on others.

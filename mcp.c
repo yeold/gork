@@ -101,7 +101,10 @@ static int send_msg(struct server *s, cJSON *msg)
     return rc;
 }
 
-/* Next whole line from the server, or NULL at EOF or once `deadline` passes. */
+static int stopped;             /* read_line: the user pressed Esc */
+
+/* Next whole line from the server, or NULL at EOF, once `deadline` passes,
+   or (with `stopped` set) when the user pressed Esc. */
 static char *read_line(struct server *s, time_t deadline)
 {
     char            chunk[4096], *nl, *line;
@@ -127,13 +130,19 @@ static char *read_line(struct server *s, time_t deadline)
 
         left = (long) (deadline - time(NULL));
         if (left <= 0) return NULL;
+        /* In the TUI, look for Esc five times a second. */
+        if (relay_abort != NULL && relay_abort()) {
+            stopped = 1;
+            return NULL;
+        }
         FD_ZERO(&rf);
         FD_SET(s->out_fd, &rf);
-        tv.tv_sec  = left;
-        tv.tv_usec = 0;
+        tv.tv_sec  = relay_abort != NULL ? 0 : left;
+        tv.tv_usec = relay_abort != NULL ? 200000L : 0;
         r = select(s->out_fd + 1, &rf, NULL, NULL, &tv);
         if (r < 0 && errno == EINTR) continue;
-        if (r <= 0) return NULL;
+        if (r < 0) return NULL;
+        if (r == 0) continue;
 
         r = read(s->out_fd, chunk, sizeof chunk);
         if (r <= 0) {
@@ -212,6 +221,23 @@ static cJSON *rpc(struct server *s, const char *method, cJSON *params,
 
     for (;;) {
         line = read_line(s, deadline);
+        if (line == NULL && stopped) {
+            /* Tell the server; its answer, if one still comes, is skipped
+               like any late one. */
+            stopped = 0;
+            req = cJSON_CreateObject();
+            params = req != NULL ? cJSON_AddObjectToObject(req, "params") : NULL;
+            if (params != NULL) {
+                cJSON_AddStringToObject(req, "jsonrpc", "2.0");
+                cJSON_AddStringToObject(req, "method",
+                                        "notifications/cancelled");
+                cJSON_AddNumberToObject(params, "requestId", want);
+                send_msg(s, req);
+            }
+            cJSON_Delete(req);
+            strcpy(rpc_err, "aborted by the user");
+            return NULL;
+        }
         if (line == NULL) {
             strcpy(rpc_err, s->dead ? "server exited"
                                     : "server did not answer in time");

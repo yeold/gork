@@ -114,7 +114,10 @@ jobs:
       # Windows Python, with nothing of Cygwin on the PATH.
       - name: package test
         shell: cmd
+        env:
+          GORK_NEED_TUI: 1        # pywinpty: a console to drive the TUI in
         run: |
+          python -m pip install -q pywinpty==2.0.15
           for /d %%d in (unpacked\gork-*-win32) do python testing\cygpacktest.py %%d > pack.log 2>&1
           set rc=%errorlevel%
           type pack.log

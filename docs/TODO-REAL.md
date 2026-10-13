@@ -27,8 +27,8 @@ terminals and keyboards, and CPUs that QEMU only pretends to be: its
 |---|---|---|
 | Windows 95, 95 OSR2, 98 SE, Me | QEMU, emulated Pentium or Pentium II | Real hardware, a real 486 above all: the programs hold no instruction newer than the 486, but none has run on one |
 | Windows NT 3.1, 3.51, NT 4.0, 2000, XP | QEMU | Real hardware; service packs other than the ones tried |
-| SPX from Windows | Windows Me in QEMU, by hand | Any other Windows; a real IPX network |
-| The Cygwin package (`win32`) | GitHub's Windows Server runner, batch mode | A desktop Windows 10 or 11; the TUI, in the console and in Windows Terminal; MCP servers started from the package |
+| SPX from Windows | Windows Me in QEMU (`testing/winspxtest.py`) | Any other Windows; a real IPX network |
+| The Cygwin package (`win32`) | GitHub's Windows Server runner: batch mode, and the TUI in a pseudo console | A desktop Windows 10 or 11; the TUI in Windows Terminal; MCP servers started from the package |
 
 Windows 11 with the legacy build is the one Windows result from a real
 machine.

@@ -29,7 +29,7 @@
 #include "relay.h"              /* struct buf */
 #include "tui.h"
 
-#define HINT_IDLE  "Enter send | PgUp/PgDn scroll | /new fresh task | /compact | /effort | /quit"
+#define HINT_IDLE  "Enter send | Up/Down history | PgUp/PgDn scroll | /new /compact /effort /quit"
 #define HINT_BUSY  "waiting for the model ... (Esc to abort)"
 #define PREVIEW_LINES 20        /* approval detail shown before eliding */
 
@@ -62,6 +62,16 @@ static const char  *status_text = "";
 static const char  *hint_text = HINT_IDLE;
 static char         input[4096];
 static size_t       input_len;
+static size_t       input_pos;          /* the cursor: a byte offset */
+
+/* Earlier lines, for the Up and Down keys. */
+#ifdef GORK_DOS16
+#define NHIST 8
+#else
+#define NHIST 32
+#endif
+static char        *hist[NHIST];
+static int          nhist;
 
 /* ponytail: history grows without bound and is wrapped by byte count, so
    UTF-8 text wraps a little early.  Fine for a session; cap it if needed. */
@@ -126,6 +136,29 @@ static void put(int y, int x, const char *s, int n)
     waddnstr(stdscr, (char *) s, n);
 }
 
+/* Is `c` a byte inside a UTF-8 character, not its first?  Never on DOS
+   and Windows, where the keyboard gives one byte for each character. */
+static int is_cont(char c)
+{
+#if defined(GORK_NO_FORK)
+    (void) c;
+    return 0;
+#else
+    return ((unsigned char) c & 0xC0) == 0x80;
+#endif
+}
+
+/* How many screen columns the `n` bytes at `s` take. */
+static int columns(const char *s, size_t n)
+{
+    int    c = 0;
+    size_t i;
+
+    for (i = 0; i < n; i++)
+        if (!is_cont(s[i])) c++;
+    return c;
+}
+
 static void draw(void)
 {
     int    w = COLS, avail = LINES - 3, total = 0, first, g, k, rows, off;
@@ -167,8 +200,10 @@ static void draw(void)
     attrset(A_BOLD);
     mvaddstr(LINES - 1, 0, "> ");
     attrset(A_NORMAL);
-    off = (int) input_len > w - 3 ? (int) input_len - (w - 3) : 0;
+    off = (int) input_pos > w - 3 ? (int) input_pos - (w - 3) : 0;
+    while (off < (int) input_pos && is_cont(input[off])) off++;
     put(LINES - 1, 2, input + off, w - 3);
+    move(LINES - 1, 2 + columns(input + off, input_pos - (size_t) off));
     refresh();
 }
 
@@ -376,16 +411,43 @@ void tui_drain(void)
     draw();
 }
 
+static void set_input(const char *text)
+{
+    input_len = strlen(text);
+    if (input_len > sizeof input - 1) input_len = sizeof input - 1;
+    memcpy(input, text, input_len);
+    input[input_len] = '\0';
+    input_pos = input_len;
+}
+
+/* Remember a line that was sent; the oldest goes when the list is full. */
+static void remember(const char *text)
+{
+    char *copy;
+
+    if (nhist > 0 && strcmp(hist[nhist - 1], text) == 0) return;
+    copy = (char *) malloc(strlen(text) + 1);
+    if (copy == NULL) return;
+    strcpy(copy, text);
+    if (nhist == NHIST) {
+        free(hist[0]);
+        memmove(hist, hist + 1, (NHIST - 1) * sizeof *hist);
+        nhist--;
+    }
+    hist[nhist++] = copy;
+}
+
 char *tui_read_line(void)
 {
     static char echo[sizeof input + 2];
-    int         ch;
+    static char draft[sizeof input];    /* what was typed before Up */
+    int         ch, at = nhist;         /* at: the history line shown */
+    size_t      n;
 
     if (!active) return NULL;
     tui_drain();
     hint_text = HINT_IDLE;
-    input_len = 0;
-    input[0]  = '\0';
+    set_input("");
 
     for (;;) {
         draw();
@@ -394,10 +456,10 @@ char *tui_read_line(void)
         case '\n': case '\r': case KEY_ENTER:
             if (input_len == 0) break;
             if (strcmp(input, "/quit") == 0) return NULL;
+            remember(input);
             sprintf(echo, "> %s", input);
             add_text(ST_USER, echo);
-            input_len = 0;
-            input[0]  = '\0';
+            set_input("");
             hint_text = HINT_BUSY;
             draw();
 #ifdef _WIN32
@@ -416,15 +478,47 @@ char *tui_read_line(void)
             return echo + 2;
         case KEY_BACKSPACE: case 127: case 8:
             /* drop a whole UTF-8 sequence, not half of one */
-            while (input_len > 0 &&
-                   ((unsigned char) input[input_len - 1] & 0xC0) == 0x80)
-                input_len--;
-            if (input_len > 0) input_len--;
-            input[input_len] = '\0';
+            n = input_pos;
+            while (n > 0 && is_cont(input[n - 1])) n--;
+            if (n > 0) n--;
+            memmove(input + n, input + input_pos, input_len - input_pos + 1);
+            input_len -= input_pos - n;
+            input_pos = n;
+            break;
+        case KEY_DC:
+            n = input_pos;
+            if (n < input_len) n++;
+            while (n < input_len && is_cont(input[n])) n++;
+            memmove(input + input_pos, input + n, input_len - n + 1);
+            input_len -= n - input_pos;
+            break;
+        case KEY_LEFT:
+            if (input_pos > 0) input_pos--;
+            while (input_pos > 0 && is_cont(input[input_pos])) input_pos--;
+            break;
+        case KEY_RIGHT:
+            if (input_pos < input_len) input_pos++;
+            while (input_pos < input_len && is_cont(input[input_pos]))
+                input_pos++;
+            break;
+        case KEY_HOME: case 1:          /* ^A */
+            input_pos = 0;
+            break;
+        case KEY_END: case 5:           /* ^E */
+            input_pos = input_len;
+            break;
+        case KEY_UP:
+            if (at == 0) break;
+            if (at == nhist) strcpy(draft, input);
+            set_input(hist[--at]);
+            break;
+        case KEY_DOWN:
+            if (at == nhist) break;
+            at++;
+            set_input(at == nhist ? draft : hist[at]);
             break;
         case 21:                        /* ^U */
-            input_len = 0;
-            input[0]  = '\0';
+            set_input("");
             break;
         case 4:                         /* ^D on an empty line quits */
             if (input_len == 0) return NULL;
@@ -435,8 +529,10 @@ char *tui_read_line(void)
         default:                        /* KEY_RESIZE lands here: redraw */
             if (ch >= 32 && ch < 256 && ch != 127 &&
                 input_len < sizeof input - 1) {
-                input[input_len++] = (char) ch;
-                input[input_len]   = '\0';
+                memmove(input + input_pos + 1, input + input_pos,
+                        input_len - input_pos + 1);
+                input[input_pos++] = (char) ch;
+                input_len++;
             }
         }
     }

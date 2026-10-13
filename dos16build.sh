@@ -36,10 +36,10 @@ INCLUDE=$WATCOM/h
 export WATCOM PATH INCLUDE
 
 # Watt-32 for the large model, with none of its optional parts
-# (-DOPT_DEFINED): no BSD sockets, no DHCP, no debugging, which leaves
+# (-DOPT_DEFINED) but DHCP: no BSD sockets, no debugging, which leaves
 # room in 640K.  Its makefiles want a list of the compiler's error numbers
 # that a DOS program of theirs prints; dos16/ has that output.
-if [ ! -f "$WORK/watt/lib/wattcpwl.lib" ]; then
+if [ ! -f "$WORK/watt/lib/wattcpwl.lib" ] || [ ! -f "$WORK/watt/with-dhcp" ]; then
     rm -rf "$WORK/watt" && mkdir "$WORK/watt"
     tar xzf "$WORK/watt-32.tar.gz" -C "$WORK/watt" --strip-components=1
     mkdir -p "$WORK/watt/src/build/watcom"
@@ -49,8 +49,10 @@ if [ ! -f "$WORK/watt/lib/wattcpwl.lib" ]; then
      chmod +x ../util/linux/*
      sh configur.sh watcom >/dev/null 2>&1 || true     # its last step wants dosemu
      sed -i 's/-DWATT32_BUILD/-DWATT32_BUILD -DOPT_DEFINED/' watcom_l.mak
+     sed -i 's/^#undef USE_DHCP /#define USE_DHCP /' config.h
      wmake -h -f watcom_l.mak >"$WORK/watt.log" 2>&1) ||
         { tail -20 "$WORK/watt.log"; exit 1; }
+    touch "$WORK/watt/with-dhcp"        # a library from before had none
 fi
 
 if [ ! -f "$WORK/pdcurses/dos/pdcurses.lib" ]; then

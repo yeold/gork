@@ -6,9 +6,11 @@ Usage:  python testing\\cygpacktest.py DIR      (the unpacked gork-*-win32)
 Runs with the Windows Python; gork itself gets a PATH with nothing but
 Windows in it, so that it must find its DLLs, its shell and its terminal
 descriptions in the package.  A fake Messages API asks for a file to be
-written and a command to be run.  Exits 0 only if every check passes.
+written and a command to be run, and the TUI is driven in a console of
+its own (needs the pywinpty module; skipped without it, unless
+GORK_NEED_TUI is set).  Exits 0 only if every check passes.
 """
-import http.server, json, os, subprocess, sys, tempfile, threading
+import http.server, json, os, re, subprocess, sys, tempfile, threading, time
 
 PKG = os.path.abspath(sys.argv[1])
 PORT = 8094
@@ -42,14 +44,80 @@ def text(s):
 
 
 def gork(args, home, cwd, **extra):
+    env = clean_env(home, **extra)
+    return subprocess.run(["cmd", "/c", os.path.join(PKG, "gork.cmd")] + args,
+                          cwd=cwd, env=env, capture_output=True, text=True,
+                          timeout=120)
+
+
+def clean_env(home, **extra):
     root = os.environ["SystemRoot"]
     env = {"SystemRoot": root, "PATH": root + "\\System32;" + root,
            "USERPROFILE": home, "TEMP": home, "TMP": home,
            "ComSpec": os.environ["ComSpec"], "GORK_ALLOW_RUN": "1"}
     env.update(extra)
-    return subprocess.run(["cmd", "/c", os.path.join(PKG, "gork.cmd")] + args,
-                          cwd=cwd, env=env, capture_output=True, text=True,
-                          timeout=120)
+    return env
+
+
+def check_tui(home, work):
+    """The TUI in a Windows console (a pseudo console): the trust prompt, a
+    line typed, the reply, /quit.  (The cursor keys are left to looptest.py
+    on Cygwin: a pseudo console does not pass their sequences on whole.)"""
+    try:
+        import winpty
+    except ImportError:
+        if os.environ.get("GORK_NEED_TUI"):
+            raise
+        print("skipped: the TUI (no pywinpty module)")
+        return
+    del requests[:]
+    script[:] = [text("tui reply")]
+    proc = winpty.PtyProcess.spawn(
+        ["cmd", "/c", os.path.join(PKG, "gork.cmd")], cwd=work,
+        env=clean_env(home), dimensions=(25, 100))
+    seen = []
+
+    def pump():
+        try:
+            while True:
+                seen.append(proc.read(4096))
+        except EOFError:
+            pass
+
+    threading.Thread(target=pump, daemon=True).start()
+
+    def screen():
+        """What was written, without escape sequences and blanks: the
+        console moves the cursor where a program wrote spaces."""
+        t = re.sub(r"\x1b\][^\x07]*\x07|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b.", "",
+                   "".join(seen))
+        return re.sub(r"\s+", "", t)
+
+    def wait(what, secs=60):
+        end = time.time() + secs
+        while time.time() < end:
+            if what in screen():
+                return
+            time.sleep(0.2)
+        raise AssertionError("no %r in the console:\n%s" % (what, screen()[-3000:]))
+
+    try:
+        wait("Trustthisdirectory")
+        proc.write("y\r")
+        wait("Entersend")
+        proc.write("helx\x7flo\r")              # with a Backspace
+        wait("tuireply")
+        assert requests[0]["messages"][0]["content"] == "hello", requests[0]
+        proc.write("/quit\r")
+        end = time.time() + 30
+        while proc.isalive() and time.time() < end:
+            time.sleep(0.2)
+        assert not proc.isalive(), "still running after /quit"
+        assert proc.exitstatus == 0, proc.exitstatus
+    finally:
+        if proc.isalive():
+            proc.terminate(force=True)
+    print("ok: the TUI in a Windows console")
 
 
 def results():
@@ -91,6 +159,7 @@ def main():
         assert "run_command" in names, names
         print("ok: config in the profile, write_file, run_command through "
               "the package's sh")
+        check_tui(home, work)
     srv.shutdown()
     print("all Cygwin package checks passed")
 

@@ -9,7 +9,8 @@ NE2000 packet driver are downloaded once into $GORK_VM/dostest (default
 ~/.cache/gork-vm/dostest).  To test on another DOS, name a bootable 1.44 MB
 floppy image of it in $GORK_DOS_FLOPPY (it needs COMMAND.COM in its root
 and a little free space); MS-DOS 6.22 install disk 1 works.  Set
-$GORK_DOS_ONE_DISK to skip the check that needs a D: drive (DR-DOS 7.03's
+$GORK_DOS_DHCP to take the address from QEMU's DHCP server.
+Set $GORK_DOS_ONE_DISK to skip the check that needs a D: drive (DR-DOS 7.03's
 install floppy does not see the second disk).  To run the checks in a DOS
 box under Windows 3.0 or 3.1 in 386 enhanced mode, name an installed
 WINDOWS directory, copied off a disk where Setup ran (VGA, no network,
@@ -221,7 +222,8 @@ def build_images(zip_path):
     sh("unzip", "-qoj", os.path.join(VM, "crynwr.zip"),
        "DRIVERS/CRYNWR/NE2000.COM", "-d", c)
     files = {
-        "WATTCP.CFG": "my_ip = 10.0.2.15\nnetmask = 255.255.255.0\n"
+        "WATTCP.CFG": "my_ip = dhcp\n" if os.environ.get("GORK_DOS_DHCP") else
+                      "my_ip = 10.0.2.15\nnetmask = 255.255.255.0\n"
                       "gateway = 10.0.2.2\nnameserver = 10.0.2.3\n",
         "GORK.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
                     "timeout = 6\nretries = 0\n"
@@ -619,7 +621,8 @@ def check_timeout(g):
 
 
 def check_tui(g):
-    """Trust prompt, Backspace, approval, PgUp/PgDn, Esc, a clean exit."""
+    """Trust prompt, the line editor, approval, PgUp/PgDn, Esc, a clean
+    exit."""
     del requests[:]
     script[:] = [tool("write_file", path="tui.txt", content="x\n"),
                  text("all done"), text("never seen", delay=10)]
@@ -632,7 +635,11 @@ def check_tui(g):
     except AssertionError:              # a busy host can lose a key
         g.type("\n")
         g.wait("Enter send")
-    g.type("hix\b\n")
+    g.type("ix")                        # Home, h; End, Backspace: hi
+    g.key("home")
+    g.type("h")
+    g.key("end")
+    g.type("\b\n")
     g.wait("Allow write_file")
     g.type("y")
     g.wait("all done")
@@ -640,10 +647,12 @@ def check_tui(g):
     g.key("pgup")
     g.key("pgdn")
     g.wait("Enter send")
-    g.type("again\n")
+    g.key("up")                         # the line before, again
+    g.type("\n")
     g.wait("Esc to abort")
     g.key("esc")
     g.wait("aborted")
+    assert requests[-1]["messages"][-1]["content"] == "hi", requests[-1]
     g.type("/quit\n")
     s = g.wait(r"C:\\W>$", 20)
     assert "Enter send" not in s, s     # the screen was cleared

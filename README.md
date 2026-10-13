@@ -228,8 +228,8 @@ Each message continues the same conversation. Before any `write_file`,
 decline (the model is told and adapts), `a` allow that tool for the rest of
 the session. Reads never ask.
 
-Keys: Enter send, PgUp/PgDn scroll, Ctrl-U clear the line, Esc abort the
-running task, Ctrl-D (on an empty line) or `/quit` exit. `/new` clears the conversation. A task
+Keys: Enter send, Left/Right/Home/End/Delete edit the line, Up/Down earlier
+lines, PgUp/PgDn scroll, Ctrl-U clear the line, Esc abort the running task, Ctrl-D (on an empty line) or `/quit` exit. `/new` clears the conversation. A task
 that fails (network, API error) is dropped from the conversation so the next
 message starts clean; an aborted one is kept, so you can redirect it.
 
@@ -492,9 +492,8 @@ interrupt it too.
 
 ## Known gaps
 
-- **Esc can't stop a running MCP call.** It waits for the call to finish
-  (or hit `timeout`), then aborts.
-- **Basic line editor.** No cursor movement, history, or multi-line input.
+- **One line of input.** The line editor has a cursor and a history, but
+  no multi-line input.
 - **The TUI is only partly covered by the test suites.** They drive the
   trust prompt, approvals, Esc and `/quit`; the rest was checked by hand.
 - **Path confinement is check-then-open.** A symlink swapped in between can

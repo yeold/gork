@@ -1283,6 +1283,116 @@ def check_tui_tty_prompt():
     print("ok: run_command can prompt on /dev/tty, /effort")
 
 
+def check_tui_mcp_esc_and_editing():
+    """Esc stops a running MCP call, and the server is told.  Then the input
+    line: the cursor keys to mend a word, Up to send a line again."""
+    turns = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            turns.append(json.loads(self.rfile.read(int(self.headers["content-length"]))))
+            if len(turns) == 1:
+                reply(self, {"id": "m1", "stop_reason": "tool_use", "content": [
+                    {"type": "tool_use", "id": "t0", "name": "mcp__fake__echo",
+                     "input": {"text": "slow"}}]})
+            else:
+                reply(self, {"id": "m", "stop_reason": "end_turn", "content": [
+                    {"type": "text", "text": "reply%d" % len(turns)}]})
+
+        def log_message(self, *a):
+            pass
+
+    srv = serve(H, 8102)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        log = os.path.join(tmp, "mcp.log")
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, ".gork", "mcp.json"), "w") as f:
+            json.dump({"mcpServers": {"fake": {"command": sys.executable,
+                                               "args": [FAKEMCP]}}}, f)
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8102\nstream = no\n")
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              FAKEMCP_LOG=log,
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        def logged():
+            return open(log).read() if os.path.exists(log) else ""
+
+        out, step, start, deadline = b"", 0, time.time(), time.time() + 25
+        while time.time() < deadline and step < 7:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 4096)
+                except OSError:
+                    break
+            if step == 0 and b"Enter send" in out:
+                os.write(fd, b"go\r")
+                step = 1
+            elif step == 1 and b"Allow" in out:
+                os.write(fd, b"y")
+                step = 2
+            elif step == 2 and "started" in logged():
+                time.sleep(0.3)
+                os.write(fd, b"\x1b")
+                step = 3
+            elif step == 3 and b"gork: aborted" in out:
+                stopped_after = time.time() - start
+                # "agn", back one, "ai" before the n; End, "!"; Home, Delete
+                # and "A": Again!  Then ^A, right, and Backspace takes the A.
+                for keys in (b"agn", b"\x1bOD", b"ai", b"\x1bOF", b"!",
+                             b"\x1bOH", b"\x1b[3~", b"A", b"\x01",
+                             b"\x1bOC", b"\x7f", b"\r"):
+                    os.write(fd, keys)
+                    time.sleep(0.05)
+                step = 4
+            elif step == 4 and idle_after(out, b"reply2"):
+                os.write(fd, b"x")
+                time.sleep(0.05)
+                os.write(fd, b"\x1bOA")             # Up: the line before
+                time.sleep(0.05)
+                os.write(fd, b"\x1bOA")             # and the first one
+                time.sleep(0.05)
+                os.write(fd, b"\x1bOB")             # Down again
+                time.sleep(0.05)
+                os.write(fd, b"\r")
+                step = 5
+            elif step == 5 and idle_after(out, b"reply3"):
+                os.write(fd, b"\x1bOA")
+                time.sleep(0.05)
+                os.write(fd, b"\x1bOB")             # Down: the empty draft
+                time.sleep(0.05)
+                os.write(fd, b"last\r")
+                step = 6
+            elif step == 6 and idle_after(out, b"reply4"):
+                os.write(fd, b"/quit\r")
+                step = 7
+        if step < 7:
+            os.kill(pid, 9)
+        status = reap(pid, fd)
+        notes = logged()
+    srv.shutdown()
+
+    assert step == 7, (step, out.decode(errors="replace")[-2000:])
+    assert os.waitstatus_to_exitcode(status) == 0
+    assert stopped_after < 15, "Esc waited for the call"
+    assert "cancelled True" in notes, notes
+    assert "aborted by the user" in json.dumps(turns[1]["messages"]), turns[1]
+    said = [m["content"] for t in turns[1:] for m in t["messages"][-1:]]
+    assert said == ["gain!", "gain!", "last"], said
+
+    print("ok: Esc stops an MCP call; line editing and history")
+
+
 def check_run_timeout_and_esc():
     """run_command dies at `timeout`, background children included, and
     Esc in the TUI interrupts it and aborts the task."""
@@ -1407,5 +1517,6 @@ check_tui_stream()
 check_auto_compact()
 check_tui_abort()
 check_tui_tty_prompt()
+check_tui_mcp_esc_and_editing()
 check_run_timeout_and_esc()
 print("all checks passed")

@@ -10,8 +10,6 @@ they are built and what each needs. What is left:
 - [ ] Older DOS: MS-DOS 2.x, and the 16-bit build on DR-DOS. The oldest
       tried is MS-DOS 3.30.
 - [ ] `IPXODI` and `IPX.COM` for SPX; only PDIPX was tried.
-- [ ] DHCP in the 16-bit build: Watt-32 is built without it there, to
-      save memory, so the address goes in `WATTCP.CFG`.
 - [ ] DR-DOS 7.03 passed the checks that need one disk only: its install
       floppy does not see a second hard disk, so the `allow` check on D:
       could not run there.

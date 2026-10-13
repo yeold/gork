@@ -88,6 +88,7 @@
 #endif
 
 #ifdef GORK_DOS16
+#include <malloc.h>           /* _heapmin() */
 #include <ctype.h>
 /* As DJGPP's realpath(): c:/dir/file, whether it exists or not.  The
    library's _fullpath() adds the drive and the current directory, but it
@@ -1042,6 +1043,11 @@ static char *tool_run_command(cJSON *input, int *is_err)
     dup2(fd, 1);
     dup2(fd, 2);
     close(fd);
+#ifdef GORK_DOS16
+    /* The command interpreter needs room of its own in the 640K: hand
+       back to DOS what the heap holds and does not use. */
+    _heapmin();
+#endif
     status = system(cmd->valuestring);
     dup2(o1, 1);
     dup2(o2, 2);
