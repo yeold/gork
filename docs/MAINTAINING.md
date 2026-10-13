@@ -41,7 +41,11 @@ the system's libc all the same (tried on Alpine, which has none).
    package registry. GitHub Actions builds the same tag, waits for the
    release to exist and adds the macOS and Cygwin packages, so those two
    are on GitHub only.
-4. An asset that is already on a release makes its upload fail. To
+4. If the Cygwin job of the tag run fails, the release lacks
+   `gork-<v>-win32.zip`. Fix the job on `main`: its next build adds the
+   package to the release of the version in the tree, when that release
+   has none. (1.0 got its package that way.)
+5. An asset that is already on a release makes its upload fail. To
    replace one, delete the release on that forge and run the tag build
    again; never start a second build of a tag otherwise.
 

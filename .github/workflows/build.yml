@@ -127,19 +127,47 @@ jobs:
         with:
           name: gork-cygwin
           path: out/
-      # As for macOS: Jenkins makes the release; wait for it.
+      # As for macOS: Jenkins makes the release; on a tag, wait for it and
+      # add the package.  On main, add it to the release of the version in
+      # the tree if that one has none: so a release whose tag run failed
+      # here (1.0's did) is mended by the next push.  PowerShell, not
+      # bash: once Cygwin is installed, "bash" is Cygwin's, and it does
+      # not take the CR LF line ends this script arrives with.
       - name: release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          for i in $(seq 1 120); do
-              gh release view "$TAG" >/dev/null 2>&1 && break
-              sleep 30
-          done
-          gh release upload "$TAG" out/* --clobber
+          $zip = (Get-ChildItem out\gork-*-win32.zip)[0]
+          if ($env:REF_TYPE -eq 'tag') {
+              $tag = $env:REF_NAME
+              $tries = 120
+          } else {
+              $ver = $zip.Name -replace '^gork-(.*)-win32\.zip$', '$1'
+              $tag = 'v' + ($ver -replace '~', '-')
+              $tries = 1
+          }
+          $found = $false
+          for ($i = 0; $i -lt $tries; $i++) {
+              $assets = gh release view $tag --json assets --jq '.assets[].name' 2>$null
+              if ($LASTEXITCODE -eq 0) { $found = $true; break }
+              if ($tries -gt 1) { Start-Sleep 30 }
+          }
+          if (-not $found) {
+              if ($env:REF_TYPE -eq 'tag') { throw "no release $tag" }
+              Write-Host "no release ${tag}: nothing to add"
+              exit 0
+          }
+          if ($assets -contains $zip.Name) {
+              Write-Host "$($zip.Name) is on $tag already"
+              exit 0
+          }
+          gh release upload $tag $zip.FullName
+          if ($LASTEXITCODE -ne 0) { throw "upload to $tag failed" }
+          Write-Host "added $($zip.Name) to $tag"
 
   # The native gork.exe (MinGW, see winbuild.sh): cross-built on Linux as
   # Jenkins does it, then run on Windows.
