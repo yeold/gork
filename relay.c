@@ -1,7 +1,9 @@
 /*
  * relay.c -- transport for gork. See relay.h.
  *
- * Target: gcc 2.95 / 3.2, glibc 2.1+, Linux 2.2+. Strict C89.
+ * Strict C89, for the same systems as main.c.  Three transports: BSD
+ * sockets (Unix, DJGPP's Watt-32, Winsock), Watt-32's own calls (16-bit
+ * DOS), and SPX on DOS and Windows.
  */
 
 #include <sys/types.h>          /* first: 4.4BSD <netinet/in.h> needs it */
@@ -100,6 +102,10 @@ int buf_add(struct buf *b, const char *src, size_t n) {
   b->len += n;
   b->p[b->len] = '\0';
   return 0;
+}
+
+static int add(struct buf *b, const char *s) {
+  return buf_add(b, s, strlen(s));
 }
 
 void buf_free(struct buf *b) {
@@ -639,8 +645,8 @@ static int find_status(const char *p, size_t len) {
 int relay_post(const char *relay_host, long relay_port, const char *api_host,
                const char *path, const char *api_key, const char *body,
                size_t body_len, struct buf *resp) {
-  struct buf raw;
-  char head[1024];
+  struct buf raw, head;
+  char num[32];
   int fd;
   int status, rc;
   size_t body_off;
@@ -654,35 +660,29 @@ int relay_post(const char *relay_host, long relay_port, const char *api_host,
     return -1;
   }
 
-  /* head is 1024 bytes; path, api_host and api_key are the only variable
-     parts and all come from argv/environ, so bound them rather than trust
-     them to fit. */
-  if (strlen(path) + strlen(api_host) + strlen(api_key) > 700) {
-    fprintf(stderr, "gork: request headers too long\n");
+  /* The head grows as it must: path, host and key are as long as the
+     configuration made them. */
+  sprintf(num, "%lu", (unsigned long)body_len);
+  if (buf_init(&head) != 0 ||
+      add(&head, "POST ") != 0 || add(&head, path) != 0 ||
+      add(&head, " HTTP/1.0\r\nHost: ") != 0 || add(&head, api_host) != 0 ||
+      add(&head, "\r\nUser-Agent: gork/0\r\n"
+                 "Content-Type: application/json\r\n") != 0 ||
+      (!relay_bearer &&
+       (add(&head, "anthropic-version: 2023-06-01\r\nx-api-key: ") != 0 ||
+        add(&head, api_key) != 0 || add(&head, "\r\n") != 0)) ||
+      (relay_bearer && *api_key != '\0' &&
+       (add(&head, "Authorization: Bearer ") != 0 ||
+        add(&head, api_key) != 0 || add(&head, "\r\n") != 0)) ||
+      add(&head, "Content-Length: ") != 0 || add(&head, num) != 0 ||
+      add(&head, "\r\nConnection: close\r\n\r\n") != 0) {
+    fprintf(stderr, "gork: out of memory\n");
     buf_free(&raw);
     return -1;
   }
 
-  sprintf(head,
-          "POST %s HTTP/1.0\r\n"
-          "Host: %s\r\n"
-          "User-Agent: gork/0\r\n"
-          "Content-Type: application/json\r\n",
-          path, api_host);
-  if (!relay_bearer)
-    sprintf(head + strlen(head),
-            "anthropic-version: 2023-06-01\r\n"
-            "x-api-key: %s\r\n",
-            api_key);
-  else if (*api_key != '\0')
-    sprintf(head + strlen(head), "Authorization: Bearer %s\r\n", api_key);
-  sprintf(head + strlen(head),
-          "Content-Length: %lu\r\n"
-          "Connection: close\r\n"
-          "\r\n",
-          (unsigned long)body_len);
-
   if (install_alarm() != 0) {
+    buf_free(&head);
     buf_free(&raw);
     return -1;
   }
@@ -691,6 +691,7 @@ int relay_post(const char *relay_host, long relay_port, const char *api_host,
   fd = spx ? spx_connect(relay_host, (int)relay_port)
            : tcp_connect(relay_host, relay_port);
   if (fd < 0) {
+    buf_free(&head);
     buf_free(&raw);
     return fd == -2 ? -2 : -1;
   }
@@ -698,13 +699,15 @@ int relay_post(const char *relay_host, long relay_port, const char *api_host,
   alarm(relay_timeout);
 
   rc = -1;
-  if (write_all(fd, head, strlen(head)) != 0 ||
+  if (write_all(fd, head.p, head.len) != 0 ||
       write_all(fd, body, body_len) != 0 || (rc = read_to_eof(fd, &raw)) != 0) {
     alarm(0);
     conn_close(fd);
+    buf_free(&head);
     buf_free(&raw);
     return rc == -2 ? -2 : -1;
   }
+  buf_free(&head);
 
   alarm(0);
   conn_close(fd);

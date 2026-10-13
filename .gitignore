@@ -1,7 +1,6 @@
 *.o
 *.out
 gork
-testing/relaytest
 testing/__pycache__/
 gork.conf
 project.md

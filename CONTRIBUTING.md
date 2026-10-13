@@ -30,7 +30,8 @@ you expected and what happened. `GORK_TRACE=1` shows the reply headers.
   the README's table has. `configure` builds with
   `-std=gnu89 -pedantic -Wall -W`; a patch should add no warnings.
 - Keep to the style of the file you are changing, and write comments
-  that say why.
+  that say why. `ponytail:` in a comment marks a known shortcut and what
+  would lift it.
 - No new dependencies. gork needs a C compiler, curses and sockets, and
   the vendored cJSON; that is the point of it.
 - What differs between systems goes behind `port.h` or an `#ifdef` with a

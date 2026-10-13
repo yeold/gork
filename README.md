@@ -7,12 +7,13 @@ runs the usual tool-use loop -- send a task, get tool calls back, execute
 them locally, feed the results in, repeat -- on systems from 1987 to today:
 MS-DOS 3.30 and Windows 1.04, Linux 1.0, the first BSDs, Solaris 2.5.1,
 Windows 95, Minix, GNU/Hurd and Haiku, and just as well on a current
-Linux, macOS or Windows 11. One source for all of them, with a batch mode and a
-full-screen interactive one. The [table below](#tested-systems) says what
+Linux, macOS or Windows 11. One source for all of them, with a batch mode
+and a full-screen interactive one. The [table below](#tested-systems) says what
 it has been run on.
 
 It is small: about 5,000 lines of strict C89 and a binary of about 100 KB
-(x86-64 Linux, stripped), with no dependencies beyond libc, a curses library and the vendored cJSON.
+(x86-64 Linux, stripped), with no dependencies beyond libc, a curses
+library and the vendored cJSON.
 It builds with gcc 2.4.5, with a single compiler command where `configure`
 cannot run, and asks the system for little: TCP sockets, a terminal, a
 file system. No TLS, no threads, no C99.
@@ -20,8 +21,9 @@ file system. No TLS, no threads, no C99.
 It talks to any server that speaks the Messages API format: Anthropic's own
 API, or a local model behind LM Studio or a similar compatible server (see
 [Local models](#local-models)). With `protocol = openai` it speaks the
-OpenAI chat completions format instead. It speaks plaintext HTTP/1.0 only; reaching an HTTPS endpoint is
-the job of a [relay](#why-a-relay), not gork's.
+OpenAI chat completions format instead. It speaks plaintext HTTP/1.0
+only; reaching an HTTPS endpoint is the job of a [relay](#why-a-relay),
+not gork's.
 
 ## Tested systems
 
@@ -67,6 +69,14 @@ here, [docs/TODO-OSES.md](docs/TODO-OSES.md) the ones still to try, and
 [docs/TODO-REAL.md](docs/TODO-REAL.md) the ones that have only met an
 emulator and want a run on real hardware.
 
+## Packages
+
+Releases carry ready-made packages: a `.deb` and an `.rpm`, static Linux
+binaries for ten CPUs (`gork-<version>-linux-<arch>.tar.gz`: amd64, i386,
+arm64, armhf, riscv64, s390x, ppc64el, powerpc, m68k, hppa), a macOS
+installer, and the DOS and Windows zips below. Everything else builds from
+the source tarball.
+
 There are two DOS packages. `gork-<version>-dos.zip` needs a 386 and is
 the full program. `gork-<version>-dos16.zip` runs in real mode, in 640K,
 on anything down to an 8086, and where no protected mode is to be had
@@ -83,6 +93,7 @@ There are two Windows packages:
 ## Contents
 
 - [Tested systems](#tested-systems)
+- [Packages](#packages)
 - [Why a relay](#why-a-relay)
 - [Build](#build)
 - [Run](#run)
@@ -94,11 +105,8 @@ There are two Windows packages:
   - [Skills](#skills)
   - [MCP servers](#mcp-servers)
   - [Tools](#tools)
-- [Layout](#layout)
-- [The loop](#the-loop)
-- [Adding a tool](#adding-a-tool)
-- [Testing](#testing)
 - [Known gaps](#known-gaps)
+- [Working on gork](#working-on-gork)
 - [Licence](#licence)
 
 ## Why a relay
@@ -469,111 +477,13 @@ batch mode, interrupts the command and aborts the task. While a command runs,
 Esc is the terminal's interrupt key, so arrow keys typed at a prompt
 interrupt it too.
 
-## Layout
-
-| Path | What |
-|---|---|
-| [main.c](main.c) | Agent loop, tool table, request/response handling |
-| [relay.c](relay.c), [relay.h](relay.h) | HTTP POST through the relay; growable buffer |
-| [tui.c](tui.c), [tui.h](tui.h) | Interactive chat pane, input line, approvals |
-| [mcp.c](mcp.c), [mcp.h](mcp.h) | MCP client: stdio servers, JSON-RPC, tool calls |
-| [port.h](port.h), [win.c](win.c) | What differs without `fork` (DOS, Windows); the Windows replacements for POSIX calls |
-| [Makefile.dj](Makefile.dj), [dosbuild.sh](dosbuild.sh), [Makefile.w32](Makefile.w32), [winbuild.sh](winbuild.sh) | The DOS (DJGPP) and Windows (MinGW) cross builds |
-| [cygpack.sh](cygpack.sh) | Packs the Cygwin build as the `win32` zip |
-| [dos16build.sh](dos16build.sh), [dos16/](dos16/) | The 16-bit DOS build (Open Watcom), and two generated files Watt-32 needs for it |
-| [dosspx.c](dosspx.c) | SPX on DOS, through the IPX driver |
-| [configure.ac](configure.ac), [Makefile.am](Makefile.am) | Build: curses detection, compiler flags, sources |
-| [cJSON/](cJSON/) | Vendored JSON parser |
-| [docs/BUILD.md](docs/BUILD.md) | Build instructions per operating system |
-| [testing/](testing/) | Fakes and checks |
-| [gork.spec](gork.spec), [debian/](debian/) | RPM and deb packaging |
-| [Jenkinsfile](Jenkinsfile), [release.sh](release.sh) | CI: tarball and packages; tag builds publish releases |
-| [images/](images/) | Icon, installed to the hicolor theme |
-
-## The loop
-
-One turn is: build the request from the conversation so far, POST it, then
-branch on `stop_reason`.
-
-- `tool_use` -- run every `tool_use` block in the reply, send **all** results
-  back in a single user turn, and go again. Splitting results across turns
-  teaches the model to stop calling tools in parallel; omitting one is
-  rejected outright.
-- anything else -- print the text and stop.
-
-Two details the loop depends on, both easy to break by "tidying":
-
-- The assistant turn is echoed back **verbatim** (`cJSON_Duplicate`), tool_use
-  and thinking blocks included. Editing it gets the next request rejected.
-- No `thinking` field is sent, so the model runs its default adaptive
-  thinking. With thinking disabled it will occasionally write a tool call into
-  its *visible text* instead of emitting a `tool_use` block -- the turn
-  succeeds, the call never runs, and nothing reports an error. `max_tokens`
-  caps thinking and response text together.
-
-`max_turns` bounds the loop so a model stuck on a failing tool burns a
-bounded number of requests. A request that fails with a network error, 429
-or 5xx is retried up to `retries` times, waiting 2, 4, 8, ... seconds (at
-most 60) in between; any other error ends the task at once.
-
-## Adding a tool
-
-Write the function, then add a row to `TOOLS[]` in [main.c](main.c):
-
-```c
-static char *tool_read_file(cJSON *input, int *is_err);
-
-static const struct tool TOOLS[] = {
-    { "read_file",                                  /* name          */
-      "Read a file from disk and return its contents.",  /* description */
-      "{\"type\":\"object\", ... }",                /* input_schema  */
-      tool_read_file }
-};
-```
-
-A tool returns freshly `malloc`'d result text (the caller frees it) and sets
-`*is_err` on failure, which flags the `tool_result` block so the model can
-recover instead of trusting a bad result. Returning `NULL` means out of memory
-and aborts the run.
-
-The schema string is parsed with cJSON at request time, so a malformed one
-fails the build of the request, not the compile -- keep it valid.
-
-## Testing
-
-```sh
-python3 testing/looptest.py ./gork
-```
-
-Stands up a fake API, drives gork through a full `tool_use` round-trip, and
-asserts the wire shape: headers, tool declaration, the verbatim assistant
-echo, and one correctly-matched `tool_result` in a single user turn. This is
-the check that fails if the loop breaks.
-
-`testing/oldvm.sh build` makes a Debian 1.3 (1997: Linux 2.0.33, libc5,
-gcc 2.7.2.1) disk image for QEMU, and `testing/oldvm.sh run` boots it with
-the current tree as a tarball on `/dev/hdb`; `./build.sh` inside builds it.
-The header of the script has the details.
-
-`testing/wintest.py` checks the Windows `gork.exe` in batch mode, under
-Wine or on Windows. `testing/dostest.py` does the same for DOS: it boots FreeDOS in QEMU, runs
-the `gork.exe` that `sh dosbuild.sh` built, and checks a round trip, path
-confinement, an `allow` directory on a second drive, `edit_file`,
-`run_command`, long output, the timeout and the TUI. Jenkins runs it on
-every build.
-
-`testing/fakemcp.py` is the stdio MCP server the MCP check runs against.
-[testing/](testing/) also holds the milestone-0 pieces: `relaytest.c` (a
-standalone transport probe that POSTs a body from stdin), `fakeapi.py` (a
-minimal echo server), and `req.json` (a sample request body).
-
 ## Known gaps
 
 - **Esc can't stop a running MCP call.** It waits for the call to finish
   (or hit `timeout`), then aborts.
 - **Basic line editor.** No cursor movement, history, or multi-line input.
-- **The TUI is not covered by `looptest.py`.** It was checked by hand under
-  tmux.
+- **The TUI is only partly covered by the test suites.** They drive the
+  trust prompt, approvals, Esc and `/quit`; the rest was checked by hand.
 - **Path confinement is check-then-open.** A symlink swapped in between can
   escape it. That stops a model, not a hostile local user.
 - **No streaming.** Replies are read to EOF, so a long generation is a long
@@ -583,8 +493,12 @@ minimal echo server), and `req.json` (a sample request body).
   unchunked. A server that chunks anyway is detected and reported by name
   rather than failing as a JSON error; decoding it would be ~30 lines in
   `relay.c`.
-- `relaytest.c` still carries its own copy of the transport rather than
-  linking `relay.c`.
+
+## Working on gork
+
+[docs/HACKING.md](docs/HACKING.md) has the layout of the source, how the
+loop works, how to add a tool and how to run the tests;
+[CONTRIBUTING.md](CONTRIBUTING.md) says how to send reports and changes.
 
 ## Licence
 
@@ -595,6 +509,3 @@ version. It comes with no warranty. The full text is in [LICENSE](LICENSE).
 
 The vendored [cJSON](cJSON/) is under the MIT licence, which is at the top
 of its files.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to send reports and
-changes.

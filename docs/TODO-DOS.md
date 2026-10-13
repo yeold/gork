@@ -3,8 +3,7 @@
 Both DOS builds work and pass `testing/dostest.py`: the 32-bit one
 (`dosbuild.sh`, DJGPP, a 386 or better) and the 16-bit one
 (`dos16build.sh`, Open Watcom, real mode). [BUILD.md](BUILD.md) says how
-they are built and what each needs; [PROGRESS.md](PROGRESS.md) has how
-they came about. What is left:
+they are built and what each needs. What is left:
 
 - [ ] Real hardware: everything ran in QEMU. See
       [TODO-REAL.md](TODO-REAL.md).

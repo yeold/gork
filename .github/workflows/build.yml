@@ -3,7 +3,7 @@
 # Jenkins only tries under Wine, on a real Windows.  On a tag it also adds
 # the macOS packages and the Cygwin package (gork-<version>-win32.zip) to
 # the release that Jenkins makes.  Everything else is built by Jenkins
-# (Jenkinsfile) or by hand in QEMU (docs/PROGRESS.md).
+# (Jenkinsfile) or by hand in QEMU.
 name: build
 
 on:
@@ -90,7 +90,8 @@ jobs:
       - run: git config --global core.autocrlf input
         shell: bash
       - uses: actions/checkout@v5
-      - uses: cygwin/cygwin-install-action@v6
+      # v6, by its commit: an action of a third party is pinned
+      - uses: cygwin/cygwin-install-action@3f0a3f9f988f7e96b8c18098ae05eaec175f5b52
         with:
           install-dir: C:\cygwin    # where the shell above looks for bash
           packages: gcc-core make autoconf automake libncurses-devel python3 dash zip

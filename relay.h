@@ -1,8 +1,7 @@
 /*
  * relay.h -- plaintext HTTP/1.0 POST through a TLS-terminating relay.
  *
- * Lifted from testing/relaytest.c, which proved the transport in milestone 0.
- * Same framing decision: HTTP/1.0 + "Connection: close" means the server
+ * The framing decision: HTTP/1.0 + "Connection: close" means the server
  * replies unchunked and closes, so "read until EOF" is complete and correct.
  */
 

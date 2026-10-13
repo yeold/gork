@@ -3,11 +3,11 @@
  * systems, most of which predate TLS.
  *
  * Runs the Messages API tool-use loop against api.anthropic.com through a
- * plaintext HTTP relay, executing tool calls locally.  Transport is relay.c
- * (lifted from testing/relaytest.c); JSON is vendored cJSON.
+ * plaintext HTTP relay, executing tool calls locally.  Transport is
+ * relay.c; JSON is vendored cJSON.
  *
  * Target: gcc 2.4.5+, libc 4.5 or glibc 2.0+, Linux 1.0+, the BSDs,
- * Solaris and illumos.
+ * Solaris and illumos; DOS and Windows through port.h.
  * Strict C89.
  *
  * Usage:
@@ -246,6 +246,18 @@ static int  nallow;
 /* ------------------------------------------------------------------ */
 
 /* strdup is not C89. */
+/* dst = a followed by b, if that fits in `size` bytes: 0, or -1 if not.
+   For the paths built from HOME and the configuration: no snprintf here. */
+static int join(char *dst, size_t size, const char *a, const char *b)
+{
+    size_t na = strlen(a), nb = strlen(b);
+
+    if (na >= size || nb >= size - na) return -1;
+    memcpy(dst, a, na);
+    memcpy(dst + na, b, nb + 1);
+    return 0;
+}
+
 static char *kstrdup(const char *s)
 {
     char  *p;
@@ -370,13 +382,12 @@ static int load_config(void)
     int         n = 0, i;
 
     if (named != NULL && *named != '\0') {
-        if (strlen(named) >= sizeof path) {
+        if (join(path, sizeof path, named, "") != 0) {
             fprintf(stderr, "gork: GORK_CONFIG path too long\n");
             return -1;
         }
-        strcpy(path, named);
-    } else if (home != NULL && strlen(home) < sizeof path - 16) {
-        sprintf(path, "%s/" CONF_NAME, home);
+    } else if (home != NULL &&
+               join(path, sizeof path, home, "/" CONF_NAME) == 0) {
         named = NULL;
 #ifdef GORK_NO_FORK
         strcpy(conf_hint, path);
@@ -391,7 +402,7 @@ static int load_config(void)
         fprintf(stderr, "gork: cannot read %s: %s\n", path, strerror(errno));
         return -1;
     }
-    strcpy(cfg_path, path);
+    join(cfg_path, sizeof cfg_path, path, "");     /* the same size */
 
     while (fgets(line, sizeof line, f) != NULL) {
         n++;
@@ -474,11 +485,10 @@ static int load_allow(const char *list)
     char  copy[MAX_ALLOW * PATH_MAX], *p;
 
     if (list == NULL) return 0;
-    if (strlen(list) >= sizeof copy) {
+    if (join(copy, sizeof copy, list, "") != 0) {
         fprintf(stderr, "gork: allow list too long\n");
         return -1;
     }
-    strcpy(copy, list);
     for (p = strtok(copy, ALLOW_SEP); p != NULL;
          p = strtok(NULL, ALLOW_SEP)) {
         p = trim(p);
@@ -611,11 +621,18 @@ static const char *save_file(const char *real, const char *data, size_t n)
         fclose(f);
         goto fail;
     }
+#ifndef GORK_NO_FORK
+    /* the old file's mode, set on the open file: by name, something else
+       could be standing there by now */
+    if (stat(real, &st) == 0) fchmod(fd, st.st_mode & 07777);
+#endif
     if (fclose(f) != 0) {
         e = errno;
         goto fail;
     }
+#ifdef GORK_NO_FORK
     if (stat(real, &st) == 0) chmod(tmp, st.st_mode & 07777);
+#endif
 #if defined(_WIN32) || defined(GORK_DOS16)
     /* rename() does not replace a file here.  ponytail: not atomic; if the
        second rename fails the old file is gone. */
@@ -1785,7 +1802,7 @@ static int ask_trust(const char *file, const char *home)
 {
     char  ans[16], dir[PATH_MAX], real_home[PATH_MAX];
     FILE *f;
-    int   lvl;
+    int   lvl, fd;
 
     fprintf(stderr,
         "gork will work in %s\n"
@@ -1807,10 +1824,13 @@ static int ask_trust(const char *file, const char *home)
         : (ans[0] == 'e' || ans[0] == 'E') ? 2 : 0;
     if (lvl == 0) return 0;
 
-    strcpy(dir, file);
-    *strrchr(dir, '/') = '\0';
-    mkdir(dir, 0700);                           /* ~/.gork, if missing */
-    f = fopen(file, "a");
+    if (join(dir, sizeof dir, file, "") == 0 && strrchr(dir, '/') != NULL) {
+        *strrchr(dir, '/') = '\0';
+        mkdir(dir, 0700);                       /* ~/.gork, if missing */
+    }
+    fd = open(file, O_WRONLY | O_CREAT | O_APPEND, 0600);   /* ours alone */
+    f = fd >= 0 ? fdopen(fd, "a") : NULL;
+    if (f == NULL && fd >= 0) close(fd);
     if (f == NULL || fprintf(f, "%s %s\n", lvl == 2 ? "edits" : "trust",
                              work_root) < 0 || fclose(f) != 0)
         fprintf(stderr, "gork: could not remember this in %s; you will "
@@ -1851,10 +1871,12 @@ static void update_status(const struct conn *c)
     else
         strcpy(ctx, "ctx -");
     /* What matters most first: a narrow terminal cuts the bar on the right. */
-    sprintf(status_line, " gork %.16s | %s | %.100s @ %.100s | effort %.32s | %s",
+    sprintf(status_line, " gork %.16s | %.90s | %.100s @ %.100s | effort %.32s | ",
             VERSION, ctx,
-            cfg(CFG_MODEL), c->api_host, *effort ? effort : "default",
-            work_root);
+            cfg(CFG_MODEL), c->api_host, *effort ? effort : "default");
+    /* the directory last, cut short if it must be */
+    strncat(status_line, work_root,
+            sizeof status_line - strlen(status_line) - 1);
 }
 
 static long usage_of(cJSON *usage, const char *field)
@@ -2586,7 +2608,7 @@ int main(int argc, char **argv)
                         "xhigh or max\n");
         return 2;
     }
-    strcpy(effort, cfg(CFG_EFFORT));
+    join(effort, sizeof effort, cfg(CFG_EFFORT), "");  /* checked above */
     relay_timeout = atoi(cfg(CFG_TIMEOUT));
     if (relay_timeout < 1) {
         fprintf(stderr, "gork: want timeout >= 1 (seconds)\n");
@@ -2618,9 +2640,8 @@ int main(int argc, char **argv)
     home = getenv("HOME");
 
     /* Interactive only: a task on the command line is consent already. */
-    if (argc == 1 && home != NULL && strlen(home) < sizeof trust_path - 32) {
-        strcpy(trust_path, home);
-        strcat(trust_path, "/" DOT_GORK "/trusted");
+    if (argc == 1 && home != NULL &&
+        join(trust_path, sizeof trust_path, home, "/" DOT_GORK "/trusted") == 0) {
         lvl = trust_level(trust_path);
         if (lvl == 0) lvl = ask_trust(trust_path, home);
         if (lvl == 0) return 1;
@@ -2653,14 +2674,12 @@ int main(int argc, char **argv)
 
     scan_skills(DOT_GORK "/skills");
     c.mcp_config = NULL;
-    if (home != NULL && strlen(home) < sizeof mcp_path - 32) {
-        strcpy(mcp_path, home);
-        strcat(mcp_path, "/" DOT_GORK "/mcp.json");
+    if (home != NULL &&
+        join(mcp_path, sizeof mcp_path, home, "/" DOT_GORK "/mcp.json") == 0) {
         c.mcp_config = mcp_path;
     }
-    if (home != NULL && strlen(home) < sizeof user_skills - 16) {
-        strcpy(skills_path, home);
-        strcat(skills_path, "/" DOT_GORK "/skills");
+    if (home != NULL &&
+        join(skills_path, sizeof skills_path, home, "/" DOT_GORK "/skills") == 0) {
         if (realpath(skills_path, user_skills) != NULL)
             scan_skills(user_skills);
         else

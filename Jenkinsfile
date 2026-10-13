@@ -1,8 +1,9 @@
-// Source tarball, then RPMs and debs built from it, a DOS zip
-// cross-built from the tree (dosbuild.sh) and tested on FreeDOS in QEMU
-// (testing/dostest.py), and a Windows zip cross-built with MinGW
-// (winbuild.sh) and tested under Wine (testing/wintest.py), each in a
-// throwaway
+// Source tarball, then RPMs and debs built from it; static Linux binaries
+// for ten CPUs (linuxbuild.sh), each run through the suite under qemu-user;
+// the DOS zips, 32-bit (dosbuild.sh) and 16-bit (dos16build.sh), tested on
+// FreeDOS in QEMU (testing/dostest.py); and the legacy Windows zip, cross-
+// built with MinGW (winbuild.sh) and tested under Wine (testing/wintest.py).
+// Each in a throwaway
 // container via plain `docker run` (no Docker Pipeline plugin needed).
 // Containers build as root in their own /tmp and only copy finished
 // packages into out/, chowned back to the Jenkins user.
@@ -30,8 +31,33 @@ pipeline {
                         sh '''
                             docker run --rm -v "$PWD/out":/out fedora:latest sh -ec '
                                 dnf -yq install rpm-build gcc make ncurses-devel
-                                rpmbuild -ta /out/gork-*.tar.gz --define "_topdir /tmp/rpm"
+                                # the source tarball, not the Linux binaries beside it
+                                rpmbuild -ta "$(ls /out/gork-*.tar.gz | grep -v -- -linux-)" --define "_topdir /tmp/rpm"
                                 cp /tmp/rpm/SRPMS/*.rpm /tmp/rpm/RPMS/*/*.rpm /out/ && chown -R '"$(id -u):$(id -g)"' /out'
+                        '''
+                    }
+                }
+                stage('linux') {
+                    steps {
+                        sh '''
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends \
+                                    gcc libc6-dev make curl ca-certificates ncurses-bin \
+                                    gcc-x86-64-linux-gnu gcc-i686-linux-gnu gcc-aarch64-linux-gnu \
+                                    gcc-arm-linux-gnueabihf gcc-riscv64-linux-gnu gcc-s390x-linux-gnu \
+                                    gcc-powerpc64le-linux-gnu gcc-powerpc-linux-gnu gcc-m68k-linux-gnu \
+                                    gcc-hppa-linux-gnu libc6-dev-i386-cross libc6-dev-arm64-cross \
+                                    libc6-dev-armhf-cross libc6-dev-riscv64-cross libc6-dev-s390x-cross \
+                                    libc6-dev-ppc64el-cross libc6-dev-powerpc-cross libc6-dev-m68k-cross \
+                                    libc6-dev-hppa-cross >/dev/null
+                                cp -r /src /tmp/src && cd /tmp/src
+                                sh linuxbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
+                            # and run each: the whole suite, under qemu-user
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends python3 qemu-user-static >/dev/null
+                                cd /src && sh testing/linuxtest.sh /out'
                         '''
                     }
                 }
@@ -92,7 +118,7 @@ pipeline {
                             docker run --rm -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y build-essential debhelper libncurses-dev >/dev/null
-                                mkdir /tmp/deb && tar xzf /out/gork-*.tar.gz -C /tmp/deb
+                                mkdir /tmp/deb && tar xzf "$(ls /out/gork-*.tar.gz | grep -v -- -linux-)" -C /tmp/deb
                                 cd /tmp/deb/gork-* && dpkg-buildpackage -us -uc
                                 cd /tmp/deb && cp *.deb *.dsc *.tar.xz *.buildinfo *.changes /out/ && chown -R '"$(id -u):$(id -g)"' /out'
                         '''

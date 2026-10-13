@@ -44,3 +44,16 @@ jobs:
       - uses: github/codeql-action/analyze@v4
         with:
           category: /language:${{ matrix.language }}
+          output: sarif-out
+      # The Security tab needs a login.  The list also goes out as an
+      # annotation, which the public API shows: rule, place, message.
+      - name: findings
+        if: always()
+        run: |
+          jq -r '.runs[].results[]
+                 | "\(.ruleId) \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine) \(.message.text | gsub("\n"; " ") | .[0:140])"' \
+              sarif-out/*.sarif | sort > findings.txt || true
+          n=$(wc -l < findings.txt)
+          cat findings.txt
+          printf '::notice title=CodeQL: %s findings::%s\n' "$n" \
+              "$(head -c 60000 findings.txt | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"

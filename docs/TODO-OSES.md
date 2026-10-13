@@ -16,7 +16,7 @@ are taken to work too.
 | OS | How to run it | What to expect |
 |---|---|---|
 | AIX (4.3, 5.x, 7.x) | QEMU `ppc64` runs AIX 7.2; older wants real RS/6000 hardware | System V curses as on Solaris. Needs gcc from the AIX Toolbox, or `xlc`. Sockets are in libc. |
-| HP-UX (10.20, 11.x) | QEMU `hppa` runs 10.20 to 11.11; Itanium needs real hardware. 11.11 was installed in QEMU, but no compiler for its PA-RISC 1.1 processor could be found: see [PROGRESS.md](PROGRESS.md) | System V curses (`-lcurses`, `-lHcurses` on old releases). The bundled `cc` is K&R only, so gcc is needed. |
+| HP-UX (10.20, 11.x) | QEMU `hppa` runs 10.20 to 11.11; Itanium needs real hardware. 11.11 was installed in QEMU, but no compiler for its PA-RISC 1.1 processor could be found | System V curses (`-lcurses`, `-lHcurses` on old releases). The bundled `cc` is K&R only, so gcc is needed. |
 | IRIX (5.3, 6.5) | No good emulator; MAME's Indy boots but is slow. Real SGI hardware is the practical route | System V curses, MIPSpro `cc` or gcc. Should be close to Solaris. |
 | Minix 2.0 | x86 in QEMU | It has its own small libc: check `select`, `realpath` and curses first. |
 | Tru64 / OSF/1 | Alpha emulation in QEMU is limited; real hardware | Similar to the other System V systems. |
