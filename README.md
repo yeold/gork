@@ -48,7 +48,7 @@ of `testing/looptest.py`.
 | macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
 | Windows (native, experimental) | Windows NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added: one `gork.exe` for 9x and NT, built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, 2000, XP SP3, 11, Server 2025; Wine 10 | Windows Me: untested (no working product key for the install) |
 | Windows (Cygwin) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | |
-| DOS (experimental) | MS-DOS 6.22 (1994), with DJGPP, PDCurses and Watt-32, 386 or better | DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 3.0 and 3.1 (386 enhanced mode) | 16-bit real mode: requests do not fit in 640 K. Windows 1 and 2: not working yet |
+| DOS (experimental) | MS-DOS 4.01 (1989), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | 16-bit real mode: requests do not fit in 640 K. Windows 1: not tried |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
 and i386 passes the whole suite: cross-built with Debian 13's toolchains

@@ -87,6 +87,40 @@ build on each system), README "Tested systems" (results table).
    BeOS, OS/2 (long manual installs, or a compiler has to be found first);
    Plan 9, UEFI, ZealOS and the like are ports, not builds.
 
+## MS-DOS 4.01 and Windows 2.11 (2026-10-13)
+
+- **MS-DOS 4.01**: all nine `dostest.py` checks pass, after one fix in
+  gork. `edit_file` page-faulted in DJGPP's `stat()` (`big_move`, from
+  `_stat_assist`): for the inode number, the root directory's time and the
+  like it reads tables inside DOS, laid out differently in 4.x. gork uses
+  only the mode and the size, so `main.c` now sets every `_djstat_flags`
+  bit. (Not checked: whether this is also behind the open "a `stat()` at
+  startup breaks Esc" question in TODO-DOS.md.)
+- The disk was the problem of the day before, not DOS: MS-DOS 4.01 shows
+  an empty root directory unless the boot sector carries a DOS-style OEM
+  name (mtools writes its own), and it wants the partition on the second
+  track, type 4 and under 32 MB. `GORK_DOS_SMALL_DISKS=1` makes
+  `dostest.py` build its disks that way (32 MB, 2K clusters).
+- **Windows 2.11/286 on MS-DOS 4.01**: all nine checks pass in a
+  full-screen DOS box. `dostest.py` sees `WIN200.BIN` in the directory
+  `GORK_DOS_WINDOWS` names and takes the real-mode route (`windows2()`
+  there says how): `CWSDPMI -p` before `WIN` (loaded in the box it hangs,
+  a bare DJGPP "hello" too); a copy of `COMMAND.COM` as `GSHELL.COM` with
+  a PIF made from `WORD.PIF`, started by `run=` in `WIN.INI`
+  (`COMMAND.COM` itself is always given a window and 128K, PIF or not,
+  and from there Windows asks for a PIF for every program; `WIN file.bat`
+  runs the batch file with the 52K default); Enter for the "Memory
+  Configuration Altered" box at each start; and slower typing, as Windows
+  2 loses keys. The box has 454K free.
+- Regression runs after the change, all passing: `looptest.py` (17) in
+  Debian stable, `wintest.py` under Wine, and `dostest.py` on FreeDOS 1.3,
+  MS-DOS 6.22, MS-DOS 4.01, Windows 3.1 and 3.0 on 6.22, and Windows 2.11
+  on 4.01.
+- For a repeat: `/vm/wold/dos401-boot.img` (the "Setup" disk of MS-DOS
+  4.01 from WinWorldPC) and `/vm/wold/w211.vm/tree/WINDOWS` (Windows 2.11
+  as its Setup left it, VGA) in the `w98vm` volume; `/vm/reg.sh ZIP` runs
+  the six DOS configurations in turn.
+
 ## Windows 3.x, 2.x and 1.x (2026-10-12)
 
 The Windows `gork.exe` is a 32-bit console program and cannot run on
@@ -104,7 +138,7 @@ Windows 3.x. What runs there is the DOS `gork.exe`, in a DOS box.
   and to see a typed command on the screen before pressing Enter (the DOS
   box echoes late). `SWITCHES=/W` is for Windows 3.0, which otherwise
   wants WINA20.386 in the boot drive's root.
-- **Windows 2.11/286**: not working; see TODO-OSES.md for what was found.
+- **Windows 2.11/286**: not working that day; done on 2026-10-13, above.
   Windows 1.04, 2.03 and 2.11/386 are downloaded and untried.
 
 How, for a repeat, in `/vm/w31` and `/vm/wold` of the same volume (all

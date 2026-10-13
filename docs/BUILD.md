@@ -310,7 +310,8 @@ source out with LF line ends (`git config core.autocrlf input`): with CRLF
 Experimental; [TODO-DOS.md](TODO-DOS.md) has what works and what is left.
 32-bit protected mode only: a 386 or better, built with
 [DJGPP](https://www.delorie.com/djgpp/), with PDCurses for the screen and
-Watt-32 for TCP/IP. Tested on FreeDOS 1.3, MS-DOS 6.22 and DR-DOS 7.03.
+Watt-32 for TCP/IP. Tested on FreeDOS 1.3, MS-DOS 4.01 and 6.22, and
+DR-DOS 7.03.
 
 On Linux, `dosbuild.sh` downloads a DJGPP cross compiler and both libraries
 and leaves `gork-<version>-dos.zip` in `out/`:
@@ -328,7 +329,9 @@ make -f Makefile.dj CC=i586-pc-msdosdjgpp-gcc PDCURSES=/path/to/pdcurses \
 ```
 
 `python3 testing/dostest.py` then checks that zip on FreeDOS in QEMU, or
-on another DOS whose boot floppy image `GORK_DOS_FLOPPY` names.
+on another DOS whose boot floppy image `GORK_DOS_FLOPPY` names
+(`GORK_DOS_SMALL_DISKS=1` as well for MS-DOS 4.01, which reads only disks
+laid out the old way).
 
 **Under Windows 3.0 and 3.1** the DOS `gork.exe` runs in a DOS box, in 386
 enhanced mode: Windows provides the protected mode there, so `CWSDPMI.EXE`
@@ -339,6 +342,21 @@ collection): without `WINPKT`, gork dies at its first disk access during a
 request and the network is dead afterwards. The Windows `gork.exe` is of
 no use here: Windows 3.x cannot run 32-bit console programs, with or
 without Win32s.
+
+**Under Windows 2.11** (the 286 edition, on MS-DOS 4.01: on MS-DOS 6 it
+runs no DOS program at all) it passes the nine checks as well, with three
+things arranged:
+
+- `CWSDPMI -p` before `WIN`, to have it resident. Loaded inside Windows,
+  it hangs.
+- A PIF for the shell gork is started from, asking for the memory: without
+  one a DOS program gets a window and 52K. Windows 2 always runs
+  `COMMAND.COM` in a window, whatever `COMMAND.PIF` says, and looks each
+  program started there up again. So copy `COMMAND.COM` under another name
+  and give that a PIF (`dostest.py` makes one from `WORD.PIF`: full
+  screen, 400K required, 640K desired); gork then runs inside its box.
+- The packet driver loaded before Windows, as usual. No `WINPKT`: there is
+  only one machine.
 
 To run it, the machine needs:
 

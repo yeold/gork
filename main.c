@@ -2429,6 +2429,10 @@ int main(int argc, char **argv)
         return 2;
     }
 #ifdef __MSDOS__
+    /* Only the mode and the size are used.  For the rest DJGPP's stat()
+       reads tables inside DOS, and on MS-DOS 4.01 it page-faults there. */
+    _djstat_flags = _STAT_INODE | _STAT_EXEC_EXT | _STAT_EXEC_MAGIC |
+                    _STAT_DIRSIZE | _STAT_ROOT_TIME | _STAT_WRITEBIT;
     /* DOS sets no HOME: use the directory gork.exe is in. */
     if (getenv("HOME") == NULL && strlen(argv[0]) < PATH_MAX) {
         static char h[PATH_MAX + 8];

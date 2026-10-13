@@ -15,7 +15,12 @@ box under Windows 3.0 or 3.1 in 386 enhanced mode, name an installed
 WINDOWS directory, copied off a disk where Setup ran (VGA, no network,
 with its HIMEM.SYS), in $GORK_DOS_WINDOWS, together with $GORK_DOS_FLOPPY:
 Windows is started from the floppy's DOS with a full-screen COMMAND.COM,
-and the packet driver is the real-mode one loaded before it, with WINPKT.  The guest reaches the fake API on the host as
+and the packet driver is the real-mode one loaded before it, with WINPKT.
+A WINDOWS directory of Windows 2.x (it has WIN200.BIN) is run in real mode
+instead, and needs the "Setup" disk of MS-DOS 4.01 as $GORK_DOS_FLOPPY
+and $GORK_DOS_SMALL_DISKS: Windows 2.11 runs no DOS program on MS-DOS 6.
+Set $GORK_DOS_SMALL_DISKS for MS-DOS 4.01 and the like, which read only
+disks laid out the old way.  The guest reaches the fake API on the host as
 10.0.2.2; the keyboard is typed and the screen read through the QEMU
 monitor.
 """
@@ -26,6 +31,9 @@ VM = os.path.join(os.environ.get("GORK_VM",
                                  os.path.expanduser("~/.cache/gork-vm")),
                   "dostest")
 PORT = 8095
+SMALL = bool(os.environ.get("GORK_DOS_SMALL_DISKS"))
+WINDOWS = os.environ.get("GORK_DOS_WINDOWS")
+WINDOWS2 = bool(WINDOWS and os.path.exists(os.path.join(WINDOWS, "WIN200.BIN")))
 FD = "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files"
 DOWNLOADS = [
     (FD + "/distributions/1.3/official/FD13-FloppyEdition.zip",
@@ -103,6 +111,50 @@ def fetch():
             assert hashlib.sha256(f.read()).hexdigest() == digest, path
 
 
+def wbox(c, shell):
+    """C:\\WBOX.BAT, what Windows runs: READY, then a shell in C:\\W."""
+    with open(os.path.join(c, "WBOX.BAT"), "w", newline="\r\n") as f:
+        f.write("@echo off\nC:\ncd \\W\necho READY\n%s\n" % shell)
+
+
+def windows2(c, windows, floppy):
+    """Put Windows 2.x on C: so that it starts a full-screen DOS box with
+    WBOX.BAT in it; return the CONFIG.SYS lines it needs.
+
+    Windows 2 runs every DOS program by its PIF, and one without a PIF in
+    a window with 52K.  COMMAND.COM it always runs in a window, whatever
+    COMMAND.PIF says, and there each program started is looked up again.
+    So the shell is a copy of COMMAND.COM under another name, GSHELL.COM,
+    with a PIF made from WORD.PIF (full screen), asking for 400K; what it
+    starts runs inside its box.  run= in WIN.INI starts it.  CWSDPMI must
+    be resident before Windows: loaded inside the box, it hangs."""
+    shutil.copytree(windows, os.path.join(c, "WINDOWS"))
+    wbox(c, "A:\\COMMAND.COM")
+    sh("mcopy", "-n", "-i", floppy, "::COMMAND.COM",
+       os.path.join(c, "GSHELL.COM"))
+    with open(os.path.join(windows, "PIF", "WORD.PIF"), "rb") as f:
+        pif = bytearray(f.read())
+
+    def put(off, size, text):
+        pif[off:off + size] = (text.encode() + b"\0").ljust(size, b" ")
+    pif[2:32] = b"GSHELL".ljust(30)             # the window title
+    pif[0x20:0x24] = struct.pack("<HH", 640, 400)   # KB desired, required
+    put(0x24, 63, "C:\\GSHELL.COM")
+    put(0x65, 64, "C:\\W")                       # start-up directory
+    put(0xa5, 64, "/C C:\\WBOX.BAT")             # parameters
+    pif[1] = sum(pif[2:0x171]) & 255            # checksum
+    with open(os.path.join(c, "WINDOWS", "GSHELL.PIF"), "wb") as f:
+        f.write(pif)
+    ini = os.path.join(c, "WINDOWS", "WIN.INI")
+    with open(ini, "rb") as f:
+        text = f.read()
+    assert b"\r\nrun=\r\n" in text, "no empty run= in WIN.INI"
+    with open(ini, "wb") as f:
+        f.write(text.replace(b"\r\nrun=\r\n",
+                             b"\r\nrun=C:\\GSHELL.COM\r\n"))
+    return "DEVICE=A:\\HIMEM.SYS\n"       # the one on the MS-DOS 4.01 disk
+
+
 def build_images(zip_path):
     """boot.img: the FreeDOS floppy with our startup files.  disk.img: C:,
     one FAT16 partition holding gork and a working directory C:\\W."""
@@ -140,12 +192,15 @@ def build_images(zip_path):
     rest = ("set WATTCP.CFG=C:\\\nset TEMP=C:\\TMP\nset GORK_ALLOW_RUN=1\n"
             "C:\nNE2000 0x60 5 0x300\ncd W\necho READY\n")
     other = os.environ.get("GORK_DOS_FLOPPY")
-    windows = os.environ.get("GORK_DOS_WINDOWS")
+    windows = WINDOWS
     himem = ""
-    if windows:                         # the checks run in a DOS box
+    if windows and os.path.exists(os.path.join(windows, "WIN200.BIN")):
+        himem = windows2(c, windows, other)
+        rest = rest.replace("echo READY\n",
+                            "C:\\CWSDPMI -p\nC:\\WINDOWS\\WIN.COM\n")
+    elif windows:                       # the checks run in a DOS box
         shutil.copytree(windows, os.path.join(c, "WINDOWS"))
-        with open(os.path.join(c, "WBOX.BAT"), "w", newline="\r\n") as f:
-            f.write("@echo off\nC:\ncd \\W\necho READY\nA:\\COMMAND.COM\n")
+        wbox(c, "A:\\COMMAND.COM")
         # WINPKT hands each received packet to the virtual machine that
         # asked for it; without it gork dies at its first disk access.
         sh("unzip", "-qoj", os.path.join(VM, "crynwr.zip"),
@@ -186,7 +241,12 @@ def build_images(zip_path):
     def fat_disk(name, mb, tree, active=0x80):
         """A disk image with one bootable FAT16 partition holding `tree`."""
         disk = os.path.join(VM, name)
-        sectors, start = mb * 2048, 2048
+        sectors, start, kind, more = mb * 2048, 2048, 6, []
+        if SMALL:
+            # What MS-DOS 4.01 reads: under 32 MB (type 4), starting on
+            # the second track, 2K clusters.
+            sectors, start, kind = min(mb * 2048 // 1008, 65) * 1008, 63, 4
+            more = ["-c", "4"]
         with open(disk, "wb") as f:
             f.truncate(sectors * 512)
             f.seek(446)
@@ -195,12 +255,18 @@ def build_images(zip_path):
             def chs(lba):
                 c, r = divmod(lba, 16 * 63)
                 return bytes([r // 63, r % 63 + 1 | (c >> 8) << 6, c & 255])
-            f.write(struct.pack("<B3sB3sII", active, chs(start), 6,
+            f.write(struct.pack("<B3sB3sII", active, chs(start), kind,
                                 chs(sectors - 1), start, sectors - start))
             f.write(bytes(48) + b"\x55\xaa")
         part = "%s@@%d" % (disk, start * 512)
         sh("mformat", "-i", part, "-T", str(sectors - start), "-h", "16",
-           "-s", "63", "-H", str(start), "::")
+           "-s", "63", "-H", str(start), *more, "::")
+        if SMALL:
+            # With mtools' name in the boot sector MS-DOS 4.01 does not
+            # believe the rest of it, and shows an empty root directory.
+            with open(disk, "r+b") as f:
+                f.seek(start * 512 + 3)
+                f.write(b"MSDOS4.0")
         sh("mcopy", "-s", "-i", part, *glob.glob(os.path.join(tree, "*")),
            "::")
         return disk
@@ -212,7 +278,8 @@ def build_images(zip_path):
         with open(os.path.join(d, name), "w", newline="\r\n") as f:
             f.write("on d\n")
     disk = fat_disk("disk.img", 64, c)
-    disk2 = fat_disk("disk2.img", 40, d, 0)    # type 6: 32 MB or more
+    disk2 = fat_disk("disk2.img", 40, d, 0)    # type 6: 32 MB or more,
+                                               # unless the disks are small
     return boot, disk, disk2
 
 
@@ -261,7 +328,8 @@ class Guest:
 
     def key(self, name):
         self.cmd("sendkey " + name)
-        time.sleep(0.06)
+        # Windows 2 loses keys typed faster
+        time.sleep(0.25 if WINDOWS2 else 0.06)
 
     def type(self, s):
         for ch in s:
@@ -472,7 +540,14 @@ def main():
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     g = Guest(boot, disk, disk2)
     try:
-        if os.environ.get("GORK_DOS_WINDOWS"):
+        if WINDOWS2:
+            # "Memory Configuration Altered", OK: Enter until the box is up
+            for _ in range(12):
+                time.sleep(10)
+                if "READY" in g.screen():
+                    break
+                g.key("ret")
+        if WINDOWS:
             # READY comes from the batch file Windows runs: without it the
             # prompt would be plain DOS, after a Windows that did not start.
             g.wait(r"READY[\s\S]*C:\\W>$", 240)
@@ -492,7 +567,7 @@ def main():
         g.close()
         srv.shutdown()
     # CR LF must have survived the edit: read the file back off the disk
-    out = subprocess.run(["mtype", "-i", "%s@@%d" % (disk, 2048 * 512),
+    out = subprocess.run(["mtype", "-i", "%s@@%d" % (disk, (63 if SMALL else 2048) * 512),
                           "::W/TWO.TXT"], capture_output=True, check=True)
     assert out.stdout == b"one\r\n2\r\nthree\r\n", out.stdout
     print("all DOS checks passed")

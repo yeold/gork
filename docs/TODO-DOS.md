@@ -117,6 +117,10 @@ Testing and release
 - [x] `mcp.c` is left out of `gork.exe`.
 - [x] MS-DOS 6.22: `GORK_DOS_FLOPPY=<install disk 1> python3
       testing/dostest.py` passes all eight checks.
+- [x] MS-DOS 4.01: passes all nine checks (`GORK_DOS_FLOPPY=<its "Setup"
+      disk> GORK_DOS_SMALL_DISKS=1`). DJGPP's `stat()` page-faulted there
+      in `edit_file`: it reads tables inside DOS for the inode number and
+      the like, which gork does not use; `_djstat_flags` turns that off.
 - [x] DR-DOS 7.03: passes the seven checks that need one disk
       (`GORK_DOS_ONE_DISK=1`); its install floppy does not see a second
       hard disk, so the `allow` check on D: could not run there.
