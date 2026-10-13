@@ -441,8 +441,8 @@ emulated Pentium or 486: batch mode, every file tool, `run_command` through
 `COMMAND.COM` or `cmd.exe`, and the TUI, all by hand against a fake API.
 `testing/wintest.py` runs the batch-mode checks under Wine 10 (Jenkins)
 and on the Windows of GitHub's runners, and the release zip of 0.9~beta is
-reported working on Windows 11, TUI included. Not tried: Windows Vista,
-7, 8 and 10.
+reported working on Windows 11, TUI included. Windows Vista to 10 were
+not tried; XP and 11, on either side of them, work.
 
 **Windows 95 and NT 3.51 have no `msvcrt.dll`**, and gork.exe will not
 start without it ("A required .DLL file, MSVCRT.DLL, was not found"). Put a copy beside
