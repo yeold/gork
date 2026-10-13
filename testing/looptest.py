@@ -1285,7 +1285,8 @@ def check_tui_tty_prompt():
 
 def check_tui_mcp_esc_and_editing():
     """Esc stops a running MCP call, and the server is told.  Then the input
-    line: the cursor keys to mend a word, Up to send a line again."""
+    line: the cursor keys to mend a word, Up to send a line again, and an
+    input of two lines."""
     turns = []
 
     class H(http.server.BaseHTTPRequestHandler):
@@ -1371,7 +1372,11 @@ def check_tui_mcp_esc_and_editing():
                 time.sleep(0.05)
                 os.write(fd, b"\x1bOB")             # Down: the empty draft
                 time.sleep(0.05)
-                os.write(fd, b"last\r")
+                # A backslash and Enter: a second line.  Up from it goes
+                # to the first, not into the history.
+                for keys in (b"la\\\r", b"st", b"\x1bOA", b"X", b"\r"):
+                    os.write(fd, keys)
+                    time.sleep(0.05)
                 step = 6
             elif step == 6 and idle_after(out, b"reply4"):
                 os.write(fd, b"/quit\r")
@@ -1388,7 +1393,7 @@ def check_tui_mcp_esc_and_editing():
     assert "cancelled True" in notes, notes
     assert "aborted by the user" in json.dumps(turns[1]["messages"]), turns[1]
     said = [m["content"] for t in turns[1:] for m in t["messages"][-1:]]
-    assert said == ["gain!", "gain!", "last"], said
+    assert said == ["gain!", "gain!", "laX\nst"], said
 
     print("ok: Esc stops an MCP call; line editing and history")
 

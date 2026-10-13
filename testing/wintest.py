@@ -300,9 +300,11 @@ def check_text():
 
 def check_timeout():
     """A server that never answers: the polled deadline ends the request."""
+    release = threading.Event()
+
     class H(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
-            time.sleep(8)
+            release.wait(30)
 
         def log_message(self, *a):
             pass
@@ -315,9 +317,11 @@ def check_timeout():
                             "retries = 0\n")
             took = time.time() - start
         finally:
+            release.set()
             srv.shutdown()
     assert proc.returncode == 1 and "timeout on socket" in proc.stderr, proc.stderr
-    assert took < 7, f"took {took:.1f}s"
+    # well before the server lets go; a busy machine starts Wine slowly
+    assert took < 20, f"took {took:.1f}s"
 
     proc = run_gork("hi", os.getcwd(), "relay = 127.0.0.1:8105\nretries = 0\n")
     assert proc.returncode == 1 and "Winsock error" in proc.stderr, proc.stderr

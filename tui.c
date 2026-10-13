@@ -11,7 +11,8 @@
  * Screen layout:   row 0          status bar
  *                  1 .. LINES-3   chat
  *                  LINES-2        hint / approval prompt
- *                  LINES-1        input
+ *                  LINES-1        input (more rows, upwards, when the
+ *                                 input has several lines)
  */
 
 #include <stdio.h>
@@ -159,10 +160,40 @@ static int columns(const char *s, size_t n)
     return c;
 }
 
+/* The line of the input that holds byte `pos`: where it starts and ends
+   (at its newline or the end of the input).  Returns its number, from 0. */
+static int input_line(size_t pos, size_t *start, size_t *end)
+{
+    int    n = 0;
+    size_t i;
+
+    *start = 0;
+    for (i = 0; i < pos; i++)
+        if (input[i] == '\n') {
+            n++;
+            *start = i + 1;
+        }
+    for (i = pos; i < input_len && input[i] != '\n'; i++)
+        ;
+    *end = i;
+    return n;
+}
+
 static void draw(void)
 {
-    int    w = COLS, avail = LINES - 3, total = 0, first, g, k, rows, off;
-    size_t i;
+    int    w = COLS, avail, total = 0, first, g, k, rows, off;
+    int    in_rows, in_all, cur, top, y;
+    size_t i, a, b;
+
+    /* The input takes a row for each of its lines, up to a third of the
+       screen; with more, the rows around the cursor show. */
+    cur = input_line(input_pos, &a, &b);
+    in_all = input_line(input_len, &a, &b) + 1;
+    in_rows = in_all;
+    if (in_rows > LINES / 3) in_rows = LINES / 3;
+    if (in_rows < 1) in_rows = 1;
+    top = cur >= in_rows ? cur - in_rows + 1 : 0;
+    avail = LINES - 2 - in_rows;
 
     if (avail < 1 || w < 4) return;     /* terminal too small to bother */
     erase();
@@ -192,18 +223,37 @@ static void draw(void)
     }
 
     attrset(A_DIM);
-    put(LINES - 2, 0, hint_text, w);
-    if (scroll_rows > 0) mvaddstr(LINES - 2, w - 10, "[scrolled]");
+    put(LINES - 1 - in_rows, 0, hint_text, w);
+    if (scroll_rows > 0) mvaddstr(LINES - 1 - in_rows, w - 10, "[scrolled]");
 
-    /* Input: show the tail if it is wider than the screen.  One column is
+    /* Input: of a line wider than the screen, the part with the cursor
+       (or its start, in the lines the cursor is not in).  One column is
        kept free so the cursor never sits in the bottom-right corner. */
-    attrset(A_BOLD);
-    mvaddstr(LINES - 1, 0, "> ");
-    attrset(A_NORMAL);
-    off = (int) input_pos > w - 3 ? (int) input_pos - (w - 3) : 0;
-    while (off < (int) input_pos && is_cont(input[off])) off++;
-    put(LINES - 1, 2, input + off, w - 3);
-    move(LINES - 1, 2 + columns(input + off, input_pos - (size_t) off));
+    a = 0;
+    for (k = 0; k < top + in_rows && k < in_all; k++) {
+        for (b = a; b < input_len && input[b] != '\n'; b++)
+            ;
+        if (k >= top) {
+            y = LINES - in_rows + (k - top);
+            attrset(A_BOLD);
+            mvaddstr(y, 0, k == 0 ? "> " : "  ");
+            attrset(A_NORMAL);
+            off = 0;
+            if (k == cur) {
+                off = (int) (input_pos - a) > w - 3
+                      ? (int) (input_pos - a) - (w - 3) : 0;
+                while (a + off < input_pos && is_cont(input[a + off])) off++;
+            }
+            rows = (int) (b - a) - off;         /* bytes to show */
+            put(y, 2, input + a + off, rows < w - 3 ? rows : w - 3);
+        }
+        a = b + 1;
+    }
+    input_line(input_pos, &a, &b);
+    off = (int) (input_pos - a) > w - 3 ? (int) (input_pos - a) - (w - 3) : 0;
+    while (a + off < input_pos && is_cont(input[a + off])) off++;
+    move(LINES - in_rows + (cur - top),
+         2 + columns(input + a + off, input_pos - a - (size_t) off));
     refresh();
 }
 
@@ -441,8 +491,9 @@ char *tui_read_line(void)
 {
     static char echo[sizeof input + 2];
     static char draft[sizeof input];    /* what was typed before Up */
+    static char row[sizeof input + 2];
     int         ch, at = nhist;         /* at: the history line shown */
-    size_t      n;
+    size_t      n, e, a, b;
 
     if (!active) return NULL;
     tui_drain();
@@ -455,10 +506,25 @@ char *tui_read_line(void)
         switch (ch) {
         case '\n': case '\r': case KEY_ENTER:
             if (input_len == 0) break;
+            /* a backslash before the cursor: not sent, a new line */
+            if (input_pos > 0 && input[input_pos - 1] == '\\') {
+                input[input_pos - 1] = '\n';
+                break;
+            }
             if (strcmp(input, "/quit") == 0) return NULL;
             remember(input);
             sprintf(echo, "> %s", input);
-            add_text(ST_USER, echo);
+            for (n = 0; ; n = e + 1) {          /* a line of chat for each */
+                for (e = n; echo[e] != '\0' && echo[e] != '\n'; e++)
+                    ;
+                if (n == 0) {
+                    add_line(ST_USER, echo, e);
+                } else {                        /* under the first: indented */
+                    sprintf(row, "  %.*s", (int) (e - n), echo + n);
+                    add_line(ST_USER, row, e - n + 2);
+                }
+                if (echo[e] == '\0') break;
+            }
             set_input("");
             hint_text = HINT_BUSY;
             draw();
@@ -502,17 +568,35 @@ char *tui_read_line(void)
                 input_pos++;
             break;
         case KEY_HOME: case 1:          /* ^A */
-            input_pos = 0;
+            input_line(input_pos, &a, &b);
+            input_pos = a;
             break;
         case KEY_END: case 5:           /* ^E */
-            input_pos = input_len;
+            input_line(input_pos, &a, &b);
+            input_pos = b;
             break;
         case KEY_UP:
+            /* within an input of several lines: to the line above */
+            if (input_line(input_pos, &a, &b) > 0) {
+                n = input_pos - a;
+                input_line(a - 1, &a, &b);
+                input_pos = a + n < b ? a + n : b;
+                while (input_pos > a && is_cont(input[input_pos])) input_pos--;
+                break;
+            }
             if (at == 0) break;
             if (at == nhist) strcpy(draft, input);
             set_input(hist[--at]);
             break;
         case KEY_DOWN:
+            input_line(input_pos, &a, &b);
+            if (b < input_len) {                /* to the line below */
+                n = input_pos - a;
+                input_line(b + 1, &a, &b);
+                input_pos = a + n < b ? a + n : b;
+                while (input_pos > a && is_cont(input[input_pos])) input_pos--;
+                break;
+            }
             if (at == nhist) break;
             at++;
             set_input(at == nhist ? draft : hist[at]);
