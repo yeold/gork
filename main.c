@@ -3019,6 +3019,11 @@ int main(int argc, char **argv)
        reads tables inside DOS, and on MS-DOS 4.01 it page-faults there. */
     _djstat_flags = _STAT_INODE | _STAT_EXEC_EXT | _STAT_EXEC_MAGIC |
                     _STAT_DIRSIZE | _STAT_ROOT_TIME | _STAT_WRITEBIT;
+    /* Time zone first.  If DJGPP's first time conversion is the mktime()
+       inside a stat(), the zone is left broken: time() returns the same
+       wrong second from then on, Watt-32's timeouts never expire, and a
+       request can be neither waited out nor aborted with Esc. */
+    tzset();
 #endif
 #ifdef GORK_DOS16
     /* MS-DOS 2 leaves INT 2Fh, the multiplex interrupt of DOS 3 and later,
