@@ -362,7 +362,9 @@ before Windows, and `WINPKT` after it (`WINPKT 0x60`, from the same Crynwr
 collection): without `WINPKT`, gork dies at its first disk access during a
 request and the network is dead afterwards. The Windows `gork.exe` is of
 no use here: Windows 3.x cannot run 32-bit console programs, with or
-without Win32s.
+without Win32s. In standard mode, a 286's, use the 16-bit build: it
+passes the ten checks under 3.0 and 3.1 there (no `WINPKT`), while this
+one's `run_command` fails.
 
 **Under Windows 1 and 2** it passes the ten checks as well: Windows 1.04
 on MS-DOS 3.30, Windows 2.03 and 2.11 (the 286 edition) on MS-DOS 4.01.

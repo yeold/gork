@@ -11,7 +11,9 @@ floppy image of it in $GORK_DOS_FLOPPY (it needs COMMAND.COM in its root
 and a little free space); MS-DOS 6.22 install disk 1 works.  Set
 $GORK_DOS_DHCP to take the address from QEMU's DHCP server.
 To run the checks in a DOS
-box under Windows 3.0 or 3.1 in 386 enhanced mode, name an installed
+box under Windows 3.0 or 3.1 in 386 enhanced mode (standard mode with
+$GORK_DOS_WINDOWS_STANDARD: 15 MB then, under a 286's 16, or Windows 3.0
+does not start), name an installed
 WINDOWS directory, copied off a disk where Setup ran (VGA, no network,
 with its HIMEM.SYS), in $GORK_DOS_WINDOWS, together with $GORK_DOS_FLOPPY:
 Windows is started from the floppy's DOS with a full-screen COMMAND.COM,
@@ -54,6 +56,7 @@ GORK = "gork" if FAT12 else "..\\gork"
 ODI = RELAY and bool(os.environ.get("GORK_DOS_ODI"))
 EMM386 = os.environ.get("GORK_DOS_EMM386")     # a directory: HIMEM, EMM386
 WINDOWS = os.environ.get("GORK_DOS_WINDOWS")
+STANDARD = bool(os.environ.get("GORK_DOS_WINDOWS_STANDARD"))  # 3.x, /S
 # Windows 1 or 2: real mode
 WINDOWS2 = bool(WINDOWS and any(os.path.exists(os.path.join(WINDOWS, n))
                                 for n in ("WIN100.BIN", "WIN200.BIN")))
@@ -313,10 +316,13 @@ def build_images(zip_path):
         wbox(c, "A:\\COMMAND.COM")
         # WINPKT hands each received packet to the virtual machine that
         # asked for it; without it gork dies at its first disk access.
-        sh("unzip", "-qoj", os.path.join(VM, "crynwr.zip"),
-           "DRIVERS/CRYNWR/WINPKT.COM", "-d", c)
-        rest = rest.replace("0x300\n", "0x300\nWINPKT 0x60\n")
-        rest = rest.replace("echo READY\n", "C:\\WINDOWS\\WIN.COM /3 C:\\WBOX.BAT\n")
+        # Standard mode has no virtual machines: a DOS program runs alone.
+        if not STANDARD:
+            sh("unzip", "-qoj", os.path.join(VM, "crynwr.zip"),
+               "DRIVERS/CRYNWR/WINPKT.COM", "-d", c)
+            rest = rest.replace("0x300\n", "0x300\nWINPKT 0x60\n")
+        rest = rest.replace("echo READY\n", "C:\\WINDOWS\\WIN.COM %s C:\\WBOX.BAT\n"
+                            % ("/S" if STANDARD else "/3"))
         assert os.path.exists(os.path.join(windows, "HIMEM.SYS")), \
             "no HIMEM.SYS in the WINDOWS directory; enhanced mode needs it"
         # /W: Windows 3.0 otherwise refuses enhanced mode on MS-DOS 5 and
@@ -429,7 +435,7 @@ class Guest:
                    "-netdev", "hubport,id=h1,hubid=0,netdev=s0",
                    "-netdev", "hubport,id=n0,hubid=0"]
         self.qemu = subprocess.Popen(
-            ["qemu-system-i386", "-m", "32", "-display", "none", "-vga", "std",
+            ["qemu-system-i386", "-m", "15" if STANDARD else "32", "-display", "none", "-vga", "std",
              "-boot", "a", "-serial", "none",
              "-monitor", "unix:%s,server,nowait" % self.sock_path,
              "-drive", "file=%s,format=raw,if=floppy" % boot,
