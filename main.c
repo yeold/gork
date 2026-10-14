@@ -140,7 +140,7 @@ char *dos16_realpath(const char *path, char *out)
 /* configure passes VERSION; this is for builds by hand and Makefile.dj.
    Bumped with configure.ac at each release. */
 #ifndef VERSION
-#define VERSION "1.0"
+#define VERSION "1.1"
 #endif
 
 /* DOS (DJGPP) has 8.3 file names: no leading dot, one extension.  Windows

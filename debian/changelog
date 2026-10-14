@@ -1,3 +1,36 @@
+gork (1.1) unstable; urgency=medium
+
+  * New: streamed replies.  With `stream` (auto: on in the TUI, off in
+    batch mode) the text shows as it arrives, for both protocols.  A
+    chunked reply is decoded.
+  * New: the TUI has a line editor (Left, Right, Home, End, Delete, ^A,
+    ^E), Up and Down through the lines sent before, and input of
+    several lines (a backslash, then Enter).  Esc also stops an MCP call.
+  * New: MCP servers over streamable HTTP: an entry with a "url" instead
+    of a "command", with "headers" if it wants a token.  gork has no TLS:
+    an https:// server is reached through a "relay" that has.  Entries in
+    Zed's layout, with a "transport", are read too.
+  * New: docs/examples has sample .gork.conf, gork.cnf and mcp.json.
+  * DOS: both builds are the bare bones: no streaming, no input of
+    several lines, and no MCP.  The 16-bit build gets its address by
+    DHCP if asked.
+  * Newly confirmed: MS-DOS 2.11 (the 16-bit build), DR-DOS 7.03 (both),
+    Windows 3.0 and 3.1 in standard mode (the 16-bit build), MS-DOS 6.22
+    with HIMEM and EMM386, and SPX through Novell's IPXODI and through a
+    WSGEN-made IPX.COM.  The 16-bit build on an emulated 8086 and 286.
+  * DOS, 32-bit: the time zone is set up first.  A stat() before the
+    first time() leaves DJGPP's clock stuck, so that a request can be
+    neither waited out nor aborted; no release had one, but the next
+    change might have.
+  * Fixed: DOS, 16-bit: a task in the TUI without a packet driver loaded
+    ended gork with the screen as curses left it.
+  * Fixed: DOS, 16-bit: on MS-DOS 2 gork found no gork.cnf, and the TUI
+    hung waiting for a key.
+  * Fixed: Windows: gork.exe held two instructions a 486 lacks, from
+    MinGW's start-up code.
+
+ -- Yeold <isac.selea@gmail.com>  Wed, 14 Oct 2026 13:00:46 +0200
+
 gork (1.0) unstable; urgency=medium
 
   * The first full release.  gork is free software under the GNU GPL,
