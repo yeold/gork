@@ -25,7 +25,9 @@ which hangs on 4.01.
 Name a gork-relay binary (https://github.com/yeold/gork-relay) in
 $GORK_RELAY to check SPX as well: the guest then loads PDIPX, Novell's
 IPX and SPX on the packet driver, and its network card is also wired to
-that relay, which passes what it gets on to the fake API.
+that relay, which passes what it gets on to the fake API.  With
+$GORK_DOS_ODI set as well it loads Novell's ODI stack instead: LSL, the
+NE2000 MLID and IPXODI, with ODIPKT for the packet driver Watt-32 needs.
 Set $GORK_DOS_SMALL_DISKS for MS-DOS 3.30, 4.01 and the like, which read
 only disks laid out the old way, and $GORK_DOS_FAT12 instead for MS-DOS 2,
 which reads FAT12 only.  The guest reaches the fake API on the host as
@@ -46,6 +48,7 @@ SMALL = FAT12 or bool(os.environ.get("GORK_DOS_SMALL_DISKS"))
 # MS-DOS 2's COMMAND.COM runs nothing named with a directory (and says
 # nothing either): there gork.exe is found along PATH.
 GORK = "gork" if FAT12 else "..\\gork"
+ODI = RELAY and bool(os.environ.get("GORK_DOS_ODI"))
 WINDOWS = os.environ.get("GORK_DOS_WINDOWS")
 # Windows 1 or 2: real mode
 WINDOWS2 = bool(WINDOWS and any(os.path.exists(os.path.join(WINDOWS, n))
@@ -57,6 +60,19 @@ DOWNLOADS = [
     (FD + "/repositories/1.3/net/crynwr.zip",
      "fd18758586d3efa7cf9cd9a69f3b61a79f2d5d5f46a97cc781a66bd28a5b5ec2"),
 ]
+if ODI:
+    DOWNLOADS += [
+        # LSL 2.11, IPXODI and Novell's NE2000 MLID, as packed for DOOM
+        ("https://mirrors.lug.mtu.edu/idgames/utils/network/ipxodi-2.zip",
+         "32f780d6a5f7ed2d017b0882ec17365bbdfb3a92190f7422c23d8d62211e141e"),
+        # Dan Lanciani's ODI to packet driver shim
+        ("https://sunsite2.icm.edu.pl/pub/novell/drivers/odipkt24.zip",
+         "a9a64ec2e590a08400aa3eddef67d453301e49a67994686419e8f799d784523f"),
+        # JEMMEX: upper memory for the drivers, or the 16-bit gork leaves
+        # COMMAND.COM no room to run in
+        (FD + "/repositories/1.3/base/jemm.zip",
+         "ee1993dbbc736041f802370e8a15220304f03b522765827d65e937e285e4e341"),
+    ]
 
 
 def sh(*cmd, **kw):
@@ -258,7 +274,24 @@ def build_images(zip_path):
     boot = os.path.join(VM, "boot.img")
     rest = ("set WATTCP.CFG=C:\\\nset TEMP=C:\\TMP\nset GORK_ALLOW_RUN=1\n"
             "C:\nNE2000 0x60 5 0x300\ncd W\necho READY\n")
-    if RELAY:
+    if ODI:
+        # One frame type for both: Ethernet II, IPX's as the relay's
+        sh("unzip", "-qoj", os.path.join(VM, "ipxodi-2.zip"), "lsl.com",
+           "ne2000.com", "ipxodi.com", "-d", c)
+        for n in ("lsl.com", "ne2000.com", "ipxodi.com"):  # NE2000: the MLID
+            os.replace(os.path.join(c, n), os.path.join(c, n.upper()))
+        sh("unzip", "-qoj", os.path.join(VM, "odipkt24.zip"), "-d", c)
+        sh("unzip", "-qoj", os.path.join(VM, "jemm.zip"), "BIN/JEMMEX.EXE",
+           "-d", c)
+        with open(os.path.join(c, "NET.CFG"), "w", newline="\r\n") as f:
+            f.write("Link support\n    Buffers 8 1600\n"
+                    "Link driver NE2000\n    Int 5\n    Port 300\n"
+                    "    Frame Ethernet_II\n"
+                    "    Protocol IPX 8137 Ethernet_II\n")
+        rest = rest.replace("NE2000 0x60 5 0x300\n",
+                            "LH LSL\nLH NE2000\nLH IPXODI\n"
+                            "LH ODIPKT24 0 96\n")
+    elif RELAY:
         sh("unzip", "-qoj", os.path.join(VM, "crynwr.zip"),
            "DRIVERS/CRYNWR/PDIPX.COM", "-d", c)
         rest = rest.replace("0x300\n", "0x300\nPDIPX\n")
@@ -304,7 +337,9 @@ def build_images(zip_path):
            "144m/x86BOOT.img", "-d", VM)
         shutil.copy(os.path.join(VM, "x86BOOT.img"), boot)
         startup = {
-            "fdconfig.sys": "LASTDRIVE=Z\nBUFFERS=20\nFILES=40\n"
+            "fdconfig.sys": ("DOS=HIGH,UMB\nDEVICE=C:\\JEMMEX.EXE NOEMS\n"
+                             if ODI else "") +
+                            "LASTDRIVE=Z\nBUFFERS=20\nFILES=40\n"
                             "SHELL=\\FREEDOS\\BIN\\COMMAND.COM "
                             "\\FREEDOS\\BIN /E:2048 /P=\\FDAUTO.BAT\n",
             "fdauto.bat": "@echo off\nset PATH=A:\\FREEDOS\\BIN;C:\\\n"

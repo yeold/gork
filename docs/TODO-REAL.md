@@ -19,7 +19,7 @@ terminals and keyboards, and CPUs that QEMU only pretends to be: its
 | The 32-bit build (`dos`) on a 386 or 486 | QEMU, emulated NE2000 | A real machine with a real packet driver; a 386 without a coprocessor |
 | MS-DOS 2.11, 3.30, 4.01, 6.22, DR-DOS 7.03, FreeDOS 1.3 | QEMU, booted from the install floppy | An installed system with its usual drivers and memory managers (EMM386, QEMM) |
 | DOS boxes of Windows 1.04, 2.03, 2.11, 2.11/386, 3.0, 3.1 | QEMU, VGA, no mouse | Real machines of the time; Windows 3.x standard mode; a network shared with Windows itself |
-| SPX (`relay = spx:...`), both builds | PDIPX on QEMU's NE2000, wired straight to gork-relay | `IPXODI` and `IPX.COM`; a real IPX network with other nodes, a NetWare server or a router on it; frame types other than Ethernet II |
+| SPX (`relay = spx:...`), both builds | PDIPX, and IPXODI with ODIPKT, on QEMU's NE2000, wired straight to gork-relay | `IPX.COM`; a real IPX network with other nodes, a NetWare server or a router on it; frame types other than Ethernet II |
 
 ## Windows
 

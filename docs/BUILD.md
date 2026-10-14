@@ -386,7 +386,10 @@ Without TCP/IP, on an IPX network, gork can reach a
 [gork-relay](https://github.com/yeold/gork-relay) over SPX: load an IPX
 driver that has SPX (`IPXODI`, `IPX.COM`, or `PDIPX` after a packet
 driver) and set `relay = spx:NET.NODE:SOCKET`. Both DOS builds have it,
-and `dostest.py` checks it when `GORK_RELAY` names a relay binary.
+and `dostest.py` checks it when `GORK_RELAY` names a relay binary. With
+ODI, TCP/IP on the same card goes through ODIPKT, both on the Ethernet_II
+frame type; for the 16-bit build load the drivers high (`LH`), or
+`run_command` finds no room for `COMMAND.COM`.
 
 **The 16-bit build** (`gork-<version>-dos16.zip`) is the same source
 compiled with [Open Watcom](https://github.com/open-watcom/open-watcom-v2)

@@ -6,7 +6,8 @@ Both DOS builds work and pass `testing/dostest.py`: the 32-bit one
 they are built and what each needs. What is left:
 
 - [ ] The 16-bit build on DR-DOS.
-- [ ] `IPXODI` and `IPX.COM` for SPX; only PDIPX was tried.
+- [ ] `IPX.COM` for SPX: PDIPX and IPXODI were tried. It is made with
+      Novell's WSGEN from a driver for the card, and neither was found.
 - [ ] DR-DOS 7.03 passed the checks that need one disk only: its install
       floppy does not see a second hard disk, so the `allow` check on D:
       could not run there.
