@@ -2157,12 +2157,14 @@ static void wait_secs(int n)
  * and thinking blocks included.  A server that ignores the request and
  * answers with plain JSON is taken as it is.
  */
-#define STREAM_CALLS 16         /* tool calls in one OpenAI reply */
-
 static int want_stream;         /* the `stream` setting, resolved */
 static int no_stream;           /* this request's text is not for the user */
 static int streamed_said = -1;  /* text blocks the last post() printed
                                    itself; -1: none, the caller prints */
+
+#ifndef GORK_BARE
+#define STREAM_CALLS 16         /* tool calls in one OpenAI reply */
+
 static struct {
     struct buf line;            /* the unfinished line of the stream */
     struct buf acc;             /* text, thinking or tool input so far */
@@ -2547,6 +2549,13 @@ static cJSON *stream_result(void)
     }
     return from_openai(root);
 }
+#else   /* GORK_BARE: want_stream stays 0, and post() never calls these */
+static struct { int printed; } st;
+static void stream_reset(void) { }
+static void stream_feed(const char *p, size_t n) { (void) p; (void) n; }
+static void stream_text_end(void) { }
+static cJSON *stream_result(void) { return NULL; }
+#endif
 
 
 /* Send the conversation and return the parsed 200 reply, or NULL after
@@ -3060,9 +3069,15 @@ int main(int argc, char **argv)
     relay_bearer = openai;
     /* auto: in the TUI, where someone is watching; not in batch mode */
     if (strcmp(cfg(CFG_STREAM), "auto") == 0) {
+#ifndef GORK_BARE
         want_stream = argc == 1;
+#endif
     } else if (strcmp(cfg(CFG_STREAM), "yes") == 0) {
+#ifdef GORK_BARE
+        fprintf(stderr, "gork: stream: the DOS builds take replies whole\n");
+#else
         want_stream = 1;
+#endif
     } else if (strcmp(cfg(CFG_STREAM), "no") != 0) {
         fprintf(stderr, "gork: want stream auto, yes or no\n");
         return 2;

@@ -607,19 +607,20 @@ def check_spx(g):
 
 
 def check_stream(g):
-    """`stream = yes`: a tool call and an answer arrive as an event stream,
-    in pieces, and do what they would have done whole."""
+    """`stream = yes` on DOS: no stream is asked for, gork says so, and the
+    reply comes whole and does what it should."""
     del requests[:]
-    script[:] = [tool("write_file", path="str.txt", content="streamed\n"),
+    script[:] = [tool("write_file", path="str.txt", content="whole\n"),
                  text("stream done")]
     g.run("set GORK_CONFIG=c:\\stream.cnf")
     s = g.run(GORK + " t", 120)
     g.run("set GORK_CONFIG=")
-    assert requests[0].get("stream") is True, requests[0].keys()
+    assert "stream" not in requests[0], requests[0].keys()
+    assert "take replies whole" in s, s
     assert "stream done" in s, s
-    assert "wrote 9 bytes" in results()[0]["content"], results()
-    assert "streamed" in g.run("type str.txt")
-    print("ok: a streamed reply")
+    assert "wrote 6 bytes" in results()[0]["content"], results()
+    assert "whole" in g.run("type str.txt")
+    print("ok: no streaming")
 
 
 def check_timeout(g):

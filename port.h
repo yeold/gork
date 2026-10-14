@@ -23,6 +23,12 @@
 #define GORK_NO_FORK
 #endif
 
+/* The bare bones, for the DOS builds: replies come whole (no streaming)
+   and Enter always sends (no input of several lines). */
+#ifdef __MSDOS__
+#define GORK_BARE
+#endif
+
 #ifdef GORK_DOS16
 /* realpath(): absolute, lower case, with forward slashes, as DJGPP's. */
 char *dos16_realpath(const char *path, char *out);

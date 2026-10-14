@@ -513,11 +513,13 @@ char *tui_read_line(void)
         switch (ch) {
         case '\n': case '\r': case KEY_ENTER:
             if (input_len == 0) break;
+#ifndef GORK_BARE
             /* a backslash before the cursor: not sent, a new line */
             if (input_pos > 0 && input[input_pos - 1] == '\\') {
                 input[input_pos - 1] = '\n';
                 break;
             }
+#endif
             if (strcmp(input, "/quit") == 0) return NULL;
             remember(input);
             sprintf(echo, "> %s", input);

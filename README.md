@@ -77,7 +77,8 @@ arm64, armhf, riscv64, s390x, ppc64el, powerpc, m68k, hppa), a macOS
 installer, and the DOS and Windows zips below. Everything else builds from
 the source tarball.
 
-There are two DOS packages, both without MCP servers.
+There are two DOS packages, both without MCP servers, streaming or input
+of several lines.
 `gork-<version>-dos.zip` needs a 386 and is otherwise the full program. `gork-<version>-dos16.zip` runs in real mode, in 640K,
 on anything down to an 8086, and where no protected mode is to be had
 (Windows/386 2.x); there a conversation is kept to about 8000 tokens,
@@ -228,7 +229,7 @@ Each message continues the same conversation. Before any `write_file`,
 decline (the model is told and adapts), `a` allow that tool for the rest of
 the session. Reads never ask.
 
-Keys: Enter send, `\` then Enter a new line, Left/Right/Home/End/Delete
+Keys: Enter send, `\` then Enter a new line (not on DOS), Left/Right/Home/End/Delete
 edit, Up/Down earlier lines, PgUp/PgDn scroll, Ctrl-U clear the line, Esc abort the running task, Ctrl-D (on an empty line) or `/quit` exit. `/new` clears the conversation. A task
 that fails (network, API error) is dropped from the conversation so the next
 message starts clean; an aborted one is kept, so you can redirect it.
@@ -349,7 +350,7 @@ servers, so there is no `mcp.json`.
 | `retries` | `AGENT_RETRIES` | `2` | Extra attempts for a request that hits a network error, 429 or 5xx (0..10) |
 | `context_window` | `AGENT_CONTEXT_WINDOW` | `200000` | Tokens the model can take; set it to the loaded context length for a local model |
 | `auto_compact` | `AGENT_AUTO_COMPACT` | `80` | Compact once the context passes this percentage of `context_window` (0 = never, max 99) |
-| `stream` | `AGENT_STREAM` | `auto` | Whether the reply is asked for as a stream and shown as it arrives: `yes`, `no`, or `auto`, which is yes in the TUI and no in batch mode. A server that answers whole all the same is fine |
+| `stream` | `AGENT_STREAM` | `auto` | Whether the reply is asked for as a stream and shown as it arrives: `yes`, `no`, or `auto`, which is yes in the TUI and no in batch mode. A server that answers whole all the same is fine. Not on DOS |
 | `timeout` | `AGENT_TIMEOUT` | `120` | Seconds one API request, MCP tool call or `run_command` may take before it fails |
 | `default_effort` | `AGENT_DEFAULT_EFFORT` | *(unset: model default)* | Reasoning effort at startup: `low`, `medium`, `high`, `xhigh` or `max`, sent as `output_config.effort` (`reasoning_effort` with `protocol = openai`); `/effort` changes it in the TUI |
 
