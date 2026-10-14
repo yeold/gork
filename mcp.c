@@ -829,6 +829,24 @@ static void start_server(const char *name, cJSON *cfg)
     free(cursor);
 }
 
+/* Zed puts command, args and env (or url and headers) in a "transport"
+   object: take them from there, where the entry has none of its own. */
+static void lift_transport(cJSON *cfg)
+{
+    static const char *const keys[] = {
+        "command", "args", "env", "url", "headers"
+    };
+    cJSON *t = cJSON_GetObjectItem(cfg, "transport"), *v;
+    size_t i;
+
+    if (!cJSON_IsObject(t)) return;
+    for (i = 0; i < sizeof keys / sizeof *keys; i++) {
+        v = cJSON_GetObjectItem(t, keys[i]);
+        if (v != NULL && cJSON_GetObjectItem(cfg, keys[i]) == NULL)
+            cJSON_AddItemToObject(cfg, keys[i], cJSON_Duplicate(v, 1));
+    }
+}
+
 void mcp_start(const char *path)
 {
     FILE      *f;
@@ -860,6 +878,7 @@ void mcp_start(const char *path)
 
     cJSON_ArrayForEach(cfg, cJSON_GetObjectItem(root, "mcpServers")) {
         if (cJSON_IsTrue(cJSON_GetObjectItem(cfg, "disabled"))) continue;
+        lift_transport(cfg);
         if (!cJSON_IsString(cJSON_GetObjectItem(cfg, "command")) &&
             !cJSON_IsString(cJSON_GetObjectItem(cfg, "url"))) {
             fprintf(stderr, "gork: MCP server %s: no command and no url\n",

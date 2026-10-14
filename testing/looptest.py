@@ -38,7 +38,10 @@ def reply(handler, obj, status=200):
     handler.send_header("content-type", "application/json")
     handler.send_header("content-length", str(len(body)))
     handler.end_headers()
-    handler.wfile.write(body)
+    try:
+        handler.wfile.write(body)
+    except (BrokenPipeError, ConnectionResetError):
+        pass                    # gork gave up first: the timeout checks
 
 
 # ---------------------------------------------------------------- tool loop
@@ -532,7 +535,8 @@ FAKEMCP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fakemcp.py")
 def check_mcp():
     """Servers in ~/.gork/mcp.json are started, their tools offered as
     mcp__<server>__<tool>, and calls round-trip.  A broken or disabled
-    server is skipped without taking the others down."""
+    server is skipped without taking the others down; an entry in Zed's
+    layout, with a "transport", is read as well."""
     turns = []
 
     class H(http.server.BaseHTTPRequestHandler):
@@ -560,6 +564,10 @@ def check_mcp():
                 "broken": {"command": "/nonexistent/server"},
                 "picky": {"command": sys.executable, "args": [FAKEMCP],
                           "tools": ["echo"]},
+                "zed": {"transport": {"type": "stdio",
+                                      "command": sys.executable,
+                                      "args": [FAKEMCP]},
+                        "tools": ["fail"]},
                 "fake": {"command": sys.executable, "args": [FAKEMCP]},
                 "off": {"command": sys.executable, "args": [FAKEMCP],
                         "disabled": True},
@@ -581,6 +589,8 @@ def check_mcp():
     assert not [n for n in names if n.startswith("mcp__off")], names
     assert [n for n in names if n.startswith("mcp__picky")] == \
         ["mcp__picky__echo"], names
+    assert [n for n in names if n.startswith("mcp__zed")] == \
+        ["mcp__zed__fail"], names
     echo = turns[0]["tools"][-2]
     assert echo["input_schema"]["required"] == ["text"], echo
 
@@ -1462,6 +1472,93 @@ def check_tui_mcp_esc_and_editing():
     print("ok: Esc stops an MCP call; line editing and history")
 
 
+def check_tui_mcp_http_esc():
+    """Esc stops a call to a streamable HTTP server too: the request is
+    dropped, the server is told by a POST of its own, and the session is
+    deleted when gork ends."""
+    turns = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            turns.append(json.loads(self.rfile.read(int(self.headers["content-length"]))))
+            if len(turns) == 1:
+                reply(self, {"id": "m1", "stop_reason": "tool_use", "content": [
+                    {"type": "tool_use", "id": "t0", "name": "mcp__web__echo",
+                     "input": {"text": "slow"}}]})
+            else:
+                reply(self, {"id": "m", "stop_reason": "end_turn", "content": [
+                    {"type": "text", "text": "reply%d" % len(turns)}]})
+
+        def log_message(self, *a):
+            pass
+
+    srv = serve(H, 8104)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        log = os.path.join(tmp, "mcp.log")
+        fake = subprocess.Popen([sys.executable, FAKEMCP, "--http", "8105"],
+                                env=dict(os.environ, FAKEMCP_LOG=log))
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, ".gork", "mcp.json"), "w") as f:
+            json.dump({"mcpServers": {"web": {
+                "url": "http://127.0.0.1:8105/mcp",
+                "headers": {"X-Token": "t1"}}}}, f)
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8104\nstream = no\n")
+        time.sleep(0.5)
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        def logged():
+            return open(log).read() if os.path.exists(log) else ""
+
+        out, step, start, deadline = b"", 0, time.time(), time.time() + 25
+        while time.time() < deadline and step < 4:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 4096)
+                except OSError:
+                    break
+            if step == 0 and b"Enter send" in out:
+                os.write(fd, b"go\r")
+                step = 1
+            elif step == 1 and b"Allow" in out:
+                os.write(fd, b"y")
+                step = 2
+            elif step == 2 and "started" in logged():
+                time.sleep(0.3)
+                os.write(fd, b"\x1b")
+                step = 3
+            elif step == 3 and b"gork: aborted" in out:
+                stopped_after = time.time() - start
+                os.write(fd, b"/quit\r")
+                step = 4
+        if step < 4:
+            os.kill(pid, 9)
+        status = reap(pid, fd)
+        fake.kill()
+        fake.wait()
+        notes = logged()
+    srv.shutdown()
+
+    assert step == 4, (step, out.decode(errors="replace")[-2000:])
+    assert os.waitstatus_to_exitcode(status) == 0
+    assert stopped_after < 15, "Esc waited for the call"
+    assert "cancelled True" in notes, notes
+    assert "deleted s-1" in notes, notes
+
+    print("ok: Esc stops a call to an HTTP MCP server")
+
+
 def check_run_timeout_and_esc():
     """run_command dies at `timeout`, background children included, and
     Esc in the TUI interrupts it and aborts the task."""
@@ -1588,5 +1685,6 @@ check_auto_compact()
 check_tui_abort()
 check_tui_tty_prompt()
 check_tui_mcp_esc_and_editing()
+check_tui_mcp_http_esc()
 check_run_timeout_and_esc()
 print("all checks passed")
