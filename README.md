@@ -312,8 +312,8 @@ relay = spx:0.525400A1B2C3:8443
 
 DOS, either build, needs an IPX driver with SPX loaded (`IPXODI`,
 `IPX.COM`, or `PDIPX` on a packet driver); Windows 95 to XP need the IPX/SPX-compatible
-protocol installed. Tested with PDIPX and with IPXODI on FreeDOS, and on
-Windows Me. The
+protocol installed. Tested with PDIPX, IPXODI and a WSGEN-made `IPX.COM` on
+FreeDOS, and on Windows Me. The
 Unix builds have no SPX.
 
 ### Config

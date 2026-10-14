@@ -5,8 +5,6 @@ Both DOS builds work and pass `testing/dostest.py`: the 32-bit one
 (`dos16build.sh`, Open Watcom, real mode). [BUILD.md](BUILD.md) says how
 they are built and what each needs. What is left:
 
-- [ ] `IPX.COM` for SPX: PDIPX and IPXODI were tried. It is made with
-      Novell's WSGEN from a driver for the card, and neither was found.
 - [ ] Find out why a `stat()` at startup breaks Esc in the 32-bit build.
       The first version of the allow check called `stat()` on each allow
       directory before the TUI starts, and with it Esc no longer aborted a

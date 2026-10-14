@@ -32,6 +32,9 @@ $GORK_DOS_EMM386, with $GORK_DOS_FLOPPY, to boot as a machine of the time
 did: both loaded, DOS high, and the packet driver in upper memory.  With
 $GORK_DOS_ODI set as well it loads Novell's ODI stack instead: LSL, the
 NE2000 MLID and IPXODI, with ODIPKT for the packet driver Watt-32 needs.
+Name an IPX.COM made by WSGEN for an NE2000 in $GORK_DOS_IPXCOM instead to
+use that: it takes a card of its own, wired to the relay, raw 802.3, and
+the packet driver a second one.
 Set $GORK_DOS_SMALL_DISKS for MS-DOS 3.30, 4.01, DR-DOS 7.03 and the like,
 which read only disks laid out the old way (DR-DOS sees no second disk
 otherwise), and $GORK_DOS_FAT12 instead for MS-DOS 2,
@@ -55,6 +58,7 @@ SMALL = FAT12 or bool(os.environ.get("GORK_DOS_SMALL_DISKS"))
 GORK = "gork" if FAT12 else "..\\gork"
 ODI = RELAY and bool(os.environ.get("GORK_DOS_ODI"))
 EMM386 = os.environ.get("GORK_DOS_EMM386")     # a directory: HIMEM, EMM386
+IPXCOM = RELAY and os.environ.get("GORK_DOS_IPXCOM")    # a WSGEN IPX.COM
 WINDOWS = os.environ.get("GORK_DOS_WINDOWS")
 STANDARD = bool(os.environ.get("GORK_DOS_WINDOWS_STANDARD"))  # 3.x, /S
 # Windows 1 or 2: real mode
@@ -279,7 +283,11 @@ def build_images(zip_path):
     boot = os.path.join(VM, "boot.img")
     rest = ("set WATTCP.CFG=C:\\\nset TEMP=C:\\TMP\nset GORK_ALLOW_RUN=1\n"
             "C:\nNE2000 0x60 5 0x300\ncd W\necho READY\n")
-    if ODI:
+    if IPXCOM:
+        shutil.copy(IPXCOM, os.path.join(c, "IPX.COM"))
+        rest = rest.replace("NE2000 0x60 5 0x300\n",
+                            "IPX\nNE2000 0x60 10 0x340\n")
+    elif ODI:
         # One frame type for both: Ethernet II, IPX's as the relay's
         sh("unzip", "-qoj", os.path.join(VM, "ipxodi-2.zip"), "lsl.com",
            "ne2000.com", "ipxodi.com", "-d", c)
@@ -426,7 +434,17 @@ class Guest:
         if os.path.exists(self.sock_path):
             os.remove(self.sock_path)
         net = ["-netdev", "user,id=n0"]
-        if RELAY:
+        card = ["-device", "ne2k_isa,netdev=n0,iobase=0x300,irq=5"]
+        if IPXCOM:
+            # IPX.COM finds the card at 0x300, the relay's; the packet
+            # driver gets one of its own at 0x340
+            net = ["-netdev", "socket,id=s0,udp=127.0.0.1:%d,"
+                   "localaddr=127.0.0.1:%d" % (RELAY_PORT, RELAY_PORT + 1),
+                   "-netdev", "user,id=n0"]
+            card = ["-device", "ne2k_isa,netdev=s0,iobase=0x300,irq=5,"
+                    "mac=52:54:00:12:34:57",
+                    "-device", "ne2k_isa,netdev=n0,iobase=0x340,irq=10"]
+        elif RELAY:
             # the card on a hub with both the user network and the relay
             net = ["-netdev", "user,id=u0",
                    "-netdev", "socket,id=s0,udp=127.0.0.1:%d,"
@@ -441,7 +459,7 @@ class Guest:
              "-drive", "file=%s,format=raw,if=floppy" % boot,
              "-drive", "file=%s,format=raw,if=ide,index=0" % disk,
              "-drive", "file=%s,format=raw,if=ide,index=1" % disk2] + net +
-            ["-device", "ne2k_isa,netdev=n0,iobase=0x300,irq=5"])
+            card)
         for _ in range(50):
             if os.path.exists(self.sock_path):
                 break
