@@ -3,7 +3,7 @@
 Usage:  python3 testing/looptest.py ./gork
 Exits 0 only if every check passes.  Fails loudly on anything else.
 """
-import http.server, json, os, pty, re, select, subprocess, sys, tempfile, threading, time
+import http.server, json, os, pty, re, select, socket, subprocess, sys, tempfile, threading, time
 
 BINARY = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "./gork")
 
@@ -28,8 +28,12 @@ def run_gork(port, task, cwd=None, config=None, mode=0o600, **env_extra):
         conf.flush()
         os.chmod(conf.name, mode)
         env["GORK_CONFIG"] = conf.name
-        return subprocess.run([BINARY, task], cwd=cwd, capture_output=True,
-                              text=True, timeout=30, env=env)
+        try:
+            return subprocess.run([BINARY, task], cwd=cwd, capture_output=True,
+                                  text=True, timeout=30, env=env)
+        except subprocess.TimeoutExpired as e:
+            raise AssertionError("gork ran past 30 s; it said: %r"
+                                 % (e.stderr or b"")[-2000:]) from None
 
 
 def reply(handler, obj, status=200):
@@ -532,6 +536,21 @@ def check_trust():
 FAKEMCP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fakemcp.py")
 
 
+def fakemcp_http(port, log):
+    """fakemcp.py on streamable HTTP, once it takes connections."""
+    fake = subprocess.Popen([sys.executable, FAKEMCP, "--http", str(port)],
+                            env=dict(os.environ, FAKEMCP_LOG=log))
+    end = time.time() + 10
+    while True:
+        assert fake.poll() is None, "fakemcp.py --http %d died" % port
+        try:
+            socket.create_connection(("127.0.0.1", port), 1).close()
+            return fake
+        except OSError:
+            assert time.time() < end, "fakemcp.py --http %d did not start" % port
+            time.sleep(0.1)
+
+
 def check_mcp():
     """Servers in ~/.gork/mcp.json are started, their tools offered as
     mcp__<server>__<tool>, and calls round-trip.  A broken or disabled
@@ -629,8 +648,7 @@ def check_mcp_http():
 
     with tempfile.TemporaryDirectory() as home:
         log = os.path.join(home, "mcp.log")
-        fake = subprocess.Popen([sys.executable, FAKEMCP, "--http", "8103"],
-                                env=dict(os.environ, FAKEMCP_LOG=log))
+        fake = fakemcp_http(8103, log)
         os.makedirs(os.path.join(home, ".gork"))
         with open(os.path.join(home, ".gork", "mcp.json"), "w") as f:
             json.dump({"mcpServers": {
@@ -642,7 +660,6 @@ def check_mcp_http():
             }}, f)
         srv = serve(H, 8104)
         try:
-            time.sleep(0.5)
             proc = run_gork(8104, "go", HOME=home)
         finally:
             srv.shutdown()
@@ -1498,8 +1515,7 @@ def check_tui_mcp_http_esc():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = os.path.realpath(tmp)
         log = os.path.join(tmp, "mcp.log")
-        fake = subprocess.Popen([sys.executable, FAKEMCP, "--http", "8105"],
-                                env=dict(os.environ, FAKEMCP_LOG=log))
+        fake = fakemcp_http(8105, log)
         os.makedirs(os.path.join(tmp, ".gork"))
         with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
             f.write(f"trust {tmp}\n")
@@ -1509,7 +1525,6 @@ def check_tui_mcp_http_esc():
                 "headers": {"X-Token": "t1"}}}}, f)
         with open(os.path.join(tmp, "k.conf"), "w") as f:
             f.write("relay = 127.0.0.1:8104\nstream = no\n")
-        time.sleep(0.5)
         pid, fd = pty.fork()
         if pid == 0:
             os.chdir(tmp)
