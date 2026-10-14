@@ -422,8 +422,11 @@ for it, on x86-64 Linux. What 640K and a 16-bit `int` change
 
 It passes the ten `dostest.py` checks, TUI included, on FreeDOS, MS-DOS
 2.11, 3.30 and 6.22, DR-DOS 7.03 and in a DOS box under Windows 1.04, 2.11/386 and 3.1. All
-of that on QEMU's 486: it is compiled for the 8086, but no 8086 or 286
-has run it.
+of that on QEMU's 486, which takes 386 instructions without a word.
+`testing/dosboxtest.py` runs it on DOSBox-X's 8086 and 286, which do not:
+tool calls over the network on the 286, the TUI on the 8086. The 8086's
+network is not tried there: the emulated NE2000 loses the byte-wide reads
+the Crynwr driver makes on an 8086. No real 8086 or 286 has run it.
 
 To run it, the machine needs:
 

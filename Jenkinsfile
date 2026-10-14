@@ -87,11 +87,13 @@ pipeline {
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh dos16build.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
                             # the same checks as for the 32-bit one, with the
-                            # address from DHCP here
+                            # address from DHCP here; then on an 8086 and a 286
+                            # in DOSBox-X
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev >/dev/null
-                                cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_DOS_DHCP=1 GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16.zip'
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev dosbox-x >/dev/null
+                                cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_DOS_DHCP=1 GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16.zip &&
+                                    GORK_VM=/tmp/vm python3 testing/dosboxtest.py /out/gork-*-dos16.zip'
                         '''
                     }
                 }

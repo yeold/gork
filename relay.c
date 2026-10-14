@@ -384,6 +384,9 @@ static int tcp_connect(const char *host, long port) {
   DWORD ip;
   int status = 0;
 
+  /* Left set, Watt-32 ends the program when it finds no packet driver:
+     in the TUI with the screen as curses left it. */
+  _watt_do_exit = 0;
   if (!started && sock_init() != 0) {
     fprintf(stderr, "gork: no network: is a packet driver loaded?\n");
     return -1;
