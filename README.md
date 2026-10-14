@@ -321,7 +321,7 @@ Unix builds have no SPX.
 gork reads `~/.gork.conf`, or the file `GORK_CONFIG` names. One
 `key = value` per line; lines starting with `#` are comments. An unknown key
 or a malformed line stops gork with the line number rather than being
-skipped.
+skipped. Sample files are in [docs/examples](docs/examples/).
 
 The DOS and Windows builds use other names, as a name with a leading dot
 is awkward or impossible to create there. Wherever this README says
@@ -404,7 +404,8 @@ which is what skills use in practice -- not YAML in general.
 gork is an MCP client for **stdio** servers, local programs it starts and
 talks to over their stdin/stdout, and for **streamable HTTP** servers. List
 them in `~/.gork/mcp.json`, in the
-same `mcpServers` shape Claude Code and Cline use, so existing entries can be
+same `mcpServers` shape Claude Code and Cline use (Zed's, with a
+`"transport"`, is read too), so existing entries can be
 copied over:
 
 ```json

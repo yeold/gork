@@ -53,7 +53,7 @@ the system's libc all the same (tried on Alpine, which has none).
 
 | Suite | What it runs |
 |---|---|
-| `python3 testing/looptest.py ./gork` | The Unix build against fake APIs: 22 checks |
+| `python3 testing/looptest.py ./gork` | The Unix build against fake APIs: 23 checks |
 | `python3 testing/wintest.py [wine] gork.exe` | The legacy Windows programs, batch mode |
 | `python3 testing/dostest.py ZIP` | Either DOS zip on FreeDOS in QEMU: ten checks, the TUI among them |
 | `python3 testing/dosboxtest.py ZIP` | The 16-bit zip in DOSBox-X: two tool calls over the network on a 286, the TUI on an 8086 |

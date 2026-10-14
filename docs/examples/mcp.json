@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/me/projects"]
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "autoApprove": ["read_graph", "search_nodes"]
+    },
+    "notes": {
+      "command": "python3",
+      "args": ["-m", "notes_server"],
+      "env": { "NOTES_DIR": "/home/me/notes" },
+      "tools": ["search", "read_note"]
+    },
+    "web": {
+      "url": "http://127.0.0.1:10530/mcp",
+      "headers": { "Authorization": "Bearer REPLACE-ME" },
+      "disabled": true
+    }
+  }
+}
