@@ -3,7 +3,7 @@
 Usage:  python3 testing/looptest.py ./gork
 Exits 0 only if every check passes.  Fails loudly on anything else.
 """
-import http.server, json, os, pty, re, select, socket, subprocess, sys, tempfile, threading, time
+import atexit, http.server, json, os, pty, re, select, socket, subprocess, sys, tempfile, threading, time
 
 BINARY = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "./gork")
 
@@ -536,10 +536,25 @@ def check_trust():
 FAKEMCP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fakemcp.py")
 
 
+FAKES = []
+
+
+@atexit.register
+def kill_fakes():
+    """A fake server left running keeps the output pipe open, and a CI step
+    that pipes the suite through tee would wait for it for ever."""
+    for fake in FAKES:
+        if fake.poll() is None:
+            fake.kill()
+
+
 def fakemcp_http(port, log):
     """fakemcp.py on streamable HTTP, once it takes connections."""
     fake = subprocess.Popen([sys.executable, FAKEMCP, "--http", str(port)],
-                            env=dict(os.environ, FAKEMCP_LOG=log))
+                            env=dict(os.environ, FAKEMCP_LOG=log),
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL)
+    FAKES.append(fake)
     end = time.time() + 10
     while True:
         assert fake.poll() is None, "fakemcp.py --http %d died" % port

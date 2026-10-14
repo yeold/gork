@@ -120,7 +120,16 @@ def serve_http(port):
         def log_message(self, *a):
             pass
 
-    http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
+    class Server(http.server.ThreadingHTTPServer):
+        def server_bind(self):
+            # HTTPServer's own looks the host name up first, between bind
+            # and listen; on macOS that can take seconds, and a connection
+            # meanwhile hangs instead of being refused.
+            import socketserver
+            socketserver.TCPServer.server_bind(self)
+            self.server_name, self.server_port = "127.0.0.1", port
+
+    Server(("127.0.0.1", port), H).serve_forever()
 
 
 if len(sys.argv) > 2 and sys.argv[1] == "--http":
