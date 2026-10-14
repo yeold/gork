@@ -62,14 +62,14 @@ the system's libc all the same (tried on Alpine, which has none).
 
 `dostest.py` takes other systems through environment variables, described
 at its top: another DOS (`GORK_DOS_FLOPPY`, with `GORK_DOS_SMALL_DISKS`
-for MS-DOS 3.30 and 4.01 and `GORK_DOS_FAT12` for MS-DOS 2), a Windows 1 to 3.1 directory to run the DOS box
+for MS-DOS 3.30, 4.01 and DR-DOS 7.03 and `GORK_DOS_FAT12` for MS-DOS 2), a Windows 1 to 3.1 directory to run the DOS box
 of (`GORK_DOS_WINDOWS`), and a gork-relay binary for the SPX check
 (`GORK_RELAY`; with `GORK_DOS_ODI`, Novell's ODI stack instead of PDIPX),
 and an address by DHCP (`GORK_DOS_DHCP`). Jenkins runs it on FreeDOS only, with a gork-relay built by `testing/getrelay.sh`, and the 16-bit zip with DHCP; the others need media
 that cannot be put in a repository. Before a release, the 32-bit zip was
-last run on MS-DOS 3.30, 4.01 and 6.22 and under Windows 1.04, 2.03, 2.11,
+last run on MS-DOS 3.30, 4.01 and 6.22, DR-DOS 7.03 and under Windows 1.04, 2.03, 2.11,
 3.0 and 3.1, and the 16-bit one on MS-DOS 2.11 (Compaq's, from WinWorldPC), 3.30 and
-6.22 and under Windows
+6.22, DR-DOS 7.03 and under Windows
 1.04, 2.11/386 and 3.1.
 
 The old Windows and Unix systems in the README's table were tried by hand

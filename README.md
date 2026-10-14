@@ -51,7 +51,7 @@ of `testing/looptest.py`.
 | Windows (native, experimental; the `win32-legacy` package) | Windows NT 3.1 (1993), with `gorknt3.exe` from the same package; `gork.exe` from NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added. Built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, Me, 2000, XP SP3, 11, Server 2025; Wine 10 | |
 | Windows (Cygwin; the `win32` package) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | 64-bit Windows 10 and later only. The package was run on GitHub's Windows runner, batch mode only |
 | DOS, 32-bit (experimental; the `dos` package) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | MS-DOS 2 and Windows/386 2.11: use the 16-bit build (DJGPP needs DOS 3) |
-| DOS, 16-bit (experimental; the `dos16` package) | MS-DOS 2.11 (1984, Compaq's), real mode, built with Open Watcom for the 8086 | MS-DOS 3.30, 6.22, FreeDOS 1.3; in a DOS box under Windows 1.04, 2.11/386 and 3.1 | Run on an emulated 486 only: no 8086 or 286 was at hand. Small limits (below) |
+| DOS, 16-bit (experimental; the `dos16` package) | MS-DOS 2.11 (1984, Compaq's), real mode, built with Open Watcom for the 8086 | MS-DOS 3.30, 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04, 2.11/386 and 3.1 | Run on an emulated 486 only: no 8086 or 286 was at hand. Small limits (below) |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
 and i386 passes the whole suite: cross-built with Debian 13's toolchains

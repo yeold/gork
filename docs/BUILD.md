@@ -350,8 +350,8 @@ make -f Makefile.dj CC=i586-pc-msdosdjgpp-gcc PDCURSES=/path/to/pdcurses \
 
 `python3 testing/dostest.py` then checks that zip on FreeDOS in QEMU, or
 on another DOS whose boot floppy image `GORK_DOS_FLOPPY` names
-(`GORK_DOS_SMALL_DISKS=1` as well for MS-DOS 3.30 and 4.01, which read
-only disks laid out the old way, and `GORK_DOS_FAT12=1` instead for MS-DOS
+(`GORK_DOS_SMALL_DISKS=1` as well for MS-DOS 3.30, 4.01 and DR-DOS 7.03,
+which read only disks laid out the old way, and `GORK_DOS_FAT12=1` instead for MS-DOS
 2).
 
 **Under Windows 3.0 and 3.1** the DOS `gork.exe` runs in a DOS box, in 386
@@ -421,7 +421,7 @@ for it, on x86-64 Linux. What 640K and a 16-bit `int` change
   directory (`..\gork`, `c:\gork`): put gork's directory on `PATH`.
 
 It passes the ten `dostest.py` checks, TUI included, on FreeDOS, MS-DOS
-2.11, 3.30 and 6.22 and in a DOS box under Windows 1.04, 2.11/386 and 3.1. All
+2.11, 3.30 and 6.22, DR-DOS 7.03 and in a DOS box under Windows 1.04, 2.11/386 and 3.1. All
 of that on QEMU's 486: it is compiled for the 8086, but no 8086 or 286
 has run it.
 

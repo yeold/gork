@@ -10,8 +10,7 @@ NE2000 packet driver are downloaded once into $GORK_VM/dostest (default
 floppy image of it in $GORK_DOS_FLOPPY (it needs COMMAND.COM in its root
 and a little free space); MS-DOS 6.22 install disk 1 works.  Set
 $GORK_DOS_DHCP to take the address from QEMU's DHCP server.
-Set $GORK_DOS_ONE_DISK to skip the check that needs a D: drive (DR-DOS 7.03's
-install floppy does not see the second disk).  To run the checks in a DOS
+To run the checks in a DOS
 box under Windows 3.0 or 3.1 in 386 enhanced mode, name an installed
 WINDOWS directory, copied off a disk where Setup ran (VGA, no network,
 with its HIMEM.SYS), in $GORK_DOS_WINDOWS, together with $GORK_DOS_FLOPPY:
@@ -28,8 +27,9 @@ IPX and SPX on the packet driver, and its network card is also wired to
 that relay, which passes what it gets on to the fake API.  With
 $GORK_DOS_ODI set as well it loads Novell's ODI stack instead: LSL, the
 NE2000 MLID and IPXODI, with ODIPKT for the packet driver Watt-32 needs.
-Set $GORK_DOS_SMALL_DISKS for MS-DOS 3.30, 4.01 and the like, which read
-only disks laid out the old way, and $GORK_DOS_FAT12 instead for MS-DOS 2,
+Set $GORK_DOS_SMALL_DISKS for MS-DOS 3.30, 4.01, DR-DOS 7.03 and the like,
+which read only disks laid out the old way (DR-DOS sees no second disk
+otherwise), and $GORK_DOS_FAT12 instead for MS-DOS 2,
 which reads FAT12 only.  The guest reaches the fake API on the host as
 10.0.2.2; the keyboard is typed and the screen read through the QEMU
 monitor.
@@ -248,9 +248,7 @@ def build_images(zip_path):
                       "gateway = 10.0.2.2\nnameserver = 10.0.2.3\n",
         "GORK.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
                     "timeout = 6\nretries = 0\n"
-                    "allow = %sc:/tmp\n"
-                    % (PORT, "" if os.environ.get("GORK_DOS_ONE_DISK")
-                       else "d:/shared;"),
+                    "allow = d:/shared;c:/tmp\n" % PORT,
         "BAD.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
                    "allow = c:/nope\n" % PORT,
         "STREAM.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
@@ -743,8 +741,7 @@ def main():
         check_confinement(g)
         check_bad_allow(g)
         check_edit(g)
-        if not os.environ.get("GORK_DOS_ONE_DISK"):
-            check_allow(g)
+        check_allow(g)
         check_long(g)
         check_run(g)
         check_stream(g)

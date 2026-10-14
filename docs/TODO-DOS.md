@@ -5,12 +5,8 @@ Both DOS builds work and pass `testing/dostest.py`: the 32-bit one
 (`dos16build.sh`, Open Watcom, real mode). [BUILD.md](BUILD.md) says how
 they are built and what each needs. What is left:
 
-- [ ] The 16-bit build on DR-DOS.
 - [ ] `IPX.COM` for SPX: PDIPX and IPXODI were tried. It is made with
       Novell's WSGEN from a driver for the card, and neither was found.
-- [ ] DR-DOS 7.03 passed the checks that need one disk only: its install
-      floppy does not see a second hard disk, so the `allow` check on D:
-      could not run there.
 - [ ] Find out why a `stat()` at startup breaks Esc in the 32-bit build.
       The first version of the allow check called `stat()` on each allow
       directory before the TUI starts, and with it Esc no longer aborted a
@@ -18,8 +14,15 @@ they are built and what each needs. What is left:
       `opendir()` it works. Narrowed down: Esc still works after a
       `list_dir` tool call, which also calls `stat()`, on C: and on D:. So
       it is something about the first `stat()` coming before curses is
-      initialised. Not looked at again since `_djstat_flags` was set, which
-      takes most of what DJGPP's `stat()` does away.
+      initialised. Still so with `_djstat_flags` set (2026-10-14): one
+      `stat()` or `lstat()` at startup, on a file or a directory, breaks
+      it, while linking it in without calling it does not, and neither
+      does any of its parts called alone (`_fixpath`, `_truename`,
+      `findfirst`, `_get_cached_blksize`, `mktime`, the FSEXT hook,
+      symlink resolution). What breaks: Watt-32's `select()` overruns its
+      200 ms until the request's deadline, so Esc is never polled; in
+      batch mode a tool call can hang. `hires_timer(0)` is no way out:
+      then `connect` times out.
 
 ## What DOS lacks, and what gork does about it
 
