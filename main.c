@@ -90,6 +90,7 @@
 #ifdef GORK_DOS16
 #include <malloc.h>           /* _heapmin() */
 #include <ctype.h>
+#include <dos.h>              /* _dos_getvect(), intdosx() */
 /* As DJGPP's realpath(): c:/dir/file, whether it exists or not.  The
    library's _fullpath() adds the drive and the current directory, but it
    takes only backslashes and leaves ".." in the path, which would lead out
@@ -251,8 +252,11 @@ static int  nallow;
    For the paths built from HOME and the configuration: no snprintf here. */
 static int join(char *dst, size_t size, const char *a, const char *b)
 {
-    size_t na = strlen(a), nb = strlen(b);
+    size_t na = strlen(a), nb;
 
+    /* "C:\" + "/gork.cnf": MS-DOS 2 opens no path with "\/" in it */
+    if (na > 0 && (a[na - 1] == '/' || a[na - 1] == '\\') && *b == '/') b++;
+    nb = strlen(b);
     if (na >= size || nb >= size - na) return -1;
     memcpy(dst, a, na);
     memcpy(dst + na, b, nb + 1);
@@ -2953,6 +2957,34 @@ static int interactive(const struct conn *c)
     return 0;
 }
 
+#ifdef __MSDOS__
+/* MS-DOS 2 tells a program nothing of where it was found.  Look for
+   gork.exe where COMMAND.COM did: the current directory, then each
+   directory of PATH.  Its directory into `dir`; 0, or -1 if not found. */
+static int dos_self_dir(char *dir, size_t size)
+{
+    const char *p, *e;
+    char        f[PATH_MAX];
+    size_t      n;
+
+    if (access("GORK.EXE", 0) == 0)
+        return getcwd(dir, (int) size) != NULL ? 0 : -1;
+    for (p = getenv("PATH"); p != NULL && *p != '\0'; p = *e ? e + 1 : e) {
+        e = strchr(p, ';');
+        if (e == NULL) e = p + strlen(p);
+        n = (size_t) (e - p);
+        if (n == 0 || n + 10 > sizeof f || n >= size) continue;
+        sprintf(f, "%.*s%sGORK.EXE", (int) n, p,
+                p[n - 1] == '\\' || p[n - 1] == '/' ? "" : "\\");
+        if (access(f, 0) == 0) {
+            sprintf(dir, "%.*s", (int) n, p);
+            return 0;
+        }
+    }
+    return -1;
+}
+#endif
+
 int main(int argc, char **argv)
 {
     struct conn c;
@@ -2979,6 +3011,23 @@ int main(int argc, char **argv)
     _djstat_flags = _STAT_INODE | _STAT_EXEC_EXT | _STAT_EXEC_MAGIC |
                     _STAT_DIRSIZE | _STAT_ROOT_TIME | _STAT_WRITEBIT;
 #endif
+#ifdef GORK_DOS16
+    /* MS-DOS 2 leaves INT 2Fh, the multiplex interrupt of DOS 3 and later,
+       at 0000:0000, and PDCurses calls it while it waits for a key (so
+       does the SPX code, looking for IPX): aim it at the BIOS's dummy
+       handler, an IRET at F000:FF53.  It may stay there after gork. */
+    if (_dos_getvect(0x2f) == NULL &&
+        *(unsigned char __far *) MK_FP(0xf000, 0xff53) == 0xcf) {
+        union REGS   r;         /* INT 21h AH=25h: a cast to a pointer to */
+        struct SREGS sr;        /* function loses the segment */
+
+        segread(&sr);
+        r.x.ax = 0x252f;
+        r.x.dx = 0xff53;
+        sr.ds = 0xf000;
+        intdosx(&r, &r, &sr);
+    }
+#endif
     /* DOS sets no HOME: use the directory gork.exe is in. */
     if (getenv("HOME") == NULL && strlen(argv[0]) < PATH_MAX) {
         static char h[PATH_MAX + 8];
@@ -2989,6 +3038,8 @@ int main(int argc, char **argv)
             ;
         if (p > h + 5) {
             p[p[-1] == ':'] = '\0';    /* "c:" is that drive's cwd: keep the / */
+            putenv(h);
+        } else if (dos_self_dir(h + 5, PATH_MAX) == 0) {
             putenv(h);
         }
     }

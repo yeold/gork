@@ -27,7 +27,8 @@ $GORK_RELAY to check SPX as well: the guest then loads PDIPX, Novell's
 IPX and SPX on the packet driver, and its network card is also wired to
 that relay, which passes what it gets on to the fake API.
 Set $GORK_DOS_SMALL_DISKS for MS-DOS 3.30, 4.01 and the like, which read
-only disks laid out the old way.  The guest reaches the fake API on the host as
+only disks laid out the old way, and $GORK_DOS_FAT12 instead for MS-DOS 2,
+which reads FAT12 only.  The guest reaches the fake API on the host as
 10.0.2.2; the keyboard is typed and the screen read through the QEMU
 monitor.
 """
@@ -40,7 +41,11 @@ VM = os.path.join(os.environ.get("GORK_VM",
 PORT = 8095
 RELAY = os.environ.get("GORK_RELAY")    # a gork-relay binary: check SPX too
 RELAY_PORT = 8097                       # where it takes the guest's frames
-SMALL = bool(os.environ.get("GORK_DOS_SMALL_DISKS"))
+FAT12 = bool(os.environ.get("GORK_DOS_FAT12"))
+SMALL = FAT12 or bool(os.environ.get("GORK_DOS_SMALL_DISKS"))
+# MS-DOS 2's COMMAND.COM runs nothing named with a directory (and says
+# nothing either): there gork.exe is found along PATH.
+GORK = "gork" if FAT12 else "..\\gork"
 WINDOWS = os.environ.get("GORK_DOS_WINDOWS")
 # Windows 1 or 2: real mode
 WINDOWS2 = bool(WINDOWS and any(os.path.exists(os.path.join(WINDOWS, n))
@@ -289,6 +294,9 @@ def build_images(zip_path):
             "config.sys": himem + "BUFFERS=20\nFILES=40\n"
                           "SHELL=A:\\COMMAND.COM A:\\ /E:1024 /P\n",
             "autoexec.bat": "@echo off\nprompt $p$g\nset PATH=A:\\;C:\\\n"
+                            # MS-DOS 2 leaves COMSPEC without a drive, and
+                            # run_command's COMMAND.COM is then looked for on C:
+                            + ("set COMSPEC=A:\\COMMAND.COM\n" if FAT12 else "")
                             + rest,
         }
     else:
@@ -317,6 +325,9 @@ def build_images(zip_path):
             # the second track, 2K clusters.
             sectors, start, kind = min(mb * 2048 // 1008, 65) * 1008, 63, 4
             more = ["-c", "4"]
+            if FAT12:
+                # MS-DOS 2 knows no FAT16: about 15 MB, type 1
+                sectors, kind, more = 30 * 1008, 1, ["-c", "8"]
         with open(disk, "wb") as f:
             f.truncate(sectors * 512)
             f.seek(446)
@@ -478,7 +489,7 @@ def check_batch(g):
     del requests[:]
     script[:] = [tool("write_file", path="out.txt", content="hello\n"),
                  text("wrote it")]
-    s = g.run("..\\gork t")
+    s = g.run(GORK + " t")
     assert "wrote it" in s, s
     system = requests[0]["system"]
     assert system.startswith("Always answer in haiku."), system
@@ -498,7 +509,7 @@ def check_confinement(g):
     for p in outside + inside:
         del requests[:]
         script[:] = [tool("read_file", path=p), text("done")]
-        g.run("..\\gork t")
+        g.run(GORK + " t")
         r = results()[0]
         if p in outside:
             assert r.get("is_error") and "outside" in r["content"], (p, r)
@@ -515,7 +526,7 @@ def check_edit(g):
                  tool("edit_file", path="two.txt", old_text="one\ntwo\n",
                       new_text="one\n2\n"),
                  text("done")]
-    g.run("..\\gork t")
+    g.run(GORK + " t")
     read, edit = results()
     assert read["content"] == "one\ntwo\nthree\n", read
     assert not edit.get("is_error"), edit
@@ -525,7 +536,7 @@ def check_edit(g):
 def check_bad_allow(g):
     """An allow directory that does not exist stops gork, as on Unix."""
     g.run("set GORK_CONFIG=c:\\bad.cnf")
-    s = g.run("..\\gork t")
+    s = g.run(GORK + " t")
     g.run("set GORK_CONFIG=")
     assert "allow: c:/nope" in s, s
     print("ok: missing allow directory refused")
@@ -543,7 +554,7 @@ def check_allow(g):
     for name, inp, want in cases:
         del requests[:]
         script[:] = [tool(name, **inp), text("done")]
-        g.run("..\\gork t")
+        g.run(GORK + " t")
         r = results()[0]
         assert want in r["content"], (inp, r)
         assert bool(r.get("is_error")) == (want == "outside"), (inp, r)
@@ -556,7 +567,7 @@ def check_long(g):
     del requests[:]
     script[:] = [tool("run_command", command="type big.txt"),
                  tool("read_file", path="big.txt"), text("done")]
-    g.run("..\\gork t", 120)
+    g.run(GORK + " t", 120)
     run, read = results()
     assert "[output truncated]" in run["content"], run["content"][-200:]
     assert len(run["content"]) < 70000, len(run["content"])
@@ -568,7 +579,7 @@ def check_run(g):
     """run_command returns the output and the exit status."""
     del requests[:]
     script[:] = [tool("run_command", command="ver"), text("done")]
-    g.run("..\\gork t")
+    g.run(GORK + " t")
     r = results()[0]
     out = r["content"]              # wording differs from DOS to DOS
     assert out.endswith("[exit 0]") and len(out.strip()) > 20, r
@@ -584,14 +595,14 @@ def check_spx(g):
     script[:] = [tool("write_file", path="spx.txt", content="over spx\n"),
                  text(big + " spx done")]
     g.run("set GORK_CONFIG=c:\\spx.cnf")
-    s = g.run("..\\gork t", 120)
+    s = g.run(GORK + " t", 120)
     g.run("set GORK_CONFIG=")
     assert "spx done" in s, s
     assert "wrote 9 bytes" in results()[0]["content"], results()
     assert "over spx" in g.run("type spx.txt")
     del requests[:]
     script[:] = [text("tcp again")]
-    assert "tcp again" in g.run("..\\gork t")
+    assert "tcp again" in g.run(GORK + " t")
     print("ok: SPX through gork-relay")
 
 
@@ -602,7 +613,7 @@ def check_stream(g):
     script[:] = [tool("write_file", path="str.txt", content="streamed\n"),
                  text("stream done")]
     g.run("set GORK_CONFIG=c:\\stream.cnf")
-    s = g.run("..\\gork t", 120)
+    s = g.run(GORK + " t", 120)
     g.run("set GORK_CONFIG=")
     assert requests[0].get("stream") is True, requests[0].keys()
     assert "stream done" in s, s
@@ -614,7 +625,7 @@ def check_stream(g):
 def check_timeout(g):
     """A reply that never comes ends in a timeout, not a crash."""
     script[:] = [text("late", delay=12)]
-    s = g.run("..\\gork t")
+    s = g.run(GORK + " t")
     assert "timeout on socket" in s, s
     time.sleep(7)                       # let the late reply drain
     print("ok: timeout")
@@ -627,7 +638,7 @@ def check_tui(g):
     script[:] = [tool("write_file", path="tui.txt", content="x\n"),
                  text("all done"), text("never seen", delay=10)]
     g.type("cls\n")
-    g.type("..\\gork\n")
+    g.type(GORK + "\n")
     g.wait("Trust this directory")
     g.type("y\n")
     try:

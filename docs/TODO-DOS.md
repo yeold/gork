@@ -5,10 +5,7 @@ Both DOS builds work and pass `testing/dostest.py`: the 32-bit one
 (`dos16build.sh`, Open Watcom, real mode). [BUILD.md](BUILD.md) says how
 they are built and what each needs. What is left:
 
-- [ ] Real hardware: everything ran in QEMU. See
-      [TODO-REAL.md](TODO-REAL.md).
-- [ ] Older DOS: MS-DOS 2.x, and the 16-bit build on DR-DOS. The oldest
-      tried is MS-DOS 3.30.
+- [ ] The 16-bit build on DR-DOS.
 - [ ] `IPXODI` and `IPX.COM` for SPX; only PDIPX was tried.
 - [ ] DR-DOS 7.03 passed the checks that need one disk only: its install
       floppy does not see a second hard disk, so the `allow` check on D:

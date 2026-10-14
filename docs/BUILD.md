@@ -351,7 +351,8 @@ make -f Makefile.dj CC=i586-pc-msdosdjgpp-gcc PDCURSES=/path/to/pdcurses \
 `python3 testing/dostest.py` then checks that zip on FreeDOS in QEMU, or
 on another DOS whose boot floppy image `GORK_DOS_FLOPPY` names
 (`GORK_DOS_SMALL_DISKS=1` as well for MS-DOS 3.30 and 4.01, which read
-only disks laid out the old way).
+only disks laid out the old way, and `GORK_DOS_FAT12=1` instead for MS-DOS
+2).
 
 **Under Windows 3.0 and 3.1** the DOS `gork.exe` runs in a DOS box, in 386
 enhanced mode: Windows provides the protected mode there, so `CWSDPMI.EXE`
@@ -408,9 +409,16 @@ for it, on x86-64 Linux. What 640K and a 16-bit `int` change
 - The linker must not pack code segments into groups
   (`option packcode=1`), or Watt-32's interrupt code crashes at
   `sock_init()`, on some layouts and not on others.
+- MS-DOS 2 tells a program nothing of where it was found, so gork looks
+  for `gork.exe` in the current directory and along `PATH` to find
+  `gork.cnf`. It also leaves `INT 2Fh` at 0000:0000, which PDCurses calls
+  while it waits for a key: gork points it at the BIOS's `IRET`. And it
+  has no commit call, so the TUI closes a duplicate handle instead.
+  Compaq's `COMMAND.COM` 2.11 silently runs nothing typed with a
+  directory (`..\gork`, `c:\gork`): put gork's directory on `PATH`.
 
 It passes the ten `dostest.py` checks, TUI included, on FreeDOS, MS-DOS
-3.30 and 6.22 and in a DOS box under Windows 1.04, 2.11/386 and 3.1. All
+2.11, 3.30 and 6.22 and in a DOS box under Windows 1.04, 2.11/386 and 3.1. All
 of that on QEMU's 486: it is compiled for the 8086, but no 8086 or 286
 has run it.
 

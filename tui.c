@@ -413,6 +413,13 @@ void tui_drain(void)
     /* A second handle does not see what the first appends until the file
        is committed and opened again. */
     fsync(1);
+#ifdef __MSDOS__
+    {                           /* MS-DOS 2 has no commit: closing a */
+        int d = dup(1);         /* duplicate does the same */
+
+        if (d >= 0) close(d);
+    }
+#endif
     close(cap_rfd);
     cap_rfd = open(cap_name, O_RDONLY);
     lseek(cap_rfd, cap_off, SEEK_SET);
