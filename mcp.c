@@ -1,13 +1,14 @@
 /*
- * mcp.c -- Model Context Protocol client, stdio transport only.
+ * mcp.c -- Model Context Protocol client: stdio and streamable HTTP.
  *
  * Servers come from ~/.gork/mcp.json, in the "mcpServers" shape Claude Code
- * and Cline use.  Each is a child process speaking newline-delimited
- * JSON-RPC 2.0 on its stdin/stdout.  At startup gork runs initialize and
+ * and Cline use.  One with a "command" is a child process speaking
+ * newline-delimited JSON-RPC 2.0 on its stdin/stdout.  One with a "url" is
+ * spoken to by HTTP POST, each message a request of its own; the answer
+ * comes back as JSON or as a stream of server-sent events.  gork has no
+ * TLS: an https:// server is reached through a relay that has ("relay":
+ * "host:port"), as the API is.  At startup gork runs initialize and
  * tools/list, and offers each tool to the model as mcp__<server>__<tool>.
- *
- * HTTP servers are skipped: they are mostly TLS-only, which is the relay's
- * problem, not this file's.
  */
 
 #include <stdio.h>
@@ -38,6 +39,14 @@ struct server {
     int        in_fd, out_fd;   /* its stdin, its stdout */
     struct buf rx;              /* bytes read but not yet a whole line */
     int        dead;
+    /* streamable HTTP */
+    int        http;
+    char      *conn_host;       /* where to connect: the server, or a relay */
+    long       conn_port;
+    char      *host, *path;     /* the URL's, for the request line */
+    char      *headers;         /* the "headers" map, as CRLF-ended lines */
+    char       session[256];    /* Mcp-Session-Id, once the server gave one */
+    char       proto[32];       /* the protocol version agreed on */
 };
 
 struct mtool {
@@ -62,6 +71,11 @@ static char *mstrdup(const char *s)
     return p;
 }
 
+static int adds(struct buf *b, const char *s)
+{
+    return buf_add(b, s, strlen(s));
+}
+
 /* ------------------------------------------------------------------ */
 /* wire                                                               */
 /* ------------------------------------------------------------------ */
@@ -82,15 +96,80 @@ static int write_all(int fd, const char *p, size_t n)
     return 0;
 }
 
+/* POST one message to an HTTP server, with what this session needs in the
+   headers.  The HTTP status, the body in `resp` and the header block in
+   `head` (both the caller's to free when the status is not negative), or
+   -1, or -2 if the user pressed Esc. */
+static int http_send(struct server *s, cJSON *msg, int timeout,
+                     struct buf *resp, struct buf *head)
+{
+    char       *text = cJSON_PrintUnformatted(msg);
+    struct buf  extra;
+    int         status, saved = relay_timeout;
+
+    head->p = NULL;
+    if (text == NULL || buf_init(&extra) != 0) {
+        free(text);
+        return -1;
+    }
+    if (adds(&extra, "Accept: application/json, text/event-stream\r\n") != 0 ||
+        (s->session[0] != '\0' &&
+         (adds(&extra, "Mcp-Session-Id: ") != 0 ||
+          adds(&extra, s->session) != 0 ||
+          adds(&extra, "\r\n") != 0)) ||
+        (s->proto[0] != '\0' &&
+         (adds(&extra, "MCP-Protocol-Version: ") != 0 ||
+          adds(&extra, s->proto) != 0 ||
+          adds(&extra, "\r\n") != 0)) ||
+        adds(&extra, s->headers) != 0) {
+        buf_free(&extra);
+        free(text);
+        return -1;
+    }
+    relay_timeout = timeout;
+    status = relay_http("POST", s->conn_host, s->conn_port, s->host, s->path,
+                        extra.p, text, strlen(text), resp, head);
+    relay_timeout = saved;
+    buf_free(&extra);
+    free(text);
+    if (status < 0) {
+        buf_free(resp);
+        return status;
+    }
+    if (head->p == NULL) {          /* no header block: nothing came */
+        buf_free(resp);
+        return -1;
+    }
+    return status;
+}
+
+/* A notification or a response to the server: the answer is 202 and no
+   body.  Esc is not looked at: it may be the user's Esc being reported. */
+static int http_post_only(struct server *s, cJSON *msg)
+{
+    struct buf resp, head;
+    int        status, (*saved)(void) = relay_abort;
+
+    relay_abort = NULL;
+    status = http_send(s, msg, 10, &resp, &head);
+    relay_abort = saved;
+    if (status < 0) return -1;
+    buf_free(&resp);
+    buf_free(&head);
+    return status >= 200 && status < 300 ? 0 : -1;
+}
+
 /* One message, one line.  SIGPIPE is ignored only for the write, so a dead
    server is an error here -- not the death of gork -- while run_command's
    children still get the default. */
 static int send_msg(struct server *s, cJSON *msg)
 {
-    char *text = cJSON_PrintUnformatted(msg);
+    char *text;
     void (*old)(int);
     int   rc;
 
+    if (s->http) return http_post_only(s, msg);
+    text = cJSON_PrintUnformatted(msg);
     if (text == NULL) return -1;
     old = signal(SIGPIPE, SIG_IGN);
     rc  = (write_all(s->in_fd, text, strlen(text)) == 0 &&
@@ -185,6 +264,142 @@ static void notify(struct server *s, const char *method)
     cJSON_Delete(n);
 }
 
+/* The user pressed Esc: tell the server.  Its answer, if one still comes,
+   is skipped like any late one. */
+static void cancel(struct server *s, int want)
+{
+    cJSON *req = cJSON_CreateObject(), *params;
+
+    params = req != NULL ? cJSON_AddObjectToObject(req, "params") : NULL;
+    if (params != NULL) {
+        cJSON_AddStringToObject(req, "jsonrpc", "2.0");
+        cJSON_AddStringToObject(req, "method", "notifications/cancelled");
+        cJSON_AddNumberToObject(params, "requestId", want);
+        send_msg(s, req);
+    }
+    cJSON_Delete(req);
+    strcpy(rpc_err, "aborted by the user");
+}
+
+static void add_message(cJSON *all, const char *text)
+{
+    cJSON *m = cJSON_Parse(text), *item;
+
+    if (cJSON_IsArray(m)) {             /* a batch: each on its own */
+        while ((item = cJSON_DetachItemFromArray(m, 0)) != NULL)
+            cJSON_AddItemToArray(all, item);
+        cJSON_Delete(m);
+    } else if (m != NULL) {
+        cJSON_AddItemToArray(all, m);
+    }
+}
+
+/* The messages in an HTTP reply, as an array: the body is JSON, or a
+   stream of server-sent events whose data are. */
+static cJSON *reply_messages(const struct buf *head, const char *body)
+{
+    cJSON      *all = cJSON_CreateArray();
+    struct buf  data;
+    char        type[128], *t;
+    const char *p = body, *e, *q;
+    size_t      n, k;
+
+    if (all == NULL) return NULL;
+    type[0] = '\0';
+    relay_header(head, "content-type", type, sizeof type);
+    for (t = type; *t; t++) *t = (char) tolower((unsigned char) *t);
+    if (strstr(type, "text/event-stream") == NULL) {
+        add_message(all, body);
+        return all;
+    }
+    if (buf_init(&data) != 0) return all;
+    for (;;) {
+        e = strchr(p, '\n');
+        n = e != NULL ? (size_t) (e - p) : strlen(p);
+        if (n > 0 && p[n - 1] == '\r') n--;
+        if (n == 0) {                   /* an event ends: its data */
+            if (data.len > 0) add_message(all, data.p);
+            data.len = 0;
+            data.p[0] = '\0';
+        } else if (n >= 5 && memcmp(p, "data:", 5) == 0) {
+            q = p + 5;
+            k = n - 5;
+            if (k > 0 && *q == ' ') {
+                q++;
+                k--;
+            }
+            if ((data.len > 0 && adds(&data, "\n") != 0) ||
+                buf_add(&data, q, k) != 0)
+                break;
+        }
+        if (e == NULL) break;
+        p = e + 1;
+    }
+    if (data.len > 0) add_message(all, data.p);
+    buf_free(&data);
+    return all;
+}
+
+/* rpc() over HTTP: the request is a POST, and its answer comes in the
+   reply, with whatever else the server sends meanwhile. */
+static cJSON *http_rpc(struct server *s, cJSON *req, int want, int timeout)
+{
+    struct buf  resp, head;
+    cJSON      *msgs, *msg, *id, *m, *err, *emsg, *res = NULL;
+    char        sid[sizeof s->session];
+    int         status, failed = 0;
+
+    status = http_send(s, req, timeout, &resp, &head);
+    if (status == -2) {
+        cancel(s, want);
+        return NULL;
+    }
+    if (status < 0) {
+        strcpy(rpc_err, "cannot reach the server");
+        return NULL;
+    }
+    if (s->session[0] == '\0' &&
+        relay_header(&head, "mcp-session-id", sid, sizeof sid) == 0)
+        strcpy(s->session, sid);
+    if (status != 200) {
+        if (status == 404 && s->session[0] != '\0')
+            strcpy(rpc_err, "the server ended the session");
+        else
+            sprintf(rpc_err, "HTTP status %d", status);
+        buf_free(&resp);
+        buf_free(&head);
+        return NULL;
+    }
+    msgs = reply_messages(&head, resp.p);
+    buf_free(&resp);
+    buf_free(&head);
+    strcpy(rpc_err, "the reply held no answer");
+    cJSON_ArrayForEach(msg, msgs) {
+        id = cJSON_GetObjectItem(msg, "id");
+        m  = cJSON_GetObjectItem(msg, "method");
+        if (cJSON_IsString(m) && id != NULL) {
+            answer(s, msg);
+        } else if (m == NULL && cJSON_IsNumber(id) &&
+                   (int) id->valuedouble == want && res == NULL && !failed) {
+            err = cJSON_GetObjectItem(msg, "error");
+            if (err != NULL) {
+                emsg = cJSON_GetObjectItem(err, "message");
+                sprintf(rpc_err, "%.200s", cJSON_IsString(emsg)
+                                           ? emsg->valuestring : "error");
+                failed = 1;
+                continue;
+            }
+            res = cJSON_DetachItemFromObject(msg, "result");
+            if (res == NULL) {
+                strcpy(rpc_err, "response had no result");
+                failed = 1;
+            }
+        }
+    }
+    cJSON_Delete(msgs);
+    return res;
+}
+
 /* Send a request and wait for its response, answering whatever the server
    asks meanwhile and skipping notifications, log noise, and late replies to
    requests that already timed out.  Takes ownership of params.  Returns the
@@ -212,6 +427,11 @@ static cJSON *rpc(struct server *s, const char *method, cJSON *params,
     cJSON_AddNumberToObject(req, "id", want);
     cJSON_AddStringToObject(req, "method", method);
     if (params != NULL) cJSON_AddItemToObject(req, "params", params);
+    if (s->http) {
+        msg = http_rpc(s, req, want, timeout);
+        cJSON_Delete(req);
+        return msg;
+    }
     if (send_msg(s, req) != 0) {
         cJSON_Delete(req);
         strcpy(rpc_err, "cannot write to server");
@@ -222,20 +442,8 @@ static cJSON *rpc(struct server *s, const char *method, cJSON *params,
     for (;;) {
         line = read_line(s, deadline);
         if (line == NULL && stopped) {
-            /* Tell the server; its answer, if one still comes, is skipped
-               like any late one. */
             stopped = 0;
-            req = cJSON_CreateObject();
-            params = req != NULL ? cJSON_AddObjectToObject(req, "params") : NULL;
-            if (params != NULL) {
-                cJSON_AddStringToObject(req, "jsonrpc", "2.0");
-                cJSON_AddStringToObject(req, "method",
-                                        "notifications/cancelled");
-                cJSON_AddNumberToObject(params, "requestId", want);
-                send_msg(s, req);
-            }
-            cJSON_Delete(req);
-            strcpy(rpc_err, "aborted by the user");
+            cancel(s, want);
             return NULL;
         }
         if (line == NULL) {
@@ -345,8 +553,131 @@ static int spawn(struct server *s, cJSON *cfg)
     return 0;
 }
 
+static char *span(const char *p, size_t n)
+{
+    char *q = (char *) malloc(n + 1);
+
+    if (q != NULL) {
+        memcpy(q, p, n);
+        q[n] = '\0';
+    }
+    return q;
+}
+
+/* "host:port" into conn_host and conn_port; 0, or -1 if it is not one. */
+static int host_port(struct server *s, const char *hp, long dflt)
+{
+    const char *c = strrchr(hp, ':');
+    char       *end;
+
+    if (c == NULL) {
+        s->conn_port = dflt;
+        s->conn_host = mstrdup(hp);
+    } else {
+        s->conn_port = strtol(c + 1, &end, 10);
+        if (*end != '\0' || s->conn_port <= 0 || s->conn_port > 65535)
+            return -1;
+        s->conn_host = span(hp, (size_t) (c - hp));
+    }
+    return s->conn_host != NULL && *s->conn_host != '\0' ? 0 : -1;
+}
+
+/* An HTTP server from its entry: "url", and maybe "relay" and "headers".
+   0, or -1 having said why. */
+static int http_setup(struct server *s, cJSON *cfg)
+{
+    const char *u = cJSON_GetObjectItem(cfg, "url")->valuestring, *h, *e;
+    cJSON      *relay = cJSON_GetObjectItem(cfg, "relay"), *kv;
+    struct buf  lines;
+    int         tls;
+
+    if (strncmp(u, "http://", 7) == 0) {
+        tls = 0;
+        h = u + 7;
+    } else if (strncmp(u, "https://", 8) == 0) {
+        tls = 1;
+        h = u + 8;
+    } else {
+        fprintf(stderr, "gork: MCP server %s: want an http:// or https:// "
+                        "url\n", s->name);
+        return -1;
+    }
+    e = h + strcspn(h, "/?#");
+    s->http = 1;
+    s->host = span(h, (size_t) (e - h));
+    s->path = *e == '/' ? span(e, strcspn(e, "#"))
+                        : (char *) malloc(strcspn(e, "#") + 2);
+    if (s->host == NULL || s->path == NULL) return -1;
+    if (*e != '/') {                    /* "?q" or nothing: from the root */
+        s->path[0] = '/';
+        memcpy(s->path + 1, e, strcspn(e, "#"));
+        s->path[1 + strcspn(e, "#")] = '\0';
+    }
+    if (cJSON_IsString(relay) ? host_port(s, relay->valuestring, 0) != 0
+                              : tls) {
+        fprintf(stderr, "gork: MCP server %s: %s\n", s->name,
+                cJSON_IsString(relay)
+                ? "want \"relay\": \"host:port\""
+                : "gork has no TLS: an https:// server needs a "
+                  "\"relay\": \"host:port\" that has");
+        return -1;
+    }
+    if (!cJSON_IsString(relay) && host_port(s, s->host, 80) != 0) {
+        fprintf(stderr, "gork: MCP server %s: bad url\n", s->name);
+        return -1;
+    }
+
+    if (buf_init(&lines) != 0) return -1;
+    cJSON_ArrayForEach(kv, cJSON_GetObjectItem(cfg, "headers")) {
+        if (!cJSON_IsString(kv) || strpbrk(kv->string, ":\r\n") != NULL ||
+            strpbrk(kv->valuestring, "\r\n") != NULL) {
+            fprintf(stderr, "gork: MCP server %s: header %s skipped\n",
+                    s->name, kv->string);
+            continue;
+        }
+        if (adds(&lines, kv->string) != 0 ||
+            adds(&lines, ": ") != 0 ||
+            adds(&lines, kv->valuestring) != 0 ||
+            adds(&lines, "\r\n") != 0) {
+            buf_free(&lines);
+            return -1;
+        }
+    }
+    s->headers = lines.p;
+    return 0;
+}
+
+/* The end of an HTTP session: DELETE it, if the server gave it an id. */
+static void http_stop(struct server *s)
+{
+    struct buf resp, head, extra;
+    int        (*saved)(void) = relay_abort, timeout = relay_timeout;
+
+    s->dead = 1;
+    if (s->session[0] == '\0' || buf_init(&extra) != 0) return;
+    if (adds(&extra, "Mcp-Session-Id: ") == 0 &&
+        adds(&extra, s->session) == 0 &&
+        adds(&extra, "\r\n") == 0) {
+        relay_abort = NULL;
+        relay_timeout = 5;
+        head.p = NULL;
+        if (relay_http("DELETE", s->conn_host, s->conn_port, s->host,
+                       s->path, extra.p, "", 0, &resp, &head) >= 0)
+            buf_free(&head);
+        buf_free(&resp);
+        relay_abort = saved;
+        relay_timeout = timeout;
+    }
+    buf_free(&extra);
+    s->session[0] = '\0';
+}
+
 static void stop_server(struct server *s)
 {
+    if (s->http) {
+        if (!s->dead) http_stop(s);
+        return;
+    }
     if (s->pid <= 0) return;
     close(s->in_fd);
     close(s->out_fd);
@@ -418,7 +749,7 @@ static void add_tool(int si, cJSON *t, cJSON *auto_approve)
 static void start_server(const char *name, cJSON *cfg)
 {
     struct server *ns, *s;
-    cJSON         *params, *info, *res, *nc;
+    cJSON         *params, *info, *res, *nc, *pv;
     char          *cursor = NULL;
     int            si, pages = 0;
 
@@ -433,7 +764,13 @@ static void start_server(const char *name, cJSON *cfg)
         free(s->name);
         return;
     }
-    if (spawn(s, cfg) != 0) {
+    if (cJSON_IsString(cJSON_GetObjectItem(cfg, "url"))) {
+        if (http_setup(s, cfg) != 0) {
+            buf_free(&s->rx);
+            free(s->name);
+            return;
+        }
+    } else if (spawn(s, cfg) != 0) {
         fprintf(stderr, "gork: MCP server %s: cannot start: %s\n",
                 name, strerror(errno));
         buf_free(&s->rx);
@@ -455,6 +792,9 @@ static void start_server(const char *name, cJSON *cfg)
         stop_server(s);
         return;
     }
+    pv = cJSON_GetObjectItem(res, "protocolVersion");
+    if (cJSON_IsString(pv) && strlen(pv->valuestring) < sizeof s->proto)
+        strcpy(s->proto, pv->valuestring);
     cJSON_Delete(res);
     notify(s, "notifications/initialized");
 
@@ -520,9 +860,10 @@ void mcp_start(const char *path)
 
     cJSON_ArrayForEach(cfg, cJSON_GetObjectItem(root, "mcpServers")) {
         if (cJSON_IsTrue(cJSON_GetObjectItem(cfg, "disabled"))) continue;
-        if (!cJSON_IsString(cJSON_GetObjectItem(cfg, "command"))) {
-            fprintf(stderr, "gork: MCP server %s: no command; only stdio "
-                            "servers are supported\n", cfg->string);
+        if (!cJSON_IsString(cJSON_GetObjectItem(cfg, "command")) &&
+            !cJSON_IsString(cJSON_GetObjectItem(cfg, "url"))) {
+            fprintf(stderr, "gork: MCP server %s: no command and no url\n",
+                    cfg->string);
             continue;
         }
         start_server(cfg->string, cfg);

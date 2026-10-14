@@ -574,7 +574,7 @@ def check_mcp():
 
     assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr}"
     assert "broken: initialize failed" in proc.stderr, proc.stderr
-    assert "remote: no command" in proc.stderr, proc.stderr
+    assert "remote: gork has no TLS" in proc.stderr, proc.stderr
 
     names = [t["name"] for t in turns[0]["tools"]]
     assert names[-2:] == ["mcp__fake__echo", "mcp__fake__fail"], names
@@ -590,6 +590,70 @@ def check_mcp():
     assert res["t1"].get("is_error") and "it broke" in res["t1"]["content"], res["t1"]
 
     print("ok: mcp")
+
+
+def check_mcp_http():
+    """A streamable HTTP server: reached directly by http://, and by https://
+    through a "relay"; its session id and headers go back with each request,
+    events in a reply are taken apart, and the session is deleted at the
+    end."""
+    turns = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            turns.append(json.loads(self.rfile.read(int(self.headers["content-length"]))))
+            if len(turns) == 1:
+                reply(self, {"id": "m1", "stop_reason": "tool_use", "content": [
+                    {"type": "tool_use", "id": "t0", "name": "mcp__web__echo",
+                     "input": {"text": "hi"}},
+                    {"type": "tool_use", "id": "t1", "name": "mcp__tls__fail",
+                     "input": {}}]})
+            else:
+                reply(self, {"id": "m2", "stop_reason": "end_turn",
+                             "content": [{"type": "text", "text": "done"}]})
+
+        def log_message(self, *a):
+            pass
+
+    with tempfile.TemporaryDirectory() as home:
+        log = os.path.join(home, "mcp.log")
+        fake = subprocess.Popen([sys.executable, FAKEMCP, "--http", "8103"],
+                                env=dict(os.environ, FAKEMCP_LOG=log))
+        os.makedirs(os.path.join(home, ".gork"))
+        with open(os.path.join(home, ".gork", "mcp.json"), "w") as f:
+            json.dump({"mcpServers": {
+                "web": {"url": "http://127.0.0.1:8103/mcp",
+                        "headers": {"X-Token": "t1"}},
+                "tls": {"url": "https://mcp.example/mcp",
+                        "relay": "127.0.0.1:8103",
+                        "headers": {"X-Token": "t1"}},
+            }}, f)
+        srv = serve(H, 8104)
+        try:
+            time.sleep(0.5)
+            proc = run_gork(8104, "go", HOME=home)
+        finally:
+            srv.shutdown()
+            fake.kill()
+            fake.wait()
+        notes = open(log).read() if os.path.exists(log) else ""
+
+    assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr}"
+    names = [t["name"] for t in turns[0]["tools"]]
+    for n in ("mcp__web__echo", "mcp__web__fail", "mcp__tls__echo",
+              "mcp__tls__fail"):
+        assert n in names, (names, proc.stderr)
+    res = {r["tool_use_id"]: r for r in turns[1]["messages"][2]["content"]}
+    assert res["t0"]["content"] == "echo: hi\n[image content omitted]\n", res["t0"]
+    assert res["t1"].get("is_error") and "it broke" in res["t1"]["content"], res["t1"]
+    assert "no session" not in notes, notes
+    assert "answer p1" in notes, notes                  # the ping in the events
+    assert "proto 2025-06-18 token t1" in notes, notes
+    assert notes.count("deleted s-1") == 2, notes
+
+    print("ok: mcp over streamable HTTP")
 
 
 # -------------------------------------------------------------- skills
@@ -1514,6 +1578,7 @@ check_list_dir()
 check_trust()
 check_skills()
 check_mcp()
+check_mcp_http()
 check_config()
 check_chunked()
 check_stream()

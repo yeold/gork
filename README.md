@@ -401,8 +401,9 @@ which is what skills use in practice -- not YAML in general.
 
 ### MCP servers
 
-gork is an MCP client for **stdio** servers: local programs it starts and
-talks to over their stdin/stdout. List them in `~/.gork/mcp.json`, in the
+gork is an MCP client for **stdio** servers, local programs it starts and
+talks to over their stdin/stdout, and for **streamable HTTP** servers. List
+them in `~/.gork/mcp.json`, in the
 same `mcpServers` shape Claude Code and Cline use, so existing entries can be
 copied over:
 
@@ -444,8 +445,17 @@ skipped; the others still load. A call that takes longer than `timeout`
 off. Server stderr is discarded unless
 `GORK_TRACE` is set, so its logging doesn't flood the TUI.
 
-HTTP servers (`"url": ...`) are skipped: they are mostly TLS-only, which old
-machines can't speak. Only tools are supported -- not MCP resources, prompts,
+An HTTP server has a `"url"` instead of a `"command"`, and may have
+`"headers"` (a token, say). gork has no TLS: an `https://` server is reached
+through a relay that has, named by `"relay"`, as the API is:
+
+```json
+"web":  { "url": "http://127.0.0.1:10530/mcp" },
+"docs": { "url": "https://mcp.example.com/mcp", "relay": "localhost:8444",
+          "headers": { "Authorization": "Bearer ..." } }
+```
+
+Only tools are supported -- not MCP resources, prompts,
 or sampling. Non-text tool output (images, audio) is replaced by a note.
 
 ### Tools

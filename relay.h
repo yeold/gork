@@ -43,6 +43,23 @@ int relay_post(const char *relay_host, long relay_port,
                const char *body, size_t body_len,
                struct buf *resp);
 
+/*
+ * The same for any request: `method` to `host``path`, through a connection
+ * to conn_host:conn_port (a relay, or the server itself), with `extra`
+ * header lines, each ending in CRLF ("" for none).  If `head_out` is not
+ * NULL and a status comes back, the reply's header block is handed over
+ * there, for relay_header(); it is the caller's to buf_free.
+ */
+int relay_http(const char *method, const char *conn_host, long conn_port,
+               const char *host, const char *path, const char *extra,
+               const char *body, size_t body_len, struct buf *resp,
+               struct buf *head_out);
+
+/* The value of header `name` (lowercase) in a block relay_http handed over,
+   trimmed, into out[size]: 0, or -1 if there is no such header. */
+int relay_header(const struct buf *head, const char *name, char *out,
+                 size_t size);
+
 extern int (*relay_abort)(void);
 
 /* If set, the body of a reply with status 200 is handed to it piece by

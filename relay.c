@@ -215,21 +215,44 @@ static struct {
 
 enum { C_SIZE, C_EXT, C_DATA, C_AFTER, C_TRAILER };
 
-/* The value of header `name` (lowercase), or NULL. */
-static const char *header(const char *name) {
+/* The value of header `name` (lowercase) in the header block p[0..len),
+   or NULL. */
+static const char *header_in(const char *p, size_t len, const char *name) {
   size_t n = strlen(name), i = 0, j;
 
-  while (i < rx.head_len) {
-    for (j = 0; j < n && i + j < rx.head_len; j++)
-      if (tolower((unsigned char)rx.head.p[i + j]) != name[j])
+  while (i < len) {
+    for (j = 0; j < n && i + j < len; j++)
+      if (tolower((unsigned char)p[i + j]) != name[j])
         break;
-    if (j == n && rx.head.p[i + n] == ':')
-      return rx.head.p + i + n + 1;
-    while (i < rx.head_len && rx.head.p[i] != '\n')
+    if (j == n && i + n < len && p[i + n] == ':')
+      return p + i + n + 1;
+    while (i < len && p[i] != '\n')
       i++;
     i++;
   }
   return NULL;
+}
+
+static const char *header(const char *name) {
+  return header_in(rx.head.p, rx.head_len, name);
+}
+
+int relay_header(const struct buf *head, const char *name, char *out,
+                 size_t size) {
+  const char *v = header_in(head->p, head->len, name);
+  size_t n;
+
+  if (v == NULL || size == 0)
+    return -1;
+  v += strspn(v, " \t");
+  n = strcspn(v, "\r\n");
+  while (n > 0 && (v[n - 1] == ' ' || v[n - 1] == '\t'))
+    n--;
+  if (n >= size)
+    n = size - 1;
+  memcpy(out, v, n);
+  out[n] = '\0';
+  return 0;
 }
 
 static int rx_emit(const char *p, size_t n) {
@@ -770,6 +793,31 @@ static int spx_connect(const char *host, int socket_no) {
 int relay_post(const char *relay_host, long relay_port, const char *api_host,
                const char *path, const char *api_key, const char *body,
                size_t body_len, struct buf *resp) {
+  struct buf extra;
+  int status;
+
+  if (buf_init(&extra) != 0 ||
+      (!relay_bearer &&
+       (add(&extra, "anthropic-version: 2023-06-01\r\nx-api-key: ") != 0 ||
+        add(&extra, api_key) != 0 || add(&extra, "\r\n") != 0)) ||
+      (relay_bearer && *api_key != '\0' &&
+       (add(&extra, "Authorization: Bearer ") != 0 ||
+        add(&extra, api_key) != 0 || add(&extra, "\r\n") != 0))) {
+    fprintf(stderr, "gork: out of memory\n");
+    buf_free(&extra);
+    buf_init(resp);             /* initialised either way, as promised */
+    return -1;
+  }
+  status = relay_http("POST", relay_host, relay_port, api_host, path,
+                      extra.p, body, body_len, resp, NULL);
+  buf_free(&extra);
+  return status;
+}
+
+int relay_http(const char *method, const char *conn_host, long conn_port,
+               const char *host, const char *path, const char *extra,
+               const char *body, size_t body_len, struct buf *resp,
+               struct buf *head_out) {
   struct buf head;
   char num[32];
   int fd;
@@ -790,16 +838,12 @@ int relay_post(const char *relay_host, long relay_port, const char *api_host,
      configuration made them. */
   sprintf(num, "%lu", (unsigned long)body_len);
   if (buf_init(&head) != 0 ||
-      add(&head, "POST ") != 0 || add(&head, path) != 0 ||
-      add(&head, " HTTP/1.0\r\nHost: ") != 0 || add(&head, api_host) != 0 ||
+      add(&head, method) != 0 || add(&head, " ") != 0 ||
+      add(&head, path) != 0 ||
+      add(&head, " HTTP/1.0\r\nHost: ") != 0 || add(&head, host) != 0 ||
       add(&head, "\r\nUser-Agent: gork/0\r\n"
                  "Content-Type: application/json\r\n") != 0 ||
-      (!relay_bearer &&
-       (add(&head, "anthropic-version: 2023-06-01\r\nx-api-key: ") != 0 ||
-        add(&head, api_key) != 0 || add(&head, "\r\n") != 0)) ||
-      (relay_bearer && *api_key != '\0' &&
-       (add(&head, "Authorization: Bearer ") != 0 ||
-        add(&head, api_key) != 0 || add(&head, "\r\n") != 0)) ||
+      add(&head, extra) != 0 ||
       add(&head, "Content-Length: ") != 0 || add(&head, num) != 0 ||
       add(&head, "\r\nConnection: close\r\n\r\n") != 0) {
     fprintf(stderr, "gork: out of memory\n");
@@ -813,9 +857,9 @@ int relay_post(const char *relay_host, long relay_port, const char *api_host,
     return -1;
   }
 
-  spx = strncmp(relay_host, "spx:", 4) == 0;
-  fd = spx ? spx_connect(relay_host, (int)relay_port)
-           : tcp_connect(relay_host, relay_port);
+  spx = strncmp(conn_host, "spx:", 4) == 0;
+  fd = spx ? spx_connect(conn_host, (int)conn_port)
+           : tcp_connect(conn_host, conn_port);
   if (fd < 0) {
     buf_free(&head);
     buf_free(&rx.head);
@@ -863,6 +907,12 @@ int relay_post(const char *relay_host, long relay_port, const char *api_host,
   if (getenv("GORK_TRACE") != NULL)
     fwrite(rx.head.p, 1, rx.head_len, stderr);
 
+  if (head_out != NULL) {       /* the caller's now, headers only */
+    rx.head.len = rx.head_len;
+    rx.head.p[rx.head_len] = '\0';
+    *head_out = rx.head;
+    return status;
+  }
   buf_free(&rx.head);
   return status;
 }
