@@ -24,7 +24,10 @@ which hangs on 4.01.
 Name a gork-relay binary (https://github.com/yeold/gork-relay) in
 $GORK_RELAY to check SPX as well: the guest then loads PDIPX, Novell's
 IPX and SPX on the packet driver, and its network card is also wired to
-that relay, which passes what it gets on to the fake API.  With
+that relay, which passes what it gets on to the fake API.  Name a
+directory holding HIMEM.SYS and EMM386.EXE (Windows 3.1's, say) in
+$GORK_DOS_EMM386, with $GORK_DOS_FLOPPY, to boot as a machine of the time
+did: both loaded, DOS high, and the packet driver in upper memory.  With
 $GORK_DOS_ODI set as well it loads Novell's ODI stack instead: LSL, the
 NE2000 MLID and IPXODI, with ODIPKT for the packet driver Watt-32 needs.
 Set $GORK_DOS_SMALL_DISKS for MS-DOS 3.30, 4.01, DR-DOS 7.03 and the like,
@@ -49,6 +52,7 @@ SMALL = FAT12 or bool(os.environ.get("GORK_DOS_SMALL_DISKS"))
 # nothing either): there gork.exe is found along PATH.
 GORK = "gork" if FAT12 else "..\\gork"
 ODI = RELAY and bool(os.environ.get("GORK_DOS_ODI"))
+EMM386 = os.environ.get("GORK_DOS_EMM386")     # a directory: HIMEM, EMM386
 WINDOWS = os.environ.get("GORK_DOS_WINDOWS")
 # Windows 1 or 2: real mode
 WINDOWS2 = bool(WINDOWS and any(os.path.exists(os.path.join(WINDOWS, n))
@@ -319,6 +323,12 @@ def build_images(zip_path):
         # later unless WINA20.386 is in the boot drive's root, where the
         # floppy has no room.  With DOS not in the HMA it is not needed.
         himem = "DEVICE=C:\\WINDOWS\\HIMEM.SYS\nSWITCHES=/W\n"
+    if EMM386:
+        for n in ("HIMEM.SYS", "EMM386.EXE"):
+            shutil.copy(os.path.join(EMM386, n), c)
+        himem = ("DEVICE=C:\\HIMEM.SYS\nDEVICE=C:\\EMM386.EXE NOEMS\n"
+                 "DOS=HIGH,UMB\n")
+        rest = rest.replace("NE2000 0x60", "LH NE2000 0x60")
     if other:                           # e.g. MS-DOS 6.22 install disk 1
         shutil.copy(other, boot)
         startup = {
