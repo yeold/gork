@@ -47,7 +47,7 @@ of `testing/looptest.py`.
 | AIX | AIX PS/2 1.3 (1992, MetaWare High C), in 86Box, over loopback only | | AIX on POWER: untested |
 | HP-UX | 11i v1 (11.11, 2000) on PA-RISC, cross-compiled with gcc 12.4, assembled and linked on HP-UX | | 10.20, 11i v2 and v3: untested |
 | Minix | 3.3.0 (2014, clang 3.4) | | |
-| OS/2 | Warp 4.52 (2002), with EMX 0.9d (gcc 2.8.1) and PDCurses 3.4 | | Warp 3, eComStation, ArcaOS: untested |
+| OS/2 | Warp 3 Connect (1995), with EMX 0.9d (gcc 2.8.1) and PDCurses 3.4 | Warp 4.52 | eComStation, ArcaOS: untested |
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | Haiku | R1/beta6 | | Older releases: may work, untested |
 | macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |

@@ -425,6 +425,17 @@ and MCP over HTTP work, tested in QEMU from a text-mode boot
 (`PROTSHELL=C:\OS2\CMD.EXE`): Warp 4.52's generic VESA driver crashes
 there, so the desktop was never up.
 
+**OS/2 Warp 3** builds the same way, with the same EMX and PDCurses. It
+has to be Warp Connect: plain Warp 3 has only the dial-up stack of the
+Internet Access Kit. Its TCP/IP comes with MPTS (`C:\MPTN\DLL` holds
+`so32dll.dll` and `tcp32dll.dll`), and its `gethostbyname()` does not take
+a numeric address, so on OS/2 gork tries `inet_addr()` first. Here
+`C:\EMX\DLL` went on `LIBPATH` in `CONFIG.SYS`, and the gork command
+had `-x c` before the sources and `-x none` before `pdcurses.a`, as the
+files came from a CD. Tested the same way as 4.52, from a text-mode
+boot. Its `CMD.EXE` ignores the number in `exit 3`, so `run_command`
+reports a different exit code there.
+
 ## DOS
 
 Experimental; [TODO-DOS.md](TODO-DOS.md) has what is left.

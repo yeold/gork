@@ -512,9 +512,9 @@ static int tcp_connect(const char *host, long port) {
 #endif
 
   memset(&addr, 0, sizeof addr);
-#if defined(_WIN32) || defined(GORK_AIXPS2)
-  /* gethostbyname() on Windows 9x and AIX PS/2 does not take a numeric
-     address. */
+#if defined(_WIN32) || defined(GORK_AIXPS2) || defined(__EMX__)
+  /* gethostbyname() on Windows 9x, AIX PS/2 and OS/2 Warp 3 does not take
+     a numeric address. */
   addr.sin_addr.s_addr = inet_addr(host);
   if (addr.sin_addr.s_addr == INADDR_NONE)
 #endif
