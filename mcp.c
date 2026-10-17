@@ -24,6 +24,7 @@
 #include <sys/time.h>
 #include <sys/wait.h>
 
+#include "port.h"
 #include "relay.h"              /* struct buf */
 #include "mcp.h"
 

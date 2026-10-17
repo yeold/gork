@@ -39,6 +39,23 @@ char *strerror(int errnum);
 char *realpath(const char *path, char *out);
 #endif
 
+/* OS/2 with EMX: Unix enough to fork, but paths are DOS paths (drive
+   letters, either slash, any case), there are no symbolic links and no
+   job control. */
+#ifdef __EMX__
+#define GORK_EMX
+#include <sys/select.h>
+/* realpath(): absolute, with forward slashes, ENOENT if nothing is there
+   (main.c), as on Windows. */
+char *os2_realpath(const char *path, char *out);
+#define realpath       os2_realpath
+#define lstat          stat
+#define S_ISLNK(m)     0
+#define SIGTTOU        0        /* never raised: run_command is never fg */
+/* ponytail: kills the shell only, not commands it started. */
+#define killpg(p, sig) kill(p, sig)
+#endif
+
 #ifdef GORK_DOS16
 /* realpath(): absolute, lower case, with forward slashes, as DJGPP's. */
 char *dos16_realpath(const char *path, char *out);

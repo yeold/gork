@@ -32,7 +32,7 @@ are taken to work too.
 
 | OS | Route | What to expect |
 |---|---|---|
-| OS/2 (Warp 3 and 4, ArcaOS) | EMX with gcc, or kLIBC; runs in QEMU | EMX has `fork`, pipes, sockets and a curses port, so it is nearer to Unix than DOS is. |
+| OS/2 Warp 3 | EMX with gcc; runs in QEMU | Warp 4.52 works with EMX (README); Warp 3 should build the same way, with its own TCP/IP stack to check. |
 | BeOS R5 | x86 in QEMU | Haiku already works. BeOS has gcc 2.95 and sockets that are not file descriptors, so `select` on them is the risk. |
 | AmigaOS, MorphOS, AROS | ixemul or libnix with gcc; UAE, or AROS in QEMU | `fork` is emulated badly or not at all; sockets come from `bsdsocket.library`. |
 | z/OS (UNIX System Services) | No emulator route that is both free and licensed: Hercules runs z/OS, but only with IBM's media (ZD&T, a paid licence). IBM Z Xplore gives free shell accounts on a real z/OS; whether a compiler and outbound TCP are allowed there is the first thing to find out. The public-domain MVS 3.8j (TK4-, TK5) has no USS and is a different job. | USS is a certified Unix: `fork`, BSD sockets, `select`, `realpath` and a curses library are there, and the compiler is `xlc`/`c89` or `ibm-clang`. The wall is EBCDIC: character constants in the source become EBCDIC, while the HTTP headers and the JSON on the wire are ASCII, so gork must be built in ASCII mode (`-qascii` with `xlc`, `-fzos-le-char-mode=ascii` with `ibm-clang`) and its files tagged, or every literal compared against the network breaks. Expect curses and the terminal (3270 or an ssh pty, in EBCDIC) to be the next problem; start with batch mode. |
@@ -64,7 +64,7 @@ reachable from C. These have them and are not listed above.
 | Darwin / PureDarwin, iOS (jailbroken), Android (Termux, bionic libc) | Unix underneath; Termux has clang and ncurses packages. |
 | SerenityOS, Redox, Managarm, ToaruOS, Sortix | Hobby Unix-likes with a POSIX libc, sockets and an ncurses port; each is a small-libc test. |
 | ReactOS | Aims at NT compatibility; a native Windows build should run there. |
-| eComStation, ArcaOS | OS/2 descendants; same EMX/kLIBC route as OS/2. |
+| eComStation, ArcaOS | OS/2 descendants; the EMX build of Warp 4.52 should run, and kLIBC is the newer route. |
 | Xenix, Coherent, 386BSD, BSD/OS, 4.3BSD on VAX (SIMH) | Old Unix with TCP/IP. Expect the `realpath` wall that stopped FreeBSD 1.x on the Net/2-era ones. |
 | Domain/OS, DG/UX, Dynix/ptx, NEWS-OS, UNICOS, Sinix | Vendor Unix; media and emulators are the obstacle, not the code. |
 | VxWorks, RTEMS, LynxOS, eCos, NuttX, Zephyr | Real-time systems with BSD-style sockets and a C toolchain, but no `fork` and usually no curses: batch mode at most. |
@@ -75,7 +75,7 @@ reachable from C. These have them and are not listed above.
 ## Suggested order
 
 1. AIX and HP-UX in QEMU: System V variety beyond Solaris, and both emulate.
-2. OS/2 with EMX: nearer to Unix than DOS is.
+2. OS/2 Warp 3 and ArcaOS: Warp 4.52 works with EMX.
 3. IRIX, NeXTSTEP, SunOS 4, Minix 2: these depend on hardware or slow
    emulators.
 4. Plan 9: batch mode only as a first goal.

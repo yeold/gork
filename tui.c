@@ -44,8 +44,10 @@ struct line {
 
 static int          active;
 static int          cap_rfd = -1, saved_out = -1, saved_err = -1;
+#if defined(GORK_NO_FORK) || defined(GORK_EMX)
+static char         cap_name[TMPNAM_MAX];   /* DOS and OS/2 cannot unlink */
+#endif                                      /* a file that is open */
 #ifdef GORK_NO_FORK
-static char         cap_name[TMPNAM_MAX];   /* DOS cannot unlink it open */
 static long         cap_off;                /* how far it has been read */
 #endif
 static struct buf   partial;            /* captured output not yet a line */
@@ -137,11 +139,11 @@ static void put(int y, int x, const char *s, int n)
     waddnstr(stdscr, (char *) s, n);
 }
 
-/* Is `c` a byte inside a UTF-8 character, not its first?  Never on DOS
-   and Windows, where the keyboard gives one byte for each character. */
+/* Is `c` a byte inside a UTF-8 character, not its first?  Never on DOS,
+   Windows and OS/2, where the keyboard gives one byte for each character. */
 static int is_cont(char c)
 {
-#if defined(GORK_NO_FORK)
+#if defined(GORK_NO_FORK) || defined(GORK_EMX)
     (void) c;
     return 0;
 #else
@@ -303,6 +305,8 @@ int tui_init(const char *status, const char *title)
 {
 #ifdef GORK_NO_FORK
     char *name = cap_name;
+#elif defined(GORK_EMX)
+    char *name = cap_name, *dir = getenv("TMP");
 #else
     char  name[] = "/tmp/gorkXXXXXX";
 #endif
@@ -320,11 +324,16 @@ int tui_init(const char *status, const char *title)
     fd = tmpnam(name) != NULL ? open(name, O_WRONLY | O_CREAT | O_EXCL, 0600)
                               : -1;
 #else
+#ifdef GORK_EMX                         /* no /tmp: %TMP%, or here */
+    if (dir == NULL) dir = getenv("TEMP");
+    if (dir == NULL || strlen(dir) + 16 > sizeof cap_name) dir = ".";
+    sprintf(name, "%s/gorkXXXXXX", dir);
+#endif
     fd = mkstemp(name);
 #endif
     if (fd < 0) return -1;
     cap_rfd = open(name, O_RDONLY);     /* own offset, independent of writers */
-#ifndef GORK_NO_FORK
+#if !defined(GORK_NO_FORK) && !defined(GORK_EMX)
     unlink(name);
 #endif
 
@@ -384,7 +393,8 @@ void tui_end(void)
 {
     if (!active) return;
     active = 0;
-#ifdef GORK_NO_FORK         /* no alternate screen to switch back from */
+#if defined(GORK_NO_FORK) || defined(GORK_EMX)   /* PDCurses: no alternate
+                                                    screen to switch back from */
     clear();
     refresh();
 #endif
@@ -397,7 +407,7 @@ void tui_end(void)
     fflush(stderr);
     dup2(saved_out, 1);
     dup2(saved_err, 2);
-#ifdef GORK_NO_FORK
+#if defined(GORK_NO_FORK) || defined(GORK_EMX)
     close(cap_rfd);
     remove(cap_name);
 #endif
@@ -689,21 +699,23 @@ int tui_confirm(const char *title, const char *detail)
    reader that tells them apart would have to steal the prompts' input. */
 void tui_suspend(void)
 {
-#if !defined(_WIN32) && !defined(GORK_DOS16)
+#if !defined(_WIN32) && !defined(GORK_DOS16) && !defined(GORK_EMX)
     struct termios t;
 #endif
 
     if (!active) return;
 #ifdef __MSDOS__
     hint_text = "running command ... (DOS cannot interrupt it)";
-#elif defined(_WIN32)
+#elif defined(_WIN32) || defined(GORK_EMX)
     hint_text = "running command ... (it cannot be interrupted)";
 #else
     hint_text = "running command ... (answer any prompt it shows; Esc aborts)";
 #endif
     draw();
     reset_shell_mode();
-#if !defined(_WIN32) && !defined(GORK_DOS16)
+    /* Not on OS/2: termios on the console makes emx.dll read the keyboard
+       itself, and it goes on taking every other key from PDCurses. */
+#if !defined(_WIN32) && !defined(GORK_DOS16) && !defined(GORK_EMX)
     if (tcgetattr(0, &t) == 0) {
         t.c_cc[VINTR] = 27;
         tcsetattr(0, TCSANOW, &t);

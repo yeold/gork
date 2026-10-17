@@ -42,6 +42,7 @@ machine.
 | FreeBSD 2.0 and 2.0.5, NetBSD 1.0, OpenBSD 2.0 | QEMU | Real hardware |
 | Solaris 2.5.1, 2.6 and 10, OpenSolaris 134, OmniOS | QEMU (x86) | SPARC, which is what most of these ran on |
 | Minix 3.3.0, GNU/Hurd, DragonFly BSD, MidnightBSD | QEMU | Real hardware |
+| OS/2 Warp 4.52 | QEMU, booted to a text-mode `CMD.EXE` (no desktop), fake API and MCP server across QEMU's user network | Real hardware; a VIO window on the desktop; a FAT boot disk |
 | AIX PS/2 1.3 | 86Box (PS/2 Model 80), against a fake API on the same machine over loopback | Any network at all. AIX PS/2's one Ethernet driver wants a 3Com 3C523 EtherLink/MC, which 86Box does not emulate; adding that card to 86Box would let the emulator test it |
 | Linux on s390x, armhf, arm64, ppc64el, riscv64, m68k, powerpc, hppa | QEMU's user-mode emulation: the suite only, on the host's kernel | The machines themselves, and the TUI on them |
 | OpenBSD 7.9 on SPARC64 | QEMU, batch checks | The TUI; a real machine |

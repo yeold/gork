@@ -137,6 +137,31 @@ char *dos16_realpath(const char *path, char *out)
 }
 #endif
 
+#ifdef GORK_EMX
+/* EMX's _fullpath() adds the drive and current directory and takes "."
+   and ".." out; existence is checked here. */
+char *os2_realpath(const char *path, char *out)
+{
+    struct stat st;
+    size_t      n;
+    char       *p;
+
+    if (_fullpath(out, path, PATH_MAX) != 0) {
+        errno = ENAMETOOLONG;
+        return NULL;
+    }
+    for (p = out; *p != '\0'; p++)
+        if (*p == '\\') *p = '/';
+    n = strlen(out);
+    if (n > 3 && out[n - 1] == '/') out[n - 1] = '\0';     /* not "c:/" */
+    if (stat(out, &st) != 0) {
+        errno = ENOENT;
+        return NULL;
+    }
+    return out;
+}
+#endif
+
 /* configure passes VERSION; this is for builds by hand and Makefile.dj.
    Bumped with configure.ac at each release. */
 #ifndef VERSION
@@ -168,14 +193,18 @@ char *dos16_realpath(const char *path, char *out)
    bare newlines, the files keep their CR LF. */
 #define RB "r"
 #define WB "w"
+#elif defined(GORK_EMX)        /* OS/2: drive letters, CR LF, but fork */
+#define ALLOW_SEP ";"
+#define RB "r"
+#define WB "w"
 #else
 #define ALLOW_SEP ":"
 #define RB "rb"
 #define WB "wb"
 #endif
 
-/* Windows file names do not tell upper case from lower. */
-#ifdef _WIN32
+/* Windows and OS/2 file names do not tell upper case from lower. */
+#if defined(_WIN32) || defined(GORK_EMX)
 #define PATHNCMP strnicmp
 #else
 #define PATHNCMP strncmp
@@ -441,11 +470,11 @@ static int load_config(void)
     }
 
     /* The key is a secret: refuse a file others can read, as ssh does.
-       DOS and Windows have no such modes; every file reads as 0644.  Nor
-       under Cygwin: a file made by a Windows program in the user's own
+       DOS, Windows and OS/2 have no such modes; every file reads as 0644.
+       Nor under Cygwin: a file made by a Windows program in the user's own
        profile shows group bits, for the access SYSTEM and the
        administrators have, and the packaged build has no chmod. */
-#if !defined(GORK_NO_FORK) && !defined(__CYGWIN__)
+#if !defined(GORK_NO_FORK) && !defined(__CYGWIN__) && !defined(GORK_EMX)
     if (cfg_file[CFG_KEY] != NULL && fstat(fileno(f), &st) == 0 &&
         (st.st_mode & 077) != 0) {
         fprintf(stderr, "gork: %s holds api_key but others can read it; "
@@ -539,7 +568,7 @@ static const char *confine(const char *path, char *out, int writing)
     size_t      n;
     struct stat st;
     int         i;
-#ifdef _WIN32           /* the model may write either slash */
+#if defined(_WIN32) || defined(GORK_EMX)  /* the model may write either slash */
     char        norm[PATH_MAX];
 
     if (strlen(path) >= sizeof norm) return "path too long";
@@ -557,7 +586,7 @@ static const char *confine(const char *path, char *out, int writing)
             base = path;
         } else {
             n = (base == path) ? 1 : (size_t) (base - path);   /* "/x" -> "/" */
-#ifdef GORK_NO_FORK
+#if defined(GORK_NO_FORK) || defined(GORK_EMX)
             if (n == 2 && path[1] == ':') n = 3;        /* "c:/x" -> "c:/" */
 #endif
             if (n >= sizeof dir) return "path too long";
@@ -600,9 +629,9 @@ static const char *save_file(const char *real, const char *data, size_t n)
 
     if (strlen(real) + 11 >= sizeof tmp) return "path too long";
     strcpy(tmp, real);
-#ifdef GORK_NO_FORK
+#if defined(GORK_NO_FORK) || defined(GORK_EMX)
     {   /* DOS has one extension only, and so has a FAT disk under Windows
-           NT 3.1: NAME.EXT is written as NAME.g$$ */
+           NT 3.1 or OS/2: NAME.EXT is written as NAME.g$$ */
         char *dot = strrchr(tmp, '.'), *sl = strrchr(tmp, '/');
         if (dot != NULL && (sl == NULL || dot > sl)) *dot = '\0';
         strcat(tmp, ".g$$");
@@ -627,7 +656,7 @@ static const char *save_file(const char *real, const char *data, size_t n)
         fclose(f);
         goto fail;
     }
-#ifndef GORK_NO_FORK
+#if !defined(GORK_NO_FORK) && !defined(GORK_EMX)     /* EMX has no fchmod */
     /* the old file's mode, set on the open file: by name, something else
        could be standing there by now */
     if (stat(real, &st) == 0) fchmod(fd, st.st_mode & 07777);
@@ -636,10 +665,10 @@ static const char *save_file(const char *real, const char *data, size_t n)
         e = errno;
         goto fail;
     }
-#ifdef GORK_NO_FORK
+#if defined(GORK_NO_FORK) || defined(GORK_EMX)
     if (stat(real, &st) == 0) chmod(tmp, st.st_mode & 07777);
 #endif
-#if defined(_WIN32) || defined(GORK_DOS16)
+#if defined(_WIN32) || defined(GORK_DOS16) || defined(GORK_EMX)
     /* rename() does not replace a file here.  ponytail: not atomic; if the
        second rename fails the old file is gone. */
     if (rename(tmp, real) != 0 && (remove(real) != 0 || rename(tmp, real) != 0)) {
@@ -1125,8 +1154,12 @@ static char *tool_run_command(cJSON *input, int *is_err)
 
     fprintf(stderr, "[run] %s\n", cmd->valuestring);
     tui_drain();
+#ifdef GORK_EMX
+    tty = -1;                   /* OS/2 has no job control: never fg */
+#else
     tty = open("/dev/tty", O_RDWR);
     if (tty >= 0 && tcgetpgrp(tty) == getpgrp()) fg = 1;
+#endif
     if (pipe(out) != 0) {
         sprintf(msg, "error: cannot start shell: %s", strerror(errno));
         goto fail;
@@ -1147,7 +1180,16 @@ static char *tool_run_command(cJSON *input, int *is_err)
         dup2(out[1], 2);
         close(out[0]);
         close(out[1]);
+#ifdef GORK_EMX
+        {
+            const char *sh = getenv("COMSPEC");
+
+            if (sh == NULL) sh = "cmd.exe";
+            execlp(sh, sh, "/c", cmd->valuestring, (char *) NULL);
+        }
+#else
         execl("/bin/sh", "sh", "-c", cmd->valuestring, (char *) NULL);
+#endif
         _exit(127);
     }
     close(out[1]);
@@ -1460,6 +1502,9 @@ static const struct tool TOOLS[] = {
 #elif defined(_WIN32)
                       "\"description\":\"Command line for Windows "
                       "(cmd.exe; COMMAND.COM on Windows 9x).\"}},"
+#elif defined(GORK_EMX)
+                      "\"description\":\"Command line for OS/2 "
+                      "(cmd.exe).\"}},"
 #elif defined(__CYGWIN__)
                       "\"description\":\"Command line for /bin/sh, on "
                       "Windows (Cygwin): Windows programs can be run; the "
