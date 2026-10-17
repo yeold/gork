@@ -44,6 +44,7 @@ of `testing/looptest.py`.
 | MidnightBSD | 4.0.8 (clang 19) | | |
 | Solaris | 2.5.1 (1996, gcc 2.7.2) | 2.6, 10 | 2.4: its kernel panics at boot in QEMU, so untested |
 | illumos | OpenSolaris build 134 (2010, gcc 3.4.3) | OmniOS r151058, with the system curses or ncurses | |
+| AIX | AIX PS/2 1.3 (1992, MetaWare High C), in 86Box, over loopback only | | AIX on POWER: untested |
 | Minix | 3.3.0 (2014, clang 3.4) | | |
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | Haiku | R1/beta6 | | Older releases: may work, untested |

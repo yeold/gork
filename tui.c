@@ -337,8 +337,10 @@ int tui_init(const char *status, const char *title)
     if (getenv("PDC_RESTORE_SCREEN") == NULL) putenv("PDC_RESTORE_SCREEN=0");
     win_own_console();
 #endif
+    /* $TERM spelled out: AIX PS/2's curses fails on NULL, which elsewhere
+       means the same thing. */
     if (cap_rfd < 0 || saved_out < 0 || saved_err < 0 || tty == NULL ||
-        newterm(NULL, tty, stdin) == NULL) {
+        newterm(getenv("TERM"), tty, stdin) == NULL) {
         close(fd);
         return -1;
     }
@@ -358,6 +360,7 @@ int tui_init(const char *status, const char *title)
     style_attr[ST_TOOL]   = A_DIM;
     style_attr[ST_NOTE]   = A_BOLD;
     style_attr[ST_DETAIL] = A_DIM;
+#ifdef COLOR_BLACK                      /* AIX PS/2's curses has no colour */
     if (has_colors()) {
         start_color();
         init_pair(1, COLOR_CYAN, COLOR_BLACK);
@@ -365,6 +368,7 @@ int tui_init(const char *status, const char *title)
         style_attr[ST_TOOL] = COLOR_PAIR(1);
         style_attr[ST_NOTE] = COLOR_PAIR(2);
     }
+#endif
 
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);

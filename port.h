@@ -29,6 +29,16 @@
 #define GORK_BARE
 #endif
 
+/* AIX PS/2 1.3 (MetaWare High C): no ssize_t, strerror is not declared,
+   libc has no realpath, memmove or strtoul and curses no waddnstr or
+   hline; aixps2.c supplies them. */
+#if defined(_AIX) && defined(_I386)
+#define GORK_AIXPS2
+typedef int ssize_t;
+char *strerror(int errnum);
+char *realpath(const char *path, char *out);
+#endif
+
 #ifdef GORK_DOS16
 /* realpath(): absolute, lower case, with forward slashes, as DJGPP's. */
 char *dos16_realpath(const char *path, char *out);

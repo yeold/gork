@@ -27,6 +27,12 @@
 #include <sys/time.h>
 #include <unistd.h>
 #endif
+#ifdef GORK_AIXPS2
+#include <arpa/inet.h>
+#ifndef INADDR_NONE
+#define INADDR_NONE 0xffffffffUL
+#endif
+#endif
 
 #include "relay.h"
 
@@ -506,8 +512,9 @@ static int tcp_connect(const char *host, long port) {
 #endif
 
   memset(&addr, 0, sizeof addr);
-#ifdef _WIN32
-  /* gethostbyname() on Windows 9x does not take a numeric address. */
+#if defined(_WIN32) || defined(GORK_AIXPS2)
+  /* gethostbyname() on Windows 9x and AIX PS/2 does not take a numeric
+     address. */
   addr.sin_addr.s_addr = inet_addr(host);
   if (addr.sin_addr.s_addr == INADDR_NONE)
 #endif
