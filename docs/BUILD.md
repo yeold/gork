@@ -273,6 +273,50 @@ Model 80) against a fake API over loopback only: 86Box has no network
 card that AIX PS/2 has a driver for (see [TODO-REAL.md](TODO-REAL.md)).
 AIX on POWER is untested.
 
+## HP-UX
+
+**HP-UX 11i v1 (11.11)** on PA-RISC 1.1. The bundled `cc` is K&R only,
+and the gcc depots that can still be found are built for PA-RISC 2.0. On
+a PA-RISC 2.0 machine with gcc installed, the
+[Everywhere](#everywhere) route should work, but it has not been tried.
+
+What was tried is a cross compiler that stops at assembly, with the
+system's own `as` and `ld` doing the rest. gcc 12 is the last release
+that targets 32-bit HP-UX 11. Build only the compiler, on Linux:
+
+```sh
+CXX="g++ -std=gnu++14" ../gcc-12.4.0/configure \
+    --target=hppa1.1-hp-hpux11.11 --enable-obsolete --enable-languages=c \
+    --without-headers --without-gnu-as --without-gnu-ld \
+    --disable-shared --disable-threads --disable-nls --prefix=$HOME/cross
+make all-gcc && make install-gcc
+```
+
+Copy `/usr/include` from the HP-UX system to `sysroot/usr/include`, then
+compile each source to assembly. `-mno-gas` makes the output something
+HP's assembler accepts:
+
+```sh
+G=$HOME/cross/bin/hppa1.1-hp-hpux11.11-gcc
+I=$HOME/cross/lib/gcc/hppa1.1-hp-hpux11.11/12.4.0/include
+for f in main relay tui mcp cJSON/cJSON; do
+    $G -O2 -mno-gas -std=gnu89 -nostdinc -isystem $I \
+       -isystem sysroot/usr/include -I. -S $f.c -o $(basename $f).s
+done
+```
+
+On HP-UX, assemble and link:
+
+```sh
+for f in main relay tui mcp cJSON; do /usr/ccs/bin/as -o $f.o $f.s; done
+cc -o gork main.o relay.o tui.o mcp.o cJSON.o -lcurses -lm
+```
+
+The code calls nothing from libgcc, only HP's millicode, which `cc`
+links in. Batch mode, the TUI (`TERM=vt100` on the serial console) and
+MCP over HTTP work. They were tested in QEMU's B160L, with the fake API
+across QEMU's user network.
+
 ## Minix
 
 **Minix 3.3.0.** The base system has make and curses but no compiler.

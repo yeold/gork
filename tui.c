@@ -26,6 +26,8 @@
 #include <termios.h>
 #endif
 #include <curses.h>
+#undef lines                    /* HP-UX: term.h macros */
+#undef columns
 
 #include "relay.h"              /* struct buf */
 #include "tui.h"

@@ -16,7 +16,7 @@ are taken to work too.
 | OS | How to run it | What to expect |
 |---|---|---|
 | AIX on POWER (4.3, 5.x, 7.x) | QEMU `ppc64` runs AIX 7.2; older wants real RS/6000 hardware | System V curses as on Solaris. Needs gcc from the AIX Toolbox, or `xlc`. Sockets are in libc. AIX PS/2 1.3 works (README); its fixes are under `GORK_AIXPS2`, which needs `_I386`, so they stay off here. |
-| HP-UX (10.20, 11.x) | QEMU `hppa` runs 10.20 to 11.11; Itanium needs real hardware. 11.11 was installed in QEMU, but no compiler for its PA-RISC 1.1 processor could be found | System V curses (`-lcurses`, `-lHcurses` on old releases). The bundled `cc` is K&R only, so gcc is needed. |
+| HP-UX 10.20, 11i v3 | QEMU `hppa` runs 10.20; 11i v3 wants a PA-RISC 2.0 or Itanium machine | 11.11 works, cross-compiled (README). 10.20 should build the same way with gcc 12's `hppa1.1-hp-hpux10.20` target, if that still builds. |
 | IRIX (5.3, 6.5) | No good emulator; MAME's Indy boots but is slow. Real SGI hardware is the practical route | System V curses, MIPSpro `cc` or gcc. Should be close to Solaris. |
 | Minix 2.0 | x86 in QEMU | It has its own small libc: check `select`, `realpath` and curses first. |
 | Tru64 / OSF/1 | Alpha emulation in QEMU is limited; real hardware | Similar to the other System V systems. |
@@ -74,7 +74,7 @@ reachable from C. These have them and are not listed above.
 
 ## Suggested order
 
-1. AIX and HP-UX in QEMU: System V variety beyond Solaris, and both emulate.
+1. AIX on POWER in QEMU: System V variety beyond Solaris. HP-UX 11.11 works.
 2. OS/2 Warp 3 and ArcaOS: Warp 4.52 works with EMX.
 3. IRIX, NeXTSTEP, SunOS 4, Minix 2: these depend on hardware or slow
    emulators.

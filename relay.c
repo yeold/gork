@@ -27,7 +27,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #endif
-#ifdef GORK_AIXPS2
+#if defined(GORK_AIXPS2) || defined(__hpux)  /* htons, inet_addr */
 #include <arpa/inet.h>
 #ifndef INADDR_NONE
 #define INADDR_NONE 0xffffffffUL
