@@ -114,3 +114,10 @@ its header lists what else it can boot (other DOS versions, Windows 1 to
 Cygwin.
 
 `testing/fakemcp.py` is the stdio MCP server the MCP check runs against.
+
+`testing/fakeapi.c` is a fake Messages API in plain C89, for guests that
+cannot reach the host or run Python (AIX PS/2 used it over loopback). It
+listens on 127.0.0.1 (port 8099, or the first argument); a turn starting
+with "go" gets `list_dir`, `write_file`, `read_file` and `run_command`
+calls, anything else a short text reply. Request bodies go to
+`fakeapi.log`.
