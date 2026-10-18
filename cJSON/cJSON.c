@@ -85,6 +85,21 @@
 #endif
 #endif
 
+/* SunOS 4: sprintf returns the buffer, not the length. */
+#if defined(__sun__) && !defined(__SVR4) && !defined(__svr4__)
+#include <stdarg.h>
+static int sunos4_sprintf(char *buf, const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsprintf(buf, fmt, ap);
+    va_end(ap);
+    return (int) strlen(buf);
+}
+#define sprintf sunos4_sprintf
+#endif
+
 typedef struct {
     const unsigned char *json;
     size_t position;

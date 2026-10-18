@@ -38,7 +38,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 #endif
-#if defined(GORK_AIXPS2) || defined(__hpux) || defined(GORK_NEXT)
+#if defined(GORK_AIXPS2) || defined(__hpux) || defined(GORK_NEXT) || \
+    defined(GORK_SUNOS4)
 /* htons, inet_addr */
 #include <arpa/inet.h>
 #ifndef INADDR_NONE
@@ -559,9 +560,9 @@ static int tcp_connect(const char *host, long port) {
 
   memset(&addr, 0, sizeof addr);
 #if defined(_WIN32) || defined(GORK_AIXPS2) || defined(__EMX__) || \
-    defined(GORK_NEXT)
-  /* gethostbyname() on Windows 9x, AIX PS/2, OS/2 Warp 3 and OPENSTEP
-     does not take a numeric address. */
+    defined(GORK_NEXT) || defined(GORK_SUNOS4)
+  /* gethostbyname() on Windows 9x, AIX PS/2, OS/2 Warp 3, OPENSTEP and
+     SunOS 4 does not take a numeric address. */
   addr.sin_addr.s_addr = inet_addr(host);
   if (addr.sin_addr.s_addr == INADDR_NONE)
 #endif

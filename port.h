@@ -71,6 +71,26 @@ int   killpg(int pgrp, int sig);
 #endif
 #endif
 
+/* SunOS 4.1 (gcc; Solaris is SunOS 5 and defines __SVR4): libc has no
+   memmove, raise, strerror or strtoul; sunos4.c supplies them.  Its
+   headers have no ssize_t and leave out what returns a pointer.  Its
+   realloc(NULL, n) returns NULL instead of acting as malloc, and its
+   getpgrp is the BSD one, which takes a pid (0 for this process). */
+#if defined(__sun__) && !defined(__SVR4) && !defined(__svr4__)
+#define GORK_SUNOS4
+#include <sys/types.h>
+typedef int ssize_t;
+char         *strerror(int errnum);
+unsigned long strtoul(const char *s, char **end, int base);
+char         *realpath(const char *path, char *out);
+void         *memchr(const void *s, int c, size_t n);
+void         *memmove(void *dst, const void *src, size_t n);
+void         *sunos4_realloc(void *p, size_t n);
+#define realloc sunos4_realloc
+pid_t         sunos4_getpgrp(void);
+#define getpgrp sunos4_getpgrp
+#endif
+
 /* OS/2 with EMX: Unix enough to fork, but paths are DOS paths (drive
    letters, either slash, any case), there are no symbolic links and no
    job control. */
