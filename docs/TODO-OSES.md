@@ -20,7 +20,6 @@ are taken to work too.
 | IRIX (5.3, 6.5) | No good emulator; MAME's Indy boots but is slow. Real SGI hardware is the practical route | System V curses, MIPSpro `cc` or gcc. Should be close to Solaris. |
 | Tru64 / OSF/1 | Alpha emulation in QEMU is limited; real hardware | Similar to the other System V systems. |
 | UnixWare, SCO OpenServer | x86 in QEMU | SVR4 and SVR3 curses; old SCO needs `-lsocket`, which `configure` already looks for. |
-| NeXTSTEP / OPENSTEP | x86 in QEMU, or the Previous emulator for 68k | 4.3BSD base with BSD curses only, so ncurses must be added as on NetBSD 1.0. |
 | SunOS 4, Ultrix, A/UX | QEMU `sparc` (SunOS 4.1.4), SIMH (VAX Ultrix), Shoebill (A/UX) | Pre-ANSI bundled compilers, so gcc. SunOS 4's libc lacks `strerror` and `memmove`. |
 | m68k Macintosh, with a Unix on it | QEMU's `q800` machine (a Quadra 800) runs Linux/m68k and NetBSD/mac68k, and newer QEMU is said to boot A/UX 3; Shoebill runs A/UX on an emulated Mac II. Not checked which of these work here | Linux/m68k (Debian ports) and NetBSD/mac68k should be `configure` and `make`, and would be the first 32-bit big-endian results. A/UX is System V with BSD sockets and a pre-ANSI `cc`, so it needs gcc (see the SunOS 4 row). The classic Mac OS on the same machines is a port: see below. |
 | Mac OS X (old) | `qemu-system-ppc` for 10.4 and 10.5 | Should behave like FreeBSD. |
@@ -74,7 +73,7 @@ reachable from C. These have them and are not listed above.
 
 1. AIX on POWER in QEMU: System V variety beyond Solaris. HP-UX 11.11 works.
 2. ArcaOS: Warp 3 and 4.52 work with EMX.
-3. IRIX, NeXTSTEP, SunOS 4: these depend on hardware or slow emulators.
+3. IRIX, SunOS 4: these depend on hardware or slow emulators.
 4. Plan 9: batch mode only as a first goal.
 5. UEFI application: reuse the decisions of the DOS and Windows ports
    (no `fork`, a polled timeout, odd path syntax); batch mode in QEMU with

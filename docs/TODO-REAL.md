@@ -43,6 +43,7 @@ machine.
 | Solaris 2.5.1, 2.6 and 10, OpenSolaris 134, OmniOS | QEMU (x86) | SPARC, which is what most of these ran on |
 | Minix 2.0.4 and 3.3.0, GNU/Hurd, DragonFly BSD, MidnightBSD | QEMU | Real hardware |
 | OS/2 Warp 3 Connect and 4.52 | QEMU, booted to a text-mode `CMD.EXE` (no desktop), fake API and MCP server across QEMU's user network | Real hardware; a VIO window on the desktop; a FAT boot disk |
+| OPENSTEP 4.2 (Intel) | 86Box (a Pentium on an i430HX board, PCnet-PCI network card), text console; fake API and MCP server across 86Box's SLiRP network | Real hardware; NeXTSTEP 3.x; Terminal.app on the desktop; the arrow keys, which the emulated console does not send in a usable form |
 | AIX PS/2 1.3 | 86Box (PS/2 Model 80), against a fake API on the same machine over loopback | Any network at all. AIX PS/2's one Ethernet driver wants a 3Com 3C523 EtherLink/MC, which 86Box does not emulate; adding that card to 86Box would let the emulator test it |
 | HP-UX 11i v1 (11.11) | QEMU's B160L (PA-RISC 1.1), with gork cross-compiled to assembly on Linux and assembled and linked on HP-UX; fake API and MCP server across QEMU's user network | Real hardware; a native gcc build on PA-RISC 2.0; a real terminal instead of the serial console |
 | Linux on s390x, armhf, arm64, ppc64el, riscv64, m68k, powerpc, hppa | QEMU's user-mode emulation: the suite only, on the host's kernel | The machines themselves, and the TUI on them |

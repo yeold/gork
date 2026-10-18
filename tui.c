@@ -711,7 +711,8 @@ void tui_suspend(void)
     if (!active) return;
 #ifdef __MSDOS__
     hint_text = "running command ... (DOS cannot interrupt it)";
-#elif defined(_WIN32) || defined(GORK_EMX) || defined(GORK_MINIX2)
+#elif defined(_WIN32) || defined(GORK_EMX) || defined(GORK_MINIX2) || \
+      defined(GORK_NEXT)
     hint_text = "running command ... (it cannot be interrupted)";
 #else
     hint_text = "running command ... (answer any prompt it shows; Esc aborts)";
@@ -720,9 +721,11 @@ void tui_suspend(void)
     reset_shell_mode();
     /* Not on OS/2: termios on the console makes emx.dll read the keyboard
        itself, and it goes on taking every other key from PDCurses.  Not on
-       Minix 2: without job control the interrupt would reach gork. */
+       Minix 2: without job control the interrupt would reach gork.  Not on
+       OPENSTEP: no tcsetattr, and its curses would keep Esc as the
+       interrupt key afterwards. */
 #if !defined(_WIN32) && !defined(GORK_DOS16) && !defined(GORK_EMX) && \
-    !defined(GORK_MINIX2)
+    !defined(GORK_MINIX2) && !defined(GORK_NEXT)
     if (tcgetattr(0, &t) == 0) {
         t.c_cc[VINTR] = 27;
         tcsetattr(0, TCSANOW, &t);

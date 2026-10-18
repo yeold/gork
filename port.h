@@ -57,6 +57,20 @@ int   killpg(int pgrp, int sig);
 #define S_ISLNK(m) 0
 #endif
 
+/* OPENSTEP 4.2 (NeXT Mach, cc -posix): POSIX headers over a 4.3BSD
+   library; nextstep.c has the calls it lacks, and fixes readdir and
+   realpath.  Its curses (ncurses on the
+   old sgtty interface) is no place for termios, so, as on OS/2, Esc does
+   not interrupt a command. */
+#ifdef __NeXT__
+#define GORK_NEXT
+#define readdir  next_readdir
+#define realpath next_realpath
+#ifndef S_ISLNK
+#define S_ISLNK(m) (((m) & 0170000) == 0120000)
+#endif
+#endif
+
 /* OS/2 with EMX: Unix enough to fork, but paths are DOS paths (drive
    letters, either slash, any case), there are no symbolic links and no
    job control. */
