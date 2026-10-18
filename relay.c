@@ -1,9 +1,9 @@
 /*
  * relay.c -- transport for gork. See relay.h.
  *
- * Strict C89, for the same systems as main.c.  Three transports: BSD
+ * Strict C89, for the same systems as main.c.  Four transports: BSD
  * sockets (Unix, DJGPP's Watt-32, Winsock), Watt-32's own calls (16-bit
- * DOS), and SPX on DOS and Windows.
+ * DOS), Minix 2's /dev/tcp, and SPX on DOS and Windows.
  */
 
 #include <sys/types.h>          /* first: 4.4BSD <netinet/in.h> needs it */
@@ -19,6 +19,17 @@
 #elif defined(GORK_DOS16)
 #include <tcp.h>                /* Watt-32's own calls: its 16-bit library
                                    has no BSD sockets */
+#elif defined(GORK_MINIX2)
+#include <fcntl.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <net/hton.h>
+#include <net/netlib.h>
+#include <net/gen/in.h>
+#include <net/gen/netdb.h>
+#include <net/gen/tcp.h>
+#include <net/gen/tcp_io.h>
 #else
 #include <netdb.h>
 #include <netinet/in.h>
@@ -501,6 +512,40 @@ static int winsock_start(void) {
 }
 #endif
 
+#ifdef GORK_MINIX2
+/* No sockets: a connection is a /dev/tcp opened and set up by ioctl. */
+static int tcp_connect(const char *host, long port) {
+  nwio_tcpconf_t conf;
+  nwio_tcpcl_t cl;
+  struct hostent *he;
+  char *dev = getenv("TCP_DEVICE");
+  int fd;
+
+  he = gethostbyname(host);
+  if (he == NULL || he->h_addr_list[0] == NULL) {
+    fprintf(stderr, "gork: cannot resolve %s\n", host);
+    return -1;
+  }
+  if (dev == NULL)
+    dev = TCP_DEVICE;
+  fd = open(dev, O_RDWR);
+  if (fd < 0) {
+    fprintf(stderr, "gork: %s: %s\n", dev, strerror(errno));
+    return -1;
+  }
+  memset(&conf, 0, sizeof conf);
+  conf.nwtc_flags = NWTC_LP_SEL | NWTC_SET_RA | NWTC_SET_RP;
+  memcpy(&conf.nwtc_remaddr, he->h_addr_list[0], sizeof conf.nwtc_remaddr);
+  conf.nwtc_remport = htons((tcpport_t)port);
+  memset(&cl, 0, sizeof cl);
+  if (ioctl(fd, NWIOSTCPCONF, &conf) < 0 || ioctl(fd, NWIOTCPCONN, &cl) < 0) {
+    perror("connect");
+    close(fd);
+    return -1;
+  }
+  return fd;
+}
+#else
 static int tcp_connect(const char *host, long port) {
   struct hostent *he;
   struct sockaddr_in addr;
@@ -547,6 +592,7 @@ static int tcp_connect(const char *host, long port) {
   }
   return fd;
 }
+#endif /* GORK_MINIX2 */
 
 static int write_all(int fd, const char *p, size_t n) {
   size_t off = 0;
@@ -631,8 +677,10 @@ static int spx_read_to_eof(int fd) {
 /* Returns 0 at EOF, -1 on error, -2 if relay_abort asked to stop. */
 static int read_to_eof(int fd) {
   char chunk[READ_CHUNK];
+#ifndef GORK_NO_SELECT
   fd_set rd;
   struct timeval tv;
+#endif
   ssize_t r;
 
 #ifdef __MSDOS__
@@ -669,7 +717,9 @@ static int read_to_eof(int fd) {
     return spx_read_to_eof(fd);
 #endif
   for (;;) {
-    /* Wake every 200 ms so the user can abort a slow reply. */
+    /* Wake every 200 ms so the user can abort a slow reply.  Without
+       select (Minix 2) the read blocks, and only the timeout ends it. */
+#ifndef GORK_NO_SELECT
 #ifndef GORK_NO_FORK
     if (relay_abort != NULL)
 #endif
@@ -700,6 +750,7 @@ static int read_to_eof(int fd) {
         return -1;
       }
     }
+#endif
     r = read(fd, chunk, sizeof chunk);
     if (r > 0) {
       int rc = rx_take(chunk, (size_t)r);

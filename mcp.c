@@ -21,10 +21,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
-#include <sys/time.h>
 #include <sys/wait.h>
 
 #include "port.h"
+#ifndef GORK_NO_SELECT
+#include <sys/time.h>
+#endif
 #include "relay.h"              /* struct buf */
 #include "mcp.h"
 
@@ -191,8 +193,10 @@ static char *read_line(struct server *s, time_t deadline)
     size_t          n;
     int             r;
     long            left;
+#ifndef GORK_NO_SELECT
     fd_set          rf;
     struct timeval  tv;
+#endif
 
     for (;;) {
         nl = (char *) memchr(s->rx.p, '\n', s->rx.len);
@@ -215,6 +219,10 @@ static char *read_line(struct server *s, time_t deadline)
             stopped = 1;
             return NULL;
         }
+#ifdef GORK_NO_SELECT
+        r = read_timed(s->out_fd, chunk, sizeof chunk, left);
+        if (r < 0 && errno == EINTR) continue;
+#else
         FD_ZERO(&rf);
         FD_SET(s->out_fd, &rf);
         tv.tv_sec  = relay_abort != NULL ? 0 : left;
@@ -225,6 +233,7 @@ static char *read_line(struct server *s, time_t deadline)
         if (r == 0) continue;
 
         r = read(s->out_fd, chunk, sizeof chunk);
+#endif
         if (r <= 0) {
             s->dead = 1;
             return NULL;

@@ -28,6 +28,9 @@
 #include <curses.h>
 #undef lines                    /* HP-UX: term.h macros */
 #undef columns
+#ifdef GORK_MINIX2
+#include "minix2.h"
+#endif
 
 #include "relay.h"              /* struct buf */
 #include "tui.h"
@@ -708,7 +711,7 @@ void tui_suspend(void)
     if (!active) return;
 #ifdef __MSDOS__
     hint_text = "running command ... (DOS cannot interrupt it)";
-#elif defined(_WIN32) || defined(GORK_EMX)
+#elif defined(_WIN32) || defined(GORK_EMX) || defined(GORK_MINIX2)
     hint_text = "running command ... (it cannot be interrupted)";
 #else
     hint_text = "running command ... (answer any prompt it shows; Esc aborts)";
@@ -716,8 +719,10 @@ void tui_suspend(void)
     draw();
     reset_shell_mode();
     /* Not on OS/2: termios on the console makes emx.dll read the keyboard
-       itself, and it goes on taking every other key from PDCurses. */
-#if !defined(_WIN32) && !defined(GORK_DOS16) && !defined(GORK_EMX)
+       itself, and it goes on taking every other key from PDCurses.  Not on
+       Minix 2: without job control the interrupt would reach gork. */
+#if !defined(_WIN32) && !defined(GORK_DOS16) && !defined(GORK_EMX) && \
+    !defined(GORK_MINIX2)
     if (tcgetattr(0, &t) == 0) {
         t.c_cc[VINTR] = 27;
         tcsetattr(0, TCSANOW, &t);

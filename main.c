@@ -60,7 +60,7 @@
 #if !defined(_WIN32) && !defined(GORK_DOS16)
 #include <sys/wait.h>
 #endif
-#ifndef GORK_DOS16
+#if !defined(GORK_DOS16) && !defined(GORK_NO_SELECT)
 #include <sys/time.h>
 #endif
 #include <dirent.h>
@@ -636,6 +636,10 @@ static const char *save_file(const char *real, const char *data, size_t n)
         if (dot != NULL && (sl == NULL || dot > sl)) *dot = '\0';
         strcat(tmp, ".g$$");
     }
+#elif defined(GORK_MINIX2)
+    /* Names stop at 14 characters there, so NAME.gork-tmp could be NAME
+       itself: one fixed name beside it instead. */
+    strcpy(strrchr(tmp, '/') + 1, ".gork-tmp");
 #else
     strcat(tmp, ".gork-tmp");
 #endif
@@ -656,16 +660,16 @@ static const char *save_file(const char *real, const char *data, size_t n)
         fclose(f);
         goto fail;
     }
-#if !defined(GORK_NO_FORK) && !defined(GORK_EMX)     /* EMX has no fchmod */
+#if !defined(GORK_NO_FORK) && !defined(GORK_EMX) && !defined(GORK_MINIX2)
     /* the old file's mode, set on the open file: by name, something else
-       could be standing there by now */
+       could be standing there by now (EMX and Minix 2 have no fchmod) */
     if (stat(real, &st) == 0) fchmod(fd, st.st_mode & 07777);
 #endif
     if (fclose(f) != 0) {
         e = errno;
         goto fail;
     }
-#if defined(GORK_NO_FORK) || defined(GORK_EMX)
+#if defined(GORK_NO_FORK) || defined(GORK_EMX) || defined(GORK_MINIX2)
     if (stat(real, &st) == 0) chmod(tmp, st.st_mode & 07777);
 #endif
 #if defined(_WIN32) || defined(GORK_DOS16) || defined(GORK_EMX)
@@ -1136,8 +1140,10 @@ static char *tool_run_command(cJSON *input, int *is_err)
 {
     cJSON          *cmd;
     struct buf      b;
+#ifndef GORK_NO_SELECT
     struct timeval  tv;
     fd_set          rs;
+#endif
     char            chunk[4096], msg[256];
     int             out[2], tty, fg = 0, status, n, trunc = 0, timed_out = 0;
     long            left;
@@ -1215,6 +1221,9 @@ static char *tool_run_command(cJSON *input, int *is_err)
             timed_out = 1;
             break;
         }
+#ifdef GORK_NO_SELECT
+        n = read_timed(out[0], chunk, sizeof chunk, left);
+#else
         FD_ZERO(&rs);
         FD_SET(out[0], &rs);
         tv.tv_sec  = left;
@@ -1223,6 +1232,7 @@ static char *tool_run_command(cJSON *input, int *is_err)
         if (n < 0 && errno != EINTR) break;
         if (n <= 0) continue;
         n = read(out[0], chunk, sizeof chunk);
+#endif
         if (n < 0 && errno == EINTR) continue;
         if (n <= 0) break;
         if (!trunc && buf_add(&b, chunk, (size_t) n) != 0) {

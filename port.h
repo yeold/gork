@@ -39,6 +39,24 @@ char *strerror(int errnum);
 char *realpath(const char *path, char *out);
 #endif
 
+/* Minix 2 (the ACK compiler; Minix 3 is clang and needs none of this): no
+   select, no symbolic links, no job control and no BSD sockets.  Without
+   select a reply cannot be interrupted with Esc, and a pipe is read with
+   read_timed().  A command gets a session of its own with setsid(), which
+   makes it a process group that killpg() reaches.  minix2.c has the rest,
+   and minix2.h what its curses lacks. */
+#if defined(__minix) && defined(__ACK__)
+#define GORK_MINIX2
+#define GORK_NO_SELECT
+#include <signal.h>
+char *realpath(const char *path, char *out);
+int   mkstemp(char *tmpl);
+int   read_timed(int fd, char *p, unsigned n, long secs);
+int   killpg(int pgrp, int sig);
+#define lstat      stat
+#define S_ISLNK(m) 0
+#endif
+
 /* OS/2 with EMX: Unix enough to fork, but paths are DOS paths (drive
    letters, either slash, any case), there are no symbolic links and no
    job control. */

@@ -78,7 +78,7 @@
 #endif
 
 #ifndef NAN
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__ACK__)  /* ACK: 0.0/0.0 is a compile error */
 #define NAN sqrt(-1.0)
 #else
 #define NAN 0.0/0.0
