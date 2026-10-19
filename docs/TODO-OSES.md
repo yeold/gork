@@ -22,6 +22,7 @@ are taken to work too.
 | UnixWare, SCO OpenServer | x86 in QEMU | SVR4 and SVR3 curses; old SCO needs `-lsocket`, which `configure` already looks for. |
 | Ultrix, A/UX | SIMH (VAX Ultrix), Shoebill (A/UX) | Pre-ANSI bundled compilers, so gcc, as on SunOS 4 (see docs/BUILD.md). |
 | m68k Macintosh, with a Unix on it | QEMU's `q800` machine (a Quadra 800) runs Linux/m68k and NetBSD/mac68k, and newer QEMU is said to boot A/UX 3; Shoebill runs A/UX on an emulated Mac II. Not checked which of these work here | Linux/m68k (Debian ports) and NetBSD/mac68k should be `configure` and `make`; so far m68k has run only the suite, under user-mode emulation. A/UX is System V with BSD sockets and a pre-ANSI `cc`, so it needs gcc, as SunOS 4 did. The classic Mac OS on the same machines is a port: see below. |
+| NeXTSTEP 3.3 | 86Box for Intel, as OPENSTEP 4.2; Previous for the 68k NeXT machines | OPENSTEP 4.2 works (README). 3.3 has an older NeXT cc (gcc 2.5-based) and the same 4.3BSD library, so expect the OPENSTEP fixes in `nextstep.c` and ncurses 4.2 to carry over. |
 | Mac OS X (old) | `qemu-system-ppc` for 10.4 and 10.5 | Should behave like FreeBSD. |
 | QNX (4, 6) | x86 in QEMU | QNX 6 is POSIX with ncurses; QNX 4 uses Watcom C. |
 | Linux with dietlibc | A cross toolchain | No curses port in common use; batch mode only, if at all. |
@@ -65,17 +66,24 @@ reachable from C. These have them and are not listed above.
 | Domain/OS, DG/UX, Dynix/ptx, NEWS-OS, UNICOS, Sinix | Vendor Unix; media and emulators are the obstacle, not the code. |
 | VxWorks, RTEMS, LynxOS, eCos, NuttX, Zephyr | Real-time systems with BSD-style sockets and a C toolchain, but no `fork` and usually no curses: batch mode at most. |
 | IBM i PASE, Stratus VOS, HP NonStop OSS | Mainframe and midrange POSIX environments. (z/OS has its own row above.) |
-| RISC OS, GEOS | Have TCP/IP and some sockets layer, but no process model gork can use as it is. |
+| GEOS | Has TCP/IP and some sockets layer, but no process model gork can use as it is. |
 | MenuetOS, KolibriOS, Genode, Fuchsia, seL4-based systems | Networked, but their own APIs: a rewrite of transport and TUI. |
 
 ## Suggested order
 
-1. AIX on POWER in QEMU: System V variety beyond Solaris. HP-UX 10.20 and 11.11 work.
-2. ArcaOS: Warp 3 and 4.52 work with EMX.
-3. IRIX: depends on hardware or a slow emulator (MAME).
-4. Plan 9: batch mode only as a first goal.
-5. UEFI application: reuse the decisions of the DOS and Windows ports
+1. QNX 6: x86 in QEMU, POSIX with ncurses; a new family.
+2. Mac OS X 10.4 on PowerPC, in QEMU: the first Mac result.
+3. Linux/m68k or NetBSD/mac68k on QEMU's `q800`: m68k on a whole machine,
+   TUI included.
+4. NeXTSTEP 3.3: reuses the OPENSTEP 4.2 setup.
+5. Plan 9: batch mode only as a first goal.
+6. UEFI application: reuse the decisions of the DOS and Windows ports
    (no `fork`, a polled timeout, odd path syntax); batch mode in QEMU with
    OVMF first. Then U-Boot and the other boot firmware: check each for TCP
    first; U-Boot running `gork.efi` is the cheapest thing to try.
-6. Visopsys, ZealOS or Shrine: only for their own sake.
+7. Classic Mac OS (System 7 first, in `q800` or Basilisk II), then
+   System 6 if an emulator with a network for it turns up.
+
+Set aside for now: AIX on POWER (AIX 5.1 in QEMU has no working network;
+AIX 7.2 media is IBM's licensed software), ArcaOS (a current commercial
+product), IRIX (hardware or a slow MAME).
