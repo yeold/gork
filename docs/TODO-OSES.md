@@ -72,7 +72,7 @@ reachable from C. These have them and are not listed above.
 ## Suggested order
 
 1. QNX 6: x86 in QEMU, POSIX with ncurses; a new family.
-2. Mac OS X 10.4 on PowerPC, in QEMU: the first Mac result.
+2. Mac OS X 10.4 on PowerPC, in QEMU: an old, big-endian macOS.
 3. Linux/m68k or NetBSD/mac68k on QEMU's `q800`: m68k on a whole machine,
    TUI included.
 4. NeXTSTEP 3.3: reuses the OPENSTEP 4.2 setup.
