@@ -16,7 +16,7 @@ are taken to work too.
 | OS | How to run it | What to expect |
 |---|---|---|
 | AIX on POWER (4.3, 5.x, 7.x) | QEMU `ppc64` runs AIX 7.2; older wants real RS/6000 hardware | System V curses as on Solaris. Needs gcc from the AIX Toolbox, or `xlc`. Sockets are in libc. AIX PS/2 1.3 works (README); its fixes are under `GORK_AIXPS2`, which needs `_I386`, so they stay off here. |
-| HP-UX 10.20, 11i v3 | QEMU `hppa` runs 10.20; 11i v3 wants a PA-RISC 2.0 or Itanium machine | 11.11 works, cross-compiled (README). 10.20 should build the same way with gcc 12's `hppa1.1-hp-hpux10.20` target, if that still builds. |
+| HP-UX 11i v3 | A PA-RISC 2.0 or Itanium machine | 10.20 and 11.11 work, cross-compiled (README). |
 | IRIX (5.3, 6.5) | No good emulator; MAME's Indy boots but is slow. Real SGI hardware is the practical route | System V curses, MIPSpro `cc` or gcc. Should be close to Solaris. |
 | Tru64 / OSF/1 | Alpha emulation in QEMU is limited; real hardware | Similar to the other System V systems. |
 | UnixWare, SCO OpenServer | x86 in QEMU | SVR4 and SVR3 curses; old SCO needs `-lsocket`, which `configure` already looks for. |
@@ -70,7 +70,7 @@ reachable from C. These have them and are not listed above.
 
 ## Suggested order
 
-1. AIX on POWER in QEMU: System V variety beyond Solaris. HP-UX 11.11 works.
+1. AIX on POWER in QEMU: System V variety beyond Solaris. HP-UX 10.20 and 11.11 work.
 2. ArcaOS: Warp 3 and 4.52 work with EMX.
 3. IRIX: depends on hardware or a slow emulator (MAME).
 4. Plan 9: batch mode only as a first goal.

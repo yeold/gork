@@ -46,7 +46,7 @@ of `testing/looptest.py`.
 | Solaris | 2.5.1 (1996, gcc 2.7.2) | 2.6, 10 | 2.4: its kernel panics at boot in QEMU, so untested |
 | illumos | OpenSolaris build 134 (2010, gcc 3.4.3) | OmniOS r151058, with the system curses or ncurses | |
 | AIX | AIX PS/2 1.3 (1992, MetaWare High C), in 86Box, over loopback only | | AIX on POWER: untested |
-| HP-UX | 11i v1 (11.11, 2000) on PA-RISC, cross-compiled with gcc 12.4, assembled and linked on HP-UX | | 10.20, 11i v2 and v3: untested |
+| HP-UX | 10.20 (1996) on PA-RISC, cross-compiled with gcc 12.4, assembled and linked on HP-UX | 11i v1 (11.11) | 11i v2 and v3: untested |
 | Minix | 2.0.4 (2001, ACK), with its own TCP/IP | 3.3.0 (clang 3.4) | |
 | NeXTSTEP | OPENSTEP 4.2 for Intel (1996, NeXT cc 744.13, gcc 2.7.2.1), with ncurses 4.2, in 86Box | | NeXTSTEP 3.x and the 68k machines: untested |
 | OS/2 | Warp 3 Connect (1995), with EMX 0.9d (gcc 2.8.1) and PDCurses 3.4 | Warp 4.52 | eComStation, ArcaOS: untested |
