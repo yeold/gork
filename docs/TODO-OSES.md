@@ -24,7 +24,7 @@ are taken to work too.
 | m68k Macintosh, with a Unix on it | QEMU's `q800` machine (a Quadra 800) runs Linux/m68k and NetBSD/mac68k, and newer QEMU is said to boot A/UX 3; Shoebill runs A/UX on an emulated Mac II. Not checked which of these work here | Linux/m68k (Debian ports) and NetBSD/mac68k should be `configure` and `make`; so far m68k has run only the suite, under user-mode emulation. A/UX is System V with BSD sockets and a pre-ANSI `cc`, so it needs gcc, as SunOS 4 did. The classic Mac OS on the same machines is a port: see below. |
 | NeXTSTEP 3.3 | 86Box for Intel, as OPENSTEP 4.2; Previous for the 68k NeXT machines | OPENSTEP 4.2 works (README). 3.3 has an older NeXT cc (gcc 2.5-based) and the same 4.3BSD library, so expect the OPENSTEP fixes in `nextstep.c` and ncurses 4.2 to carry over. |
 | Mac OS X (old) | `qemu-system-ppc` for 10.4 and 10.5 | Should behave like FreeBSD. |
-| QNX (4, 6) | x86 in QEMU | QNX 6 is POSIX with ncurses; QNX 4 uses Watcom C. |
+| QNX 4 | x86 in QEMU | QNX 6.2.1 works (README). QNX 4 is a different system underneath, with Watcom C. |
 | Linux with dietlibc | A cross toolchain | No curses port in common use; batch mode only, if at all. |
 
 ## Not Unix, but a POSIX layer exists
@@ -71,17 +71,16 @@ reachable from C. These have them and are not listed above.
 
 ## Suggested order
 
-1. QNX 6: x86 in QEMU, POSIX with ncurses; a new family.
-2. Mac OS X 10.4 on PowerPC, in QEMU: an old, big-endian macOS.
-3. Linux/m68k or NetBSD/mac68k on QEMU's `q800`: m68k on a whole machine,
+1. Mac OS X 10.4 on PowerPC, in QEMU: an old, big-endian macOS.
+2. Linux/m68k or NetBSD/mac68k on QEMU's `q800`: m68k on a whole machine,
    TUI included.
-4. NeXTSTEP 3.3: reuses the OPENSTEP 4.2 setup.
-5. Plan 9: batch mode only as a first goal.
-6. UEFI application: reuse the decisions of the DOS and Windows ports
+3. NeXTSTEP 3.3: reuses the OPENSTEP 4.2 setup.
+4. Plan 9: batch mode only as a first goal.
+5. UEFI application: reuse the decisions of the DOS and Windows ports
    (no `fork`, a polled timeout, odd path syntax); batch mode in QEMU with
    OVMF first. Then U-Boot and the other boot firmware: check each for TCP
    first; U-Boot running `gork.efi` is the cheapest thing to try.
-7. Classic Mac OS (System 7 first, in `q800` or Basilisk II), then
+6. Classic Mac OS (System 7 first, in `q800` or Basilisk II), then
    System 6 if an emulator with a network for it turns up.
 
 Set aside for now: AIX on POWER (AIX 5.1 in QEMU has no working network;

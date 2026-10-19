@@ -62,9 +62,9 @@ static struct line *lines;
 static size_t       nlines, cap_lines;
 static int          scroll_rows;        /* rows scrolled up from the bottom */
 #ifdef GORK_DOS16               /* attributes do not fit a 16-bit int */
-static chtype       style_attr[NSTYLES];
+static chtype       style_attr[NSTYLES], dim_attr;
 #else
-static int          style_attr[NSTYLES];
+static int          style_attr[NSTYLES], dim_attr;
 #endif
 static const char  *status_text = "";
 static const char  *hint_text = HINT_IDLE;
@@ -229,7 +229,7 @@ static void draw(void)
         }
     }
 
-    attrset(A_DIM);
+    attrset(dim_attr);
     put(LINES - 1 - in_rows, 0, hint_text, w);
     if (scroll_rows > 0) mvaddstr(LINES - 1 - in_rows, w - 10, "[scrolled]");
 
@@ -317,6 +317,7 @@ int tui_init(const char *status, const char *title)
 #endif
     int   fd;
     FILE *tty;
+    const char *t;
 
     status_text = status;
     /* Esc is a key here, not just a prefix: don't wait a second for the
@@ -369,11 +370,15 @@ int tui_init(const char *status, const char *title)
     noecho();
     keypad(stdscr, TRUE);
 
+    /* QNX's terminal type (qansi, as in Photon's pterm) draws dim text in
+       black. */
+    t = getenv("TERM");
+    dim_attr = t != NULL && strncmp(t, "qansi", 5) == 0 ? A_NORMAL : A_DIM;
     style_attr[ST_USER]   = A_BOLD;
     style_attr[ST_TEXT]   = A_NORMAL;
-    style_attr[ST_TOOL]   = A_DIM;
+    style_attr[ST_TOOL]   = dim_attr;
     style_attr[ST_NOTE]   = A_BOLD;
-    style_attr[ST_DETAIL] = A_DIM;
+    style_attr[ST_DETAIL] = dim_attr;
 #ifdef COLOR_BLACK                      /* AIX PS/2's curses has no colour */
     if (has_colors()) {
         start_color();

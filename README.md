@@ -51,6 +51,7 @@ of `testing/looptest.py`.
 | NeXTSTEP | OPENSTEP 4.2 for Intel (1996, NeXT cc 744.13, gcc 2.7.2.1), with ncurses 4.2, in 86Box | | NeXTSTEP 3.x and the 68k machines: untested |
 | OS/2 | Warp 3 Connect (1995), with EMX 0.9d (gcc 2.8.1) and PDCurses 3.4 | Warp 4.52 | eComStation, ArcaOS: untested |
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
+| QNX | 6.2.1 Non-Commercial Edition (2003, gcc 2.95.3, its ncurses), in QEMU | | QNX 4: untested |
 | Haiku | R1/beta6 | | Older releases: may work, untested |
 | BeOS | R5 (2000; the free Personal Edition, gcc 2.9 from the 5.0.1 developer tools), with ncurses 5.9 built there, in QEMU | | BONE, 5.0.3: untested |
 | macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
