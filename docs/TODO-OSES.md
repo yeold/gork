@@ -62,7 +62,8 @@ reachable from C. These have them and are not listed above.
 | SerenityOS, Redox, Managarm, ToaruOS, Sortix | Hobby Unix-likes with a POSIX libc, sockets and an ncurses port; each is a small-libc test. |
 | ReactOS | Aims at NT compatibility; a native Windows build should run there. |
 | eComStation, ArcaOS | OS/2 descendants; the EMX build of Warp 3 and 4.52 should run, and kLIBC is the newer route. |
-| Xenix, Coherent, 386BSD, BSD/OS, 4.3BSD on VAX (SIMH) | Old Unix with TCP/IP. Expect the `realpath` wall that stopped FreeBSD 1.x on the Net/2-era ones. |
+| Xenix, 386BSD, BSD/OS, 4.3BSD on VAX (SIMH) | Old Unix with TCP/IP. Expect the `realpath` wall that stopped FreeBSD 1.x on the Net/2-era ones. |
+| Coherent | Open source since 2015, so the media is free, but it has no TCP/IP of its own: nothing for gork to connect with. |
 | Domain/OS, DG/UX, Dynix/ptx, NEWS-OS, UNICOS, Sinix | Vendor Unix; media and emulators are the obstacle, not the code. |
 | VxWorks, RTEMS, LynxOS, eCos, NuttX, Zephyr | Real-time systems with BSD-style sockets and a C toolchain, but no `fork` and usually no curses: batch mode at most. |
 | IBM i PASE, Stratus VOS, HP NonStop OSS | Mainframe and midrange POSIX environments. (z/OS has its own row above.) |
