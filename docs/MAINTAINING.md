@@ -6,8 +6,11 @@ building on each system.
 
 ## Branches and versions
 
-- Work happens on `dev`. `master` (Forgejo) gets the same commits, and
-  `main` (GitHub) the same tree, one commit per change.
+- Work happens on `dev`. `master` (Forgejo) and `main` (GitHub) are
+  the same history: push `dev` to both (`git push origin dev:master`,
+  `git push github dev:main`), so they only ever fast-forward. Until
+  2026-10-19 the three were copied commit by commit; the old Forgejo
+  history is kept under the tags `old-dev` and `old-master`.
 - The version is in four places, changed together: `configure.ac`,
   `gork.spec`, the top of `debian/changelog`, and the fallback `VERSION`
   in `main.c`. A beta is `X.Y~beta` there and `vX.Y-beta` as a tag.
@@ -34,7 +37,7 @@ the system's libc all the same (tried on Alpine, which has none).
 
 1. Set the version in the four places, with a `debian/changelog` entry:
    its text becomes the release notes.
-2. Push `dev`, `master` and `main`, and wait for both builds to pass.
+2. Push `dev` to `master` and `main`, and wait for both builds to pass.
 3. Tag `vX.Y` on GitHub's `main`. Jenkins builds the tag, creates the
    release on GitHub and on Forgejo and uploads its packages
    (`release.sh`); the debs, RPMs and tarballs also go to Forgejo's
