@@ -15,15 +15,17 @@ are taken to work too.
 
 | OS | How to run it | What to expect |
 |---|---|---|
-| AIX on POWER (4.3, 5.x, 7.x) | QEMU `ppc64` runs AIX 7.2; older wants real RS/6000 hardware | System V curses as on Solaris. Needs gcc from the AIX Toolbox, or `xlc`. Sockets are in libc. AIX PS/2 1.3 works (README); its fixes are under `GORK_AIXPS2`, which needs `_I386`, so they stay off here. |
+| AIX on POWER (3.x, 4.3, 5.x, 7.x) | QEMU's `40p` (PReP) runs 4.3 with a network, and 5.1 without one (its network driver fails); `ppc64` runs AIX 7.2; 3.x wants real RS/6000 hardware. WinWorld has 3.x to 5.1 | System V curses as on Solaris. Needs gcc from the AIX Toolbox, or `xlc`. Sockets are in libc. AIX PS/2 1.3 works (README); its fixes are under `GORK_AIXPS2`, which needs `_I386`, so they stay off here. |
 | HP-UX 11i v3 | A PA-RISC 2.0 or Itanium machine | 10.20 and 11.11 work, cross-compiled (README). |
 | IRIX (5.3, 6.5) | No good emulator; MAME's Indy boots but is slow. Real SGI hardware is the practical route | System V curses, MIPSpro `cc` or gcc. Should be close to Solaris. |
-| Tru64 / OSF/1 | Alpha emulation in QEMU is limited; real hardware | Similar to the other System V systems. |
+| DEC OSF/1, Digital UNIX, Tru64 (2.x to 5.1B, all on WinWorld) | QEMU's Alpha runs only Linux; the ES40 emulator is slow and finicky; real hardware | Similar to the other System V systems. |
 | UnixWare, SCO OpenServer | 86Box: UnixWare 2.1's install floppy boots there (QEMU's BIOS will not boot it, and with that fixed its kernel panics). The 2.1.2 Free Edition's installer then asks for a serial number and activation key, which SCO gave out per user | SVR4 and SVR3 curses; old SCO needs `-lsocket`, which `configure` already looks for. |
-| Ultrix, A/UX | SIMH (VAX Ultrix), Shoebill (A/UX) | Pre-ANSI bundled compilers, so gcc, as on SunOS 4 (see docs/BUILD.md). |
+| Ultrix, A/UX 1.x and 2.x | GXemul's DECstation (MIPS Ultrix 4.x, with a network) or SIMH (VAX Ultrix), Shoebill (A/UX, fragile) | Pre-ANSI bundled compilers, so gcc, as on SunOS 4 (see docs/BUILD.md). |
 | m68k Macintosh, NetBSD/mac68k or A/UX | QEMU's `q800` machine (a Quadra 800) runs NetBSD/mac68k, and newer QEMU is said to boot A/UX 3; Shoebill runs A/UX on an emulated Mac II | Debian on the same `q800` works (README). NetBSD/mac68k should be `configure` and `make`. A/UX is System V with BSD sockets and a pre-ANSI `cc`, so it needs gcc, as SunOS 4 did. The classic Mac OS on the same machines is a port: see below. |
 | NeXTSTEP 3.3 | 86Box for Intel, as OPENSTEP 4.2; Previous for the 68k NeXT machines | OPENSTEP 4.2 works (README). 3.3 has an older NeXT cc (gcc 2.5-based) and the same 4.3BSD library, so expect the OPENSTEP fixes in `nextstep.c` and ncurses 4.2 to carry over. |
-| Mac OS X (old) | `qemu-system-ppc` for 10.4 and 10.5 | Should behave like FreeBSD. |
+| Mac OS X (old): 10.0 to 10.5, and Mac OS X Server 1.0 (Rhapsody) | `qemu-system-ppc` (to install here); 10.0 and Rhapsody boot less reliably in it | Should behave like FreeBSD; gcc comes with the Developer Tools. |
+| SVR4 on the 386: AT&T System V, Intel Unix System V, Dell Unix | x86 in QEMU or 86Box (floppy installs) | System V curses, sockets in `libsocket`/`libnsl`, which `configure` already looks for: close to Solaris 2.x. Find out first whether the media has a C compiler or wants a separate development package. |
+| NeXTSTEP 0.x to 2.x | Previous (68k NeXT machines, with a network) | 68k only. Likely close to OPENSTEP 4.2, with an older NeXT cc. |
 | QNX 4 | x86 in QEMU | QNX 6.2.1 works (README). QNX 4 is a different system underneath, with Watcom C. |
 | Linux with dietlibc | A cross toolchain | No curses port in common use; batch mode only, if at all. |
 
@@ -63,7 +65,8 @@ reachable from C. These have them and are not listed above.
 | ReactOS | Aims at NT compatibility; a native Windows build should run there. |
 | eComStation, ArcaOS | OS/2 descendants; the EMX build of Warp 3 and 4.52 should run, and kLIBC is the newer route. |
 | Xenix, 386BSD, BSD/OS, 4.3BSD on VAX (SIMH) | Old Unix with TCP/IP. Expect the `realpath` wall that stopped FreeBSD 1.x on the Net/2-era ones. |
-| Coherent | Open source since 2015, so the media is free, but it has no TCP/IP of its own: nothing for gork to connect with. |
+| Coherent, PC/IX, Venix 386, early Xenix (8086, 286, IBM PC 1.0 and 2.0) | No TCP/IP of their own: nothing for gork to connect with. Coherent is open source since 2015, so its media is free. |
+| Inferno | Programs are Limbo, not C, on its own virtual machine: a rewrite, not a port. |
 | Domain/OS, DG/UX, Dynix/ptx, NEWS-OS, UNICOS, Sinix | Vendor Unix; media and emulators are the obstacle, not the code. |
 | VxWorks, RTEMS, LynxOS, eCos, NuttX, Zephyr | Real-time systems with BSD-style sockets and a C toolchain, but no `fork` and usually no curses: batch mode at most. |
 | IBM i PASE, Stratus VOS, HP NonStop OSS | Mainframe and midrange POSIX environments. (z/OS has its own row above.) |
