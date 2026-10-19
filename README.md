@@ -52,6 +52,7 @@ of `testing/looptest.py`.
 | OS/2 | Warp 3 Connect (1995), with EMX 0.9d (gcc 2.8.1) and PDCurses 3.4 | Warp 4.52 | eComStation, ArcaOS: untested |
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | Haiku | R1/beta6 | | Older releases: may work, untested |
+| BeOS | R5 (2000; the free Personal Edition, gcc 2.9 from the 5.0.1 developer tools), with ncurses 5.9 built there, in QEMU | | BONE, 5.0.3: untested |
 | macOS | 26.6 on arm64 (Apple clang 21, system ncurses) | | Older releases: untested |
 | Windows (native, experimental; the `win32-legacy` package) | Windows NT 3.1 (1993), with `gorknt3.exe` from the same package; `gork.exe` from NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added. Built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, Me, 2000, XP SP3, 11, Server 2025; Wine 10 | |
 | Windows (Cygwin; the `win32` package) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | 64-bit Windows 10 and later only. The package was run on GitHub's Windows runner, batch mode only |

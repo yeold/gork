@@ -91,6 +91,23 @@ pid_t         sunos4_getpgrp(void);
 #define getpgrp sunos4_getpgrp
 #endif
 
+/* BeOS R5 (gcc 2.9; its net_server stack, not BONE, and not Haiku):
+   sockets are not file descriptors, so they take send, recv and
+   closesocket, and select() takes nothing else: a pipe is read with
+   read_timed(), in beos.c, which polls it.  libroot has no realpath
+   (beos.c) and no killpg. */
+#if defined(__BEOS__) && !defined(__HAIKU__)
+#define GORK_BEOS
+#define GORK_NO_PIPE_SELECT
+int   read_timed(int fd, char *p, unsigned n, long secs);
+char *realpath(const char *path, char *out);
+#define killpg(p, sig) kill(-(p), sig)
+#endif
+
+#ifdef GORK_NO_SELECT
+#define GORK_NO_PIPE_SELECT
+#endif
+
 /* OS/2 with EMX: Unix enough to fork, but paths are DOS paths (drive
    letters, either slash, any case), there are no symbolic links and no
    job control. */

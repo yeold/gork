@@ -660,16 +660,19 @@ static const char *save_file(const char *real, const char *data, size_t n)
         fclose(f);
         goto fail;
     }
-#if !defined(GORK_NO_FORK) && !defined(GORK_EMX) && !defined(GORK_MINIX2)
+#if !defined(GORK_NO_FORK) && !defined(GORK_EMX) && !defined(GORK_MINIX2) && \
+    !defined(GORK_BEOS)
     /* the old file's mode, set on the open file: by name, something else
-       could be standing there by now (EMX and Minix 2 have no fchmod) */
+       could be standing there by now (EMX, Minix 2 and BeOS have no
+       fchmod) */
     if (stat(real, &st) == 0) fchmod(fd, st.st_mode & 07777);
 #endif
     if (fclose(f) != 0) {
         e = errno;
         goto fail;
     }
-#if defined(GORK_NO_FORK) || defined(GORK_EMX) || defined(GORK_MINIX2)
+#if defined(GORK_NO_FORK) || defined(GORK_EMX) || defined(GORK_MINIX2) || \
+    defined(GORK_BEOS)
     if (stat(real, &st) == 0) chmod(tmp, st.st_mode & 07777);
 #endif
 #if defined(_WIN32) || defined(GORK_DOS16) || defined(GORK_EMX)
@@ -1140,7 +1143,7 @@ static char *tool_run_command(cJSON *input, int *is_err)
 {
     cJSON          *cmd;
     struct buf      b;
-#ifndef GORK_NO_SELECT
+#ifndef GORK_NO_PIPE_SELECT
     struct timeval  tv;
     fd_set          rs;
 #endif
@@ -1221,7 +1224,7 @@ static char *tool_run_command(cJSON *input, int *is_err)
             timed_out = 1;
             break;
         }
-#ifdef GORK_NO_SELECT
+#ifdef GORK_NO_PIPE_SELECT
         n = read_timed(out[0], chunk, sizeof chunk, left);
 #else
         FD_ZERO(&rs);

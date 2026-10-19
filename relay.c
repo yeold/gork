@@ -58,11 +58,14 @@ static time_t deadline;
 #define alarm(s) (deadline = (s) ? time(NULL) + (s) : 0)
 #endif
 
-#ifdef _WIN32
-/* Sockets are not file descriptors, and their errors are not in errno. */
+#if defined(_WIN32) || defined(GORK_BEOS)
+/* Sockets are not file descriptors. */
 #define close(fd)       closesocket(fd)
 #define write(fd, p, n) send(fd, p, (int)(n), 0)
 #define read(fd, p, n)  recv(fd, p, (int)(n), 0)
+#endif
+#ifdef _WIN32
+/* Their errors are not in errno. */
 static void sock_perror(const char *what) {
   fprintf(stderr, "gork: %s: Winsock error %d\n", what, WSAGetLastError());
 }

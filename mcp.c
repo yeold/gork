@@ -193,7 +193,7 @@ static char *read_line(struct server *s, time_t deadline)
     size_t          n;
     int             r;
     long            left;
-#ifndef GORK_NO_SELECT
+#ifndef GORK_NO_PIPE_SELECT
     fd_set          rf;
     struct timeval  tv;
 #endif
@@ -219,7 +219,7 @@ static char *read_line(struct server *s, time_t deadline)
             stopped = 1;
             return NULL;
         }
-#ifdef GORK_NO_SELECT
+#ifdef GORK_NO_PIPE_SELECT
         r = read_timed(s->out_fd, chunk, sizeof chunk, left);
         if (r < 0 && errno == EINTR) continue;
 #else

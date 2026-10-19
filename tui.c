@@ -712,7 +712,7 @@ void tui_suspend(void)
 #ifdef __MSDOS__
     hint_text = "running command ... (DOS cannot interrupt it)";
 #elif defined(_WIN32) || defined(GORK_EMX) || defined(GORK_MINIX2) || \
-      defined(GORK_NEXT)
+      defined(GORK_NEXT) || defined(GORK_BEOS)
     hint_text = "running command ... (it cannot be interrupted)";
 #else
     hint_text = "running command ... (answer any prompt it shows; Esc aborts)";
@@ -723,9 +723,10 @@ void tui_suspend(void)
        itself, and it goes on taking every other key from PDCurses.  Not on
        Minix 2: without job control the interrupt would reach gork.  Not on
        OPENSTEP: no tcsetattr, and its curses would keep Esc as the
-       interrupt key afterwards. */
+       interrupt key afterwards.  Not on BeOS: its Terminal has no job
+       control either. */
 #if !defined(_WIN32) && !defined(GORK_DOS16) && !defined(GORK_EMX) && \
-    !defined(GORK_MINIX2) && !defined(GORK_NEXT)
+    !defined(GORK_MINIX2) && !defined(GORK_NEXT) && !defined(GORK_BEOS)
     if (tcgetattr(0, &t) == 0) {
         t.c_cc[VINTR] = 27;
         tcsetattr(0, TCSANOW, &t);
