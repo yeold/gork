@@ -19,7 +19,7 @@ are taken to work too.
 | HP-UX 11i v3 | A PA-RISC 2.0 or Itanium machine | 10.20 and 11.11 work, cross-compiled (README). |
 | IRIX (5.3, 6.5) | No good emulator; MAME's Indy boots but is slow. Real SGI hardware is the practical route | System V curses, MIPSpro `cc` or gcc. Should be close to Solaris. |
 | Tru64 / OSF/1 | Alpha emulation in QEMU is limited; real hardware | Similar to the other System V systems. |
-| UnixWare, SCO OpenServer | x86 in QEMU | SVR4 and SVR3 curses; old SCO needs `-lsocket`, which `configure` already looks for. |
+| UnixWare, SCO OpenServer | 86Box: UnixWare 2.1's install floppy boots there (QEMU's BIOS will not boot it, and with that fixed its kernel panics). The 2.1.2 Free Edition's installer then asks for a serial number and activation key, which SCO gave out per user | SVR4 and SVR3 curses; old SCO needs `-lsocket`, which `configure` already looks for. |
 | Ultrix, A/UX | SIMH (VAX Ultrix), Shoebill (A/UX) | Pre-ANSI bundled compilers, so gcc, as on SunOS 4 (see docs/BUILD.md). |
 | m68k Macintosh, NetBSD/mac68k or A/UX | QEMU's `q800` machine (a Quadra 800) runs NetBSD/mac68k, and newer QEMU is said to boot A/UX 3; Shoebill runs A/UX on an emulated Mac II | Debian on the same `q800` works (README). NetBSD/mac68k should be `configure` and `make`. A/UX is System V with BSD sockets and a pre-ANSI `cc`, so it needs gcc, as SunOS 4 did. The classic Mac OS on the same machines is a port: see below. |
 | NeXTSTEP 3.3 | 86Box for Intel, as OPENSTEP 4.2; Previous for the 68k NeXT machines | OPENSTEP 4.2 works (README). 3.3 has an older NeXT cc (gcc 2.5-based) and the same 4.3BSD library, so expect the OPENSTEP fixes in `nextstep.c` and ncurses 4.2 to carry over. |
@@ -72,17 +72,17 @@ reachable from C. These have them and are not listed above.
 
 ## Suggested order
 
-1. UnixWare 2.1.2 (SCO's Free Edition), in QEMU: a System V branch.
-2. NeXTSTEP 3.3: reuses the OPENSTEP 4.2 setup.
-3. Mac OS X 10.4 on PowerPC, in QEMU: an old, big-endian macOS.
-4. Plan 9: batch mode only as a first goal.
-5. UEFI application: reuse the decisions of the DOS and Windows ports
+1. NeXTSTEP 3.3: reuses the OPENSTEP 4.2 setup.
+2. Mac OS X 10.4 on PowerPC, in QEMU: an old, big-endian macOS.
+3. Plan 9: batch mode only as a first goal.
+4. UEFI application: reuse the decisions of the DOS and Windows ports
    (no `fork`, a polled timeout, odd path syntax); batch mode in QEMU with
    OVMF first. Then U-Boot and the other boot firmware: check each for TCP
    first; U-Boot running `gork.efi` is the cheapest thing to try.
-6. Classic Mac OS (System 7 first, in `q800` or Basilisk II), then
+5. Classic Mac OS (System 7 first, in `q800` or Basilisk II), then
    System 6 if an emulator with a network for it turns up.
 
 Set aside for now: AIX on POWER (AIX 5.1 in QEMU has no working network;
 AIX 7.2 media is IBM's licensed software), ArcaOS (a current commercial
-product), IRIX (hardware or a slow MAME).
+product), IRIX (hardware or a slow MAME), UnixWare (a licence key for
+the Free Edition).
