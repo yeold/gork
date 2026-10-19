@@ -21,7 +21,7 @@ are taken to work too.
 | Tru64 / OSF/1 | Alpha emulation in QEMU is limited; real hardware | Similar to the other System V systems. |
 | UnixWare, SCO OpenServer | x86 in QEMU | SVR4 and SVR3 curses; old SCO needs `-lsocket`, which `configure` already looks for. |
 | Ultrix, A/UX | SIMH (VAX Ultrix), Shoebill (A/UX) | Pre-ANSI bundled compilers, so gcc, as on SunOS 4 (see docs/BUILD.md). |
-| m68k Macintosh, with a Unix on it | QEMU's `q800` machine (a Quadra 800) runs Linux/m68k and NetBSD/mac68k, and newer QEMU is said to boot A/UX 3; Shoebill runs A/UX on an emulated Mac II. Not checked which of these work here | Linux/m68k (Debian ports) and NetBSD/mac68k should be `configure` and `make`; so far m68k has run only the suite, under user-mode emulation. A/UX is System V with BSD sockets and a pre-ANSI `cc`, so it needs gcc, as SunOS 4 did. The classic Mac OS on the same machines is a port: see below. |
+| m68k Macintosh, NetBSD/mac68k or A/UX | QEMU's `q800` machine (a Quadra 800) runs NetBSD/mac68k, and newer QEMU is said to boot A/UX 3; Shoebill runs A/UX on an emulated Mac II | Debian on the same `q800` works (README). NetBSD/mac68k should be `configure` and `make`. A/UX is System V with BSD sockets and a pre-ANSI `cc`, so it needs gcc, as SunOS 4 did. The classic Mac OS on the same machines is a port: see below. |
 | NeXTSTEP 3.3 | 86Box for Intel, as OPENSTEP 4.2; Previous for the 68k NeXT machines | OPENSTEP 4.2 works (README). 3.3 has an older NeXT cc (gcc 2.5-based) and the same 4.3BSD library, so expect the OPENSTEP fixes in `nextstep.c` and ncurses 4.2 to carry over. |
 | Mac OS X (old) | `qemu-system-ppc` for 10.4 and 10.5 | Should behave like FreeBSD. |
 | QNX 4 | x86 in QEMU | QNX 6.2.1 works (README). QNX 4 is a different system underneath, with Watcom C. |
@@ -72,10 +72,9 @@ reachable from C. These have them and are not listed above.
 
 ## Suggested order
 
-1. Mac OS X 10.4 on PowerPC, in QEMU: an old, big-endian macOS.
-2. Linux/m68k or NetBSD/mac68k on QEMU's `q800`: m68k on a whole machine,
-   TUI included.
-3. NeXTSTEP 3.3: reuses the OPENSTEP 4.2 setup.
+1. UnixWare 2.1.2 (SCO's Free Edition), in QEMU: a System V branch.
+2. NeXTSTEP 3.3: reuses the OPENSTEP 4.2 setup.
+3. Mac OS X 10.4 on PowerPC, in QEMU: an old, big-endian macOS.
 4. Plan 9: batch mode only as a first goal.
 5. UEFI application: reuse the decisions of the DOS and Windows ports
    (no `fork`, a polled timeout, odd path syntax); batch mode in QEMU with

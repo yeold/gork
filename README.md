@@ -63,7 +63,9 @@ of `testing/looptest.py`.
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
 and i386 passes the whole suite: cross-built with Debian 13's toolchains
 and run under QEMU's user-mode emulation. So do the 32-bit big-endian
-m68k, powerpc and hppa, cross-built with Debian unstable's (gcc 16). OpenBSD 7.9 on SPARC64 (64-bit
+m68k, powerpc and hppa, cross-built with Debian unstable's (gcc 16).
+On m68k it also builds natively and passes the whole suite on a whole
+emulated machine, Debian unstable on QEMU's Quadra 800. OpenBSD 7.9 on SPARC64 (64-bit
 big-endian, gcc 4.2.1) builds and passes the twelve checks that need no
 pseudo-terminal; the TUI could not be run there.
 

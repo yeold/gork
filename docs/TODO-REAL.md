@@ -49,7 +49,7 @@ machine.
 | BeOS R5 | QEMU (Pentium II, RTL8139 network card), the Terminal app; fake API and MCP server across QEMU's user network | Real hardware; BONE; the TUI over telnet |
 | AIX PS/2 1.3 | 86Box (PS/2 Model 80), against a fake API on the same machine over loopback | Any network at all. AIX PS/2's one Ethernet driver wants a 3Com 3C523 EtherLink/MC, which 86Box does not emulate; adding that card to 86Box would let the emulator test it |
 | HP-UX 10.20 and 11i v1 (11.11) | QEMU's B160L (PA-RISC 1.1), with gork cross-compiled to assembly on Linux and assembled and linked on HP-UX; fake API and MCP server across QEMU's user network | Real hardware; a native gcc build on PA-RISC 2.0; a real terminal instead of the serial console |
-| Linux on s390x, armhf, arm64, ppc64el, riscv64, m68k, powerpc, hppa | QEMU's user-mode emulation: the suite only, on the host's kernel | The machines themselves, and the TUI on them |
+| Linux on s390x, armhf, arm64, ppc64el, riscv64, m68k, powerpc, hppa | QEMU's user-mode emulation: the suite only, on the host's kernel; m68k also natively, the whole suite, on Debian in QEMU's Quadra 800 | The machines themselves; the TUI on a real terminal |
 | OpenBSD 7.9 on SPARC64 | QEMU, batch checks | The TUI; a real machine |
 | macOS | GitHub's runner: the suite | The TUI; Intel Macs; older releases |
 
