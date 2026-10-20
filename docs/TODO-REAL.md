@@ -53,6 +53,7 @@ machine.
 | AIX PS/2 1.3 | 86Box (PS/2 Model 80), against a fake API on the same machine over loopback | Any network at all. AIX PS/2's one Ethernet driver wants a 3Com 3C523 EtherLink/MC, which 86Box does not emulate; adding that card to 86Box would let the emulator test it |
 | HP-UX 10.20 and 11i v1 (11.11) | QEMU's B160L (PA-RISC 1.1), with gork cross-compiled to assembly on Linux and assembled and linked on HP-UX; fake API and MCP server across QEMU's user network | Real hardware; a native gcc build on PA-RISC 2.0; a real terminal instead of the serial console |
 | Linux on s390x, armhf, arm64, ppc64el, riscv64, m68k, powerpc, hppa | QEMU's user-mode emulation: the suite only, on the host's kernel; m68k also natively, the whole suite, on Debian in QEMU's Quadra 800 | The machines themselves; the TUI on a real terminal |
+| NetBSD 11.0 on m68k (virt68k) | QEMU's m68k `virt` machine, 256 MB (the kernel panics at boot with 1 GB), over ssh; fake API on the same machine, and Qwen in LM Studio across the LAN | A real 68k machine (mac68k, amiga, atari, hp300) |
 | OpenBSD 7.9 on SPARC64 | QEMU, batch checks | The TUI; a real machine |
 | Mac OS X 10.4 (PowerPC) | QEMU's mac99 (a G4), over ssh; fake API on the same machine, and Qwen in LM Studio across the LAN | Real PowerPC Macs; Terminal.app; Tiger on Intel |
 | macOS | GitHub's runner: the suite | The TUI; Intel Macs; releases between 10.4 and 26 |

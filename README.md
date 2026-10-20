@@ -38,7 +38,7 @@ of `testing/looptest.py`.
 |---|---|---|---|
 | Linux | Slackware 2.0.0 (1994: Linux 1.0.9, gcc 2.5.8, libc 4.5.26, ncurses 1.8.5) | Slackware 3.0, Debian 1.3, 2.1 and 2.2, SuSE 8.1, openSUSE Tumbleweed (gcc 16), Alpine 3.24 (musl), uClibc (static, gcc 15) | Slackware 1.01 (libc 4.4.1): no `realpath`, no `has_colors` |
 | FreeBSD | 2.0 (1994, gcc 2.6.2) | 2.0.5, 15.1 | 1.0 and 1.1.5.1: no `realpath` in libc |
-| NetBSD | 1.0 (1994, gcc 2.4.5), with ncurses 4.2 added | 10.1, 11.0 | |
+| NetBSD | 1.0 (1994, gcc 2.4.5), with ncurses 4.2 added | 10.1, 11.0; 11.0 on m68k (virt68k, in QEMU) | |
 | OpenBSD | 2.0 (1996, gcc 2.7.2.1) | 7.9 | |
 | DragonFly BSD | 6.4.2 (gcc 8.3) | | |
 | MidnightBSD | 4.0.8 (clang 19) | | |
