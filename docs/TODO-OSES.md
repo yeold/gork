@@ -15,7 +15,7 @@ are taken to work too.
 
 | OS | How to run it | What to expect |
 |---|---|---|
-| AIX on POWER (3.x, 4.3, 5.x, 7.x) | QEMU's `40p` (PReP) runs 4.3 with a network, and 5.1 without one (its network driver fails); `ppc64` runs AIX 7.2; 3.x wants real RS/6000 hardware. WinWorld has 3.x to 5.1 | System V curses as on Solaris. Needs gcc from the AIX Toolbox, or `xlc`. Sockets are in libc. AIX PS/2 1.3 works (README); its fixes are under `GORK_AIXPS2`, which needs `_I386`, so they stay off here. |
+| AIX on POWER (3.x, 5.x, 7.x) | QEMU's `40p` (PReP) runs 5.1 without a network (its network driver fails); `ppc64` runs AIX 7.2; 3.x wants real RS/6000 hardware. WinWorld has 3.x to 5.1 | AIX 4.3.3 and AIX PS/2 1.3 work (README), 4.3 with no source change. Needs gcc, or `xlc`. |
 | HP-UX 11i v3 | A PA-RISC 2.0 or Itanium machine | 10.20 and 11.11 work, cross-compiled (README). |
 | IRIX (5.3, 6.5) | No good emulator; MAME's Indy boots but is slow. Real SGI hardware is the practical route | System V curses, MIPSpro `cc` or gcc. Should be close to Solaris. |
 | DEC OSF/1, Digital UNIX, Tru64 (2.x to 5.1B, all on WinWorld) | QEMU's Alpha runs only Linux (no SRM console). The es40 emulator boots Tru64 but is slow and finicky; FreeAXP and AlphaVM run it, on Windows only; real hardware | Sockets in libc, a system curses, DEC's ANSI C or gcc. 64-bit (LP64), as Linux and the BSDs already are, so likely a small `port.h` block at most. The emulator is the hard part. |

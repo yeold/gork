@@ -3,8 +3,9 @@
  * HTTP/1.0, for testing gork where the guest cannot reach the host.
  * A user turn starting with "go" gets tool calls (list_dir, write_file,
  * read_file, run_command); "w1" a write_file, "t1" a run_command of
- * sleep 100, "m2" a call to the MCP server named sh, "esc" two paths
- * outside the working directory, and "slow" waits 30 s.  Only the last
+ * sleep 100, "m1" a call to the MCP server named fake (testing/fakemcp.py),
+ * "m2" one to the MCP server named sh, "esc" two paths outside the working
+ * directory, and "slow" waits 30 s.  Only the last
  * user turn counts: one holding tool results, or anything else, gets a
  * short text reply.  Each request
  * body is appended to fakeapi.log.
@@ -26,6 +27,7 @@
 static const struct { const char *turn, *reply; } one_call[] = {
     { "w1",  TOOL1("t1", "write_file", "{\"path\":\"w1.txt\",\"content\":\"x\"}") },
     { "t1",  TOOL1("t1", "run_command", "{\"command\":\"sleep 100\"}") },
+    { "m1",  TOOL1("t1", "mcp__fake__echo", "{\"text\":\"hello over MCP\"}") },
     { "m2",  TOOL1("t1", "mcp__sh__echo", "{\"text\":\"hi\"}") },
     { NULL, NULL }
 };

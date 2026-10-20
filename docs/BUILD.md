@@ -21,7 +21,7 @@ release named; the table of what was tested is in the
 Systems that build by hand, or with their own toolchain, have a guide
 of their own:
 
-- [AIX PS/2](build/aix.md)
+- [AIX](build/aix.md) (4.3 on POWER, and AIX PS/2)
 - [BeOS](build/beos.md)
 - [DOS](build/dos.md)
 - [HP-UX](build/hpux.md)
