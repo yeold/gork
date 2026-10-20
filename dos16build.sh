@@ -89,7 +89,8 @@ done
 test -s "$obj/gork.exe"
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
-cp "$obj/gork.exe" README.md docs/BUILD.md LICENSE "$WORK/pack/"
+cp "$obj/gork.exe" README.md LICENSE "$WORK/pack/"
+cp docs/build/dos.md "$WORK/pack/BUILD.md"
 rm -f "$OUT/gork-$ver-dos16.zip"
 (cd "$WORK/pack" && zip -q "$OUT/gork-$ver-dos16.zip" ./*)
 echo "$OUT/gork-$ver-dos16.zip"

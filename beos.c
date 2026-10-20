@@ -2,7 +2,7 @@
  * beos.c -- what BeOS R5 lacks: realpath in libroot, and a select() that
  * takes pipes (its net_server one takes only sockets), so a pipe is read
  * with read_timed(), which polls it.  Built only there, by hand: see
- * docs/BUILD.md.
+ * docs/build/beos.md.
  */
 #include <errno.h>
 #include <fcntl.h>

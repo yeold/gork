@@ -1,7 +1,7 @@
 /*
  * plan9.c -- what Plan 9's APE lacks: realpath.  Plan 9 has no symbolic
  * links, so the directory resolves through chdir and getcwd.  Built only
- * there, by hand: see docs/BUILD.md.
+ * there, by hand: see docs/build/plan9.md.
  */
 #include <errno.h>
 #include <limits.h>

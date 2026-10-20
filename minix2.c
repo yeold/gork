@@ -2,7 +2,7 @@
  * minix2.c -- what Minix 2 lacks: realpath, mkstemp, a read() with a
  * timeout and the job control calls (as no-ops) in libc; in its curses, newterm, waddnstr, hline, key codes, a
  * getch that does not block, and the shell and program modes.
- * Built only there, by hand: see docs/BUILD.md.
+ * Built only there, by hand: see docs/build/minix.md.
  */
 #include <sys/types.h>
 #include <sys/stat.h>

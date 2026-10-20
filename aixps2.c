@@ -1,7 +1,7 @@
 /*
  * aixps2.c -- what AIX PS/2 1.3 lacks: memmove, realpath and strtoul
  * in libc, waddnstr and hline in its (System V release 3) curses.
- * Built only there, by hand: see docs/BUILD.md.
+ * Built only there, by hand: see docs/build/aix.md.
  */
 #include <curses.h>
 #include <ctype.h>

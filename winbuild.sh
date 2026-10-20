@@ -50,7 +50,8 @@ for e in gork.exe gorknt3.exe; do
 done
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
-cp gork.exe gorknt3.exe README.md docs/BUILD.md LICENSE "$WORK/pack/"
+cp gork.exe gorknt3.exe README.md LICENSE "$WORK/pack/"
+cp docs/build/windows.md "$WORK/pack/BUILD.md"
 rm -f "$OUT/gork-$ver-win32-legacy.zip"
 (cd "$WORK/pack" && zip -q "$OUT/gork-$ver-win32-legacy.zip" *)
 echo "$OUT/gork-$ver-win32-legacy.zip"

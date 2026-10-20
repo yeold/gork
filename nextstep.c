@@ -10,7 +10,7 @@
  * (getwd reads directories the 4.3BSD way, which -posix breaks), and
  * OPENSTEP 4.2 has no getcwd: the current directory is found here by
  * walking up "..", and a path that realpath fails on is resolved here.
- * Built only there, by hand: see docs/BUILD.md.
+ * Built only there, by hand: see docs/build/nextstep.md.
  */
 #include <sys/types.h>
 #include <sys/ioctl.h>

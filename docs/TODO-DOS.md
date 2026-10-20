@@ -2,7 +2,7 @@
 
 Both DOS builds work and pass `testing/dostest.py`: the 32-bit one
 (`dosbuild.sh`, DJGPP, a 386 or better) and the 16-bit one
-(`dos16build.sh`, Open Watcom, real mode). [BUILD.md](BUILD.md) says how
+(`dos16build.sh`, Open Watcom, real mode). [build/dos.md](build/dos.md) says how
 they are built and what each needs. Nothing is open here; what only real
 hardware can show is in [TODO-REAL.md](TODO-REAL.md).
 

@@ -1,6 +1,6 @@
 /*
  * svr40.c -- what System V Release 4.0 for the 386 lacks: mkstemp.
- * Built only there, by hand: see docs/BUILD.md.
+ * Built only there, by hand: see docs/build/svr4.md.
  */
 #include <sys/types.h>
 #include <errno.h>

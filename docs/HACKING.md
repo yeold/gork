@@ -20,7 +20,7 @@ are made.
 | [nt3crt.c](../nt3crt.c) | What `gorknt3.exe` needs to use `crtdll.dll` |
 | [configure.ac](../configure.ac), [Makefile.am](../Makefile.am) | Build: curses detection, compiler flags, sources |
 | [cJSON/](../cJSON/) | Vendored JSON parser |
-| [docs/BUILD.md](BUILD.md) | Build instructions per operating system |
+| [docs/BUILD.md](BUILD.md) | Build instructions per operating system; the systems built by hand have their own guide in [docs/build/](build/) |
 | [testing/](../testing/) | Fakes and checks |
 | [gork.spec](../gork.spec), [debian/](../debian/) | RPM and deb packaging |
 | [Jenkinsfile](../Jenkinsfile), [release.sh](../release.sh) | CI: tarball and packages; tag builds publish releases |

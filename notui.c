@@ -2,7 +2,7 @@
  * notui.c -- tui.h for a system without curses (Plan 9's APE): batch mode
  * only.  tui_init fails, so every other call stays a no-op, as tui.h
  * promises for batch mode.  Built in place of tui.c, by hand: see
- * docs/BUILD.md.
+ * docs/build/plan9.md.
  */
 #include <stddef.h>
 #include "tui.h"

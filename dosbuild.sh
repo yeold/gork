@@ -32,7 +32,8 @@ make -f Makefile.dj CC="$WORK/djgpp/bin/i586-pc-msdosdjgpp-gcc" \
 "$WORK/djgpp/bin/i586-pc-msdosdjgpp-strip" gork.exe
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
-cp gork.exe README.md docs/BUILD.md LICENSE "$WORK/pack/"
+cp gork.exe README.md LICENSE "$WORK/pack/"
+cp docs/build/dos.md "$WORK/pack/BUILD.md"
 rm -f "$OUT/gork-$ver-dos.zip"
 (cd "$WORK/pack" && zip -q "$OUT/gork-$ver-dos.zip" *)
 echo "$OUT/gork-$ver-dos.zip"

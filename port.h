@@ -110,7 +110,7 @@ int mkstemp(char *tmpl);
 #endif
 
 /* Plan 9 (9front), through APE: pcc predefines nothing of its own, so
-   the build passes -DGORK_PLAN9 (docs/BUILD.md).  There is no curses, so
+   the build passes -DGORK_PLAN9 (docs/build/plan9.md).  There is no curses, so
    notui.c takes tui.c's place and only batch mode works; select is in
    <sys/select.h> and realpath in plan9.c.  No fchmod, killpg or
    symbolic links. */

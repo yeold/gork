@@ -1,7 +1,7 @@
 /*
  * sunos4.c -- what SunOS 4.1 lacks: memmove, raise, strerror and strtoul,
  * a realloc that takes NULL and the POSIX getpgrp.  Built only there, by
- * hand: see docs/BUILD.md.
+ * hand: see docs/build/sunos4.md.
  */
 #include <sys/types.h>
 #include <ctype.h>
