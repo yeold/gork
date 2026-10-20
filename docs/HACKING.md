@@ -21,7 +21,7 @@ are made.
 | [configure.ac](../configure.ac), [Makefile.am](../Makefile.am) | Build: curses detection, compiler flags, sources |
 | [cJSON/](../cJSON/) | Vendored JSON parser |
 | [docs/BUILD.md](BUILD.md) | Build instructions per operating system; the systems built by hand have their own guide in [docs/build/](build/) |
-| [testing/](../testing/) | Fakes and checks |
+| [testing/](../testing/) | Fakes and checks; [docs/TODO-VMS.md](TODO-VMS.md) is the plan for scripts that rebuild the test VMs |
 | [gork.spec](../gork.spec), [debian/](../debian/) | RPM and deb packaging |
 | [Jenkinsfile](../Jenkinsfile), [release.sh](../release.sh) | CI: tarball and packages; tag builds publish releases |
 | [images/](../images/) | Icon, installed to the hicolor theme |
