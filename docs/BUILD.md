@@ -451,6 +451,18 @@ Batch mode, the TUI and MCP (over HTTP, and on stdio) work, tested in
 nothing ncurses can use, so history and scrolling need a terminal over
 telnet. A command cannot be interrupted with Esc.
 
+**NeXTSTEP 3.3** for Intel builds the same way, with the Developer CD's
+`DeveloperTools` and `DeveloperLibs` packages (unpack each with
+`uncompress -c X.tar.Z | /NextAdmin/Installer.app/installer_bigtar xpBf -`
+from `/`). Its `-posix` library differs from OPENSTEP's: `getwd` and
+`realpath` fail outright and `readdir` returns the POSIX record;
+`nextstep.c` handles both. Its `mkdir` has no `-p`. Batch mode, the TUI
+and MCP on stdio work, tested in 86Box over loopback against
+`testing/fakeapi.c`: its installer knows only SCSI (an Adaptec 1542C),
+and 86Box's WD8013 card with its `SMC16` driver passes no TCP to the
+host. With a host name set in `/etc/hostconfig`, or once a network is
+up, NetInfo times out on every lookup, logins included.
+
 ## GNU/Hurd
 
 **Debian GNU/Hurd.** `apt-get install gcc make libncurses-dev`, then build

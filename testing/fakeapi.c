@@ -2,16 +2,39 @@
  * fakeapi.c -- a fake Messages API on 127.0.0.1:PORT (default 8099), plain
  * HTTP/1.0, for testing gork where the guest cannot reach the host.
  * A user turn starting with "go" gets tool calls (list_dir, write_file,
- * read_file, run_command); a turn holding tool results, or anything else,
- * gets a short text reply.  Each request body is appended to fakeapi.log.
+ * read_file, run_command); "w1" a write_file, "t1" a run_command of
+ * sleep 100, "m2" a call to the MCP server named sh, "esc" two paths
+ * outside the working directory, and "slow" waits 30 s.  Only the last
+ * user turn counts: one holding tool results, or anything else, gets a
+ * short text reply.  Each request
+ * body is appended to fakeapi.log.
  */
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#define TOOL1(id, name, input) \
+"{\"id\":\"m1\",\"type\":\"message\",\"role\":\"assistant\",\"stop_reason\":\"tool_use\"," \
+"\"content\":[{\"type\":\"tool_use\",\"id\":\"" id "\",\"name\":\"" name "\",\"input\":" input "}]," \
+"\"usage\":{\"input_tokens\":1000,\"output_tokens\":20}}"
+
+static const struct { const char *turn, *reply; } one_call[] = {
+    { "w1",  TOOL1("t1", "write_file", "{\"path\":\"w1.txt\",\"content\":\"x\"}") },
+    { "t1",  TOOL1("t1", "run_command", "{\"command\":\"sleep 100\"}") },
+    { "m2",  TOOL1("t1", "mcp__sh__echo", "{\"text\":\"hi\"}") },
+    { NULL, NULL }
+};
+
+static const char esc_reply[] =
+"{\"id\":\"m1\",\"type\":\"message\",\"role\":\"assistant\",\"stop_reason\":\"tool_use\","
+"\"content\":[{\"type\":\"tool_use\",\"id\":\"t1\",\"name\":\"write_file\",\"input\":{\"path\":\"../escape.txt\",\"content\":\"x\"}},"
+"{\"type\":\"tool_use\",\"id\":\"t2\",\"name\":\"read_file\",\"input\":{\"path\":\"/etc/passwd\"}}],"
+"\"usage\":{\"input_tokens\":1000,\"output_tokens\":20}}";
 
 static const char tools_reply[] =
 "{\"id\":\"m1\",\"type\":\"message\",\"role\":\"assistant\",\"stop_reason\":\"tool_use\","
@@ -29,14 +52,27 @@ static const char text_reply[] =
 
 static char req[200000];
 
+/* The user turn is a string, or a text block in the TUI. */
+static int turn_is(const char *body, const char *turn)
+{
+    char pat[64];
+
+    sprintf(pat, "\"content\":\"%s\"", turn);
+    if (strstr(body, pat) != NULL) return 1;
+    sprintf(pat, "\"text\":\"%s\"", turn);
+    return strstr(body, pat) != NULL;
+}
+
 int main(int argc, char **argv)
 {
     struct sockaddr_in sa;
     int                s, c, n, len, want, one = 1;
     char              *body, *p, head[256];
-    const char        *rep;
+    const char        *rep, *last;
     FILE              *log;
+    int                i;
 
+    signal(SIGPIPE, SIG_IGN);   /* a client that gave up must not end us */
     memset(&sa, 0, sizeof sa);
     sa.sin_family = AF_INET;
     sa.sin_port = htons(argc > 1 ? atoi(argv[1]) : 8099);
@@ -68,12 +104,23 @@ int main(int argc, char **argv)
         if (body == NULL) body = req + len;
         log = fopen("fakeapi.log", "a");
         if (log != NULL) { fputs(body, log); fputs("\n", log); fclose(log); }
-        if (strstr(body, "tool_result") == NULL &&
-            (strstr(body, "\"content\":\"go") != NULL ||
-             strstr(body, "\"text\":\"go") != NULL))
-            rep = tools_reply;
-        else
-            rep = text_reply;
+        /* The last user turn: the TUI sends the whole conversation. */
+        last = body;
+        while ((p = strstr(last + 1, "\"role\":\"user\"")) != NULL)
+            last = p;
+        rep = text_reply;
+        if (strstr(last, "tool_result") == NULL) {
+            if (strstr(last, "\"content\":\"go") != NULL ||
+                strstr(last, "\"text\":\"go") != NULL)
+                rep = tools_reply;
+            else if (turn_is(last, "esc"))
+                rep = esc_reply;
+            else if (turn_is(last, "slow"))
+                sleep(30);
+            for (i = 0; one_call[i].turn != NULL; i++)
+                if (turn_is(last, one_call[i].turn))
+                    rep = one_call[i].reply;
+        }
         sprintf(head, "HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n"
                       "Content-Length: %d\r\nConnection: close\r\n\r\n",
                 (int) strlen(rep));

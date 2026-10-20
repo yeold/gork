@@ -48,7 +48,7 @@ of `testing/looptest.py`.
 | AIX | AIX PS/2 1.3 (1992, MetaWare High C), in 86Box, over loopback only | | AIX on POWER: untested |
 | HP-UX | 10.20 (1996) on PA-RISC, cross-compiled with gcc 12.4, assembled and linked on HP-UX | 11i v1 (11.11) | 11i v2 and v3: untested |
 | Minix | 2.0.4 (2001, ACK), with its own TCP/IP | 3.3.0 (clang 3.4) | |
-| NeXTSTEP | OPENSTEP 4.2 for Intel (1996, NeXT cc 744.13, gcc 2.7.2.1), with ncurses 4.2, in 86Box | | NeXTSTEP 3.x and the 68k machines: untested |
+| NeXTSTEP | NeXTSTEP 3.3 for Intel (1995), with ncurses 4.2, in 86Box, over loopback only | OPENSTEP 4.2 (NeXT cc 744.13, gcc 2.7.2.1) | The 68k machines: untested |
 | OS/2 | Warp 3 Connect (1995), with EMX 0.9d (gcc 2.8.1) and PDCurses 3.4 | Warp 4.52 | eComStation, ArcaOS: untested |
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | QNX | 6.2.1 Non-Commercial Edition (2003, gcc 2.95.3, its ncurses), in QEMU | | QNX 4: untested |

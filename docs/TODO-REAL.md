@@ -43,7 +43,8 @@ machine.
 | Solaris 2.5.1, 2.6 and 10, OpenSolaris 134, OmniOS | QEMU (x86) | SPARC, which is what most of these ran on |
 | Minix 2.0.4 and 3.3.0, GNU/Hurd, DragonFly BSD, MidnightBSD | QEMU | Real hardware |
 | OS/2 Warp 3 Connect and 4.52 | QEMU, booted to a text-mode `CMD.EXE` (no desktop), fake API and MCP server across QEMU's user network | Real hardware; a VIO window on the desktop; a FAT boot disk |
-| OPENSTEP 4.2 (Intel) | 86Box (a Pentium on an i430HX board, PCnet-PCI network card), text console; fake API and MCP server across 86Box's SLiRP network | Real hardware; NeXTSTEP 3.x; Terminal.app on the desktop; the arrow keys, which the emulated console does not send in a usable form |
+| NeXTSTEP 3.3 (Intel) | 86Box (an Adaptec 1542C for disk and CD, WD8013EBT network card), text console; fake API (`testing/fakeapi.c`) and MCP server on stdio over loopback: TCP to the host does not get through | Any network; HTTP MCP; real hardware; the arrow keys |
+| OPENSTEP 4.2 (Intel) | 86Box (a Pentium on an i430HX board, PCnet-PCI network card), text console; fake API and MCP server across 86Box's SLiRP network | Real hardware; Terminal.app on the desktop; the arrow keys, which the emulated console does not send in a usable form |
 | SunOS 4.1.4 | QEMU's SPARCstation 5 with its real PROM, serial console; fake API and MCP server across QEMU's user network | Real hardware; the Sun console and keyboard; sun4c machines |
 | QNX 6.2.1 | QEMU (an ISA NE2000), in Photon's terminal; fake API and MCP server across QEMU's user network | Real hardware; the text console; QNX 6.3 and later |
 | BeOS R5 | QEMU (Pentium II, RTL8139 network card), the Terminal app; fake API and MCP server across QEMU's user network | Real hardware; BONE; the TUI over telnet |
