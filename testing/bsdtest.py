@@ -90,22 +90,23 @@ def fetch(target):
     os.makedirs(d, exist_ok=True)
     raw = os.path.join(d, target + "-" + os.path.basename(url))
     img = raw.rsplit(".", 1)[0] if pack else raw
-    if not pack and os.path.exists(raw + ".ok"):
+    ok = img + ".ok"                # written once the image is whole
+    if os.path.exists(ok) and os.path.exists(img):
         return img
-    if os.path.exists(img):
-        return img
-    if not os.path.exists(raw):
-        subprocess.run(["curl", "-fsSL", "-o", raw, url], check=True)
+    # into a .part first: an interrupted download must not pass for one
+    part = raw + ".part"
+    subprocess.run(["curl", "-fsSL", "-o", part, url], check=True)
     h = hashlib.sha256()
-    with open(raw, "rb") as f:
+    with open(part, "rb") as f:
         for b in iter(lambda: f.read(1 << 20), b""):
             h.update(b)
     if h.hexdigest() != sha:
-        sys.exit("bsdtest: checksum mismatch for " + raw)
-    if pack:
-        subprocess.run([pack, "-dk", raw], check=True)
-    else:
-        open(raw + ".ok", "w").close()
+        os.remove(part)
+        sys.exit("bsdtest: checksum mismatch for " + url)
+    os.rename(part, raw)
+    if pack:                        # unpacked in place: the images are big
+        subprocess.run([pack, "-df", raw], check=True)
+    open(ok, "w").close()
     return img
 
 
