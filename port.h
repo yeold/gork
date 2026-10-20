@@ -91,6 +91,24 @@ pid_t         sunos4_getpgrp(void);
 #define getpgrp sunos4_getpgrp
 #endif
 
+/* System V Release 4.0 for the 386 (Dell Unix 2.2 and its AT&T cc): the
+   compiler predefines only i386 and unix, and the headers have no
+   ssize_t or S_ISLNK; libc has no killpg or mkstemp (svr40.c).  Later
+   SVR4s (Solaris, UnixWare) define _SSIZE_T, which keeps them out. */
+#if defined(i386) && defined(unix) && !defined(__GNUC__) && \
+    !defined(__svr4__) && !defined(__SVR4) && !defined(__USLC__)
+#include <sys/types.h>
+#ifndef _SSIZE_T
+#define GORK_SVR40
+typedef int ssize_t;
+int mkstemp(char *tmpl);
+#define killpg(p, sig) kill(-(p), sig)
+#ifndef S_ISLNK
+#define S_ISLNK(m) (((m) & 0170000) == 0120000)
+#endif
+#endif
+#endif
+
 /* BeOS R5 (gcc 2.9; its net_server stack, not BONE, and not Haiku):
    sockets are not file descriptors, so they take send, recv and
    closesocket, and select() takes nothing else: a pipe is read with

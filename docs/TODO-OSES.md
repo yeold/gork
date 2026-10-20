@@ -23,7 +23,7 @@ are taken to work too.
 | Ultrix, A/UX 1.x and 2.x | GXemul's DECstation (MIPS Ultrix 4.x, with a network) or SIMH (VAX Ultrix), Shoebill (A/UX, fragile) | Pre-ANSI bundled compilers, so gcc, as on SunOS 4 (see docs/BUILD.md). |
 | m68k Macintosh, NetBSD/mac68k or A/UX | QEMU's `q800` machine (a Quadra 800) runs NetBSD/mac68k, and newer QEMU is said to boot A/UX 3; Shoebill runs A/UX on an emulated Mac II | Debian on the same `q800` works (README). NetBSD/mac68k should be `configure` and `make`. A/UX is System V with BSD sockets and a pre-ANSI `cc`, so it needs gcc, as SunOS 4 did. The classic Mac OS on the same machines is a port: see below. |
 | Mac OS X (old): 10.0 to 10.3, and Mac OS X Server 1.0 (Rhapsody) | `qemu-system-ppc`; 10.0 and Rhapsody boot less reliably in it | 10.4 on PowerPC works (README), with no change to the source. gcc comes with the Developer Tools. |
-| SVR4 on the 386: AT&T System V, Intel Unix System V, Dell Unix | x86 in QEMU or 86Box (floppy installs) | System V curses, sockets in `libsocket`/`libnsl`, which `configure` already looks for: close to Solaris 2.x. Find out first whether the media has a C compiler or wants a separate development package. |
+| SVR4 on the 386: AT&T System V, Intel Unix System V, ESIX | x86 in QEMU or 86Box (floppy installs) | Dell Unix SVR4 works (README). ESIX 4.0.3 on archive.org lacks base disk 10; AT&T's 2.1 on WinWorld has no C compiler or TCP/IP. |
 | NeXTSTEP 0.x to 2.x | Previous (68k NeXT machines, with a network) | 68k only. Likely close to OPENSTEP 4.2, with an older NeXT cc. |
 | QNX 4 | x86 in QEMU | QNX 6.2.1 works (README). QNX 4 is a different system underneath, with Watcom C. |
 | Linux with dietlibc | A cross toolchain | No curses port in common use; batch mode only, if at all. |
@@ -74,13 +74,12 @@ reachable from C. These have them and are not listed above.
 
 ## Suggested order
 
-1. SVR4 on the 386 (AT&T, Intel, Dell): close to Solaris 2.x.
-2. Plan 9: batch mode only as a first goal.
-3. UEFI application: reuse the decisions of the DOS and Windows ports
+1. Plan 9: batch mode only as a first goal.
+2. UEFI application: reuse the decisions of the DOS and Windows ports
    (no `fork`, a polled timeout, odd path syntax); batch mode in QEMU with
    OVMF first. Then U-Boot and the other boot firmware: check each for TCP
    first; U-Boot running `gork.efi` is the cheapest thing to try.
-4. Classic Mac OS (System 7 first, in `q800` or Basilisk II), then
+3. Classic Mac OS (System 7 first, in `q800` or Basilisk II), then
    System 6 if an emulator with a network for it turns up.
 
 Set aside for now: AIX on POWER (AIX 5.1 in QEMU has no working network;

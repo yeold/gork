@@ -43,6 +43,7 @@ of `testing/looptest.py`.
 | DragonFly BSD | 6.4.2 (gcc 8.3) | | |
 | MidnightBSD | 4.0.8 (clang 19) | | |
 | SunOS 4 | 4.1.4 (1994) on SPARC, with gcc 2.95.3 and ncurses 5.9 built there, in QEMU | | 4.1.3 and older: untested |
+| System V Release 4.0 | Dell Unix SVR4 Issue 2.2 (1992, AT&T's C compiler, system curses) on the 386, in 86Box | | ESIX 4.0.3 and AT&T's own 2.1: untested |
 | Solaris | 2.5.1 (1996, gcc 2.7.2) | 2.6, 10 | 2.4: its kernel panics at boot in QEMU, so untested |
 | illumos | OpenSolaris build 134 (2010, gcc 3.4.3) | OmniOS r151058, with the system curses or ncurses | |
 | AIX | AIX PS/2 1.3 (1992, MetaWare High C), in 86Box, over loopback only | | AIX on POWER: untested |

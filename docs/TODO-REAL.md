@@ -40,6 +40,7 @@ machine.
 | Slackware 2.0.0 and 3.0, Debian 1.3 | QEMU | Hardware of the time: a 386 or 486 with 4 to 8 MB |
 | Debian 2.1 and 2.2 | Docker, on a current kernel | Their own kernels |
 | FreeBSD 2.0 and 2.0.5, NetBSD 1.0, OpenBSD 2.0 | QEMU | Real hardware |
+| Dell Unix SVR4 Issue 2.2 | 86Box (a Pentium, WD8013EBT network card), over telnet; fake API on the same machine, and Qwen in LM Studio across the LAN | Real hardware of the time; the console |
 | Solaris 2.5.1, 2.6 and 10, OpenSolaris 134, OmniOS | QEMU (x86) | SPARC, which is what most of these ran on |
 | Minix 2.0.4 and 3.3.0, GNU/Hurd, DragonFly BSD, MidnightBSD | QEMU | Real hardware |
 | OS/2 Warp 3 Connect and 4.52 | QEMU, booted to a text-mode `CMD.EXE` (no desktop), fake API and MCP server across QEMU's user network | Real hardware; a VIO window on the desktop; a FAT boot disk |
