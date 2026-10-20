@@ -145,10 +145,17 @@ def qemu(target, img, iso, w):
 def openbsd_disk(target, media):
     """The OpenBSD system the test runs on: installed from MEDIA once, with
     INSTALL_CONF, then kept as GORK_VM/TARGET.qcow2."""
-    import http.server, threading
+    import fcntl, http.server, threading
     arch = target.split("-")[1]
     disk = os.path.join(os.path.dirname(media), target + ".qcow2")
     if os.path.exists(disk):
+        return disk
+    # one install at a time in a cache that builds share; then look again,
+    # another may have made the disk meanwhile
+    lock = open(os.path.join(os.path.dirname(media), ".install.lock"), "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    if os.path.exists(disk):
+        lock.close()
         return disk
     w = tempfile.mkdtemp(prefix="bsdinstall.")
     with open(os.path.join(w, "install.conf"), "w") as f:
@@ -162,7 +169,9 @@ def openbsd_disk(target, media):
             pass
     srv = http.server.ThreadingHTTPServer(("0.0.0.0", 0), Quiet)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    new = disk + ".new"
+    # a name of its own: a disk some earlier, killed, run left (and a QEMU
+    # it left that may still hold it) must not get in the way
+    new = "%s.new.%d" % (disk, os.getpid())
     subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", new, "6G"], check=True)
     log = open(os.path.join(w, "install.log"), "wb")
     c = Console(machine(arch, w, ["-drive", "file=%s,if=virtio,format=qcow2" % new,
@@ -193,6 +202,7 @@ def openbsd_disk(target, media):
     os.rename(new, disk)
     shutil.copy(log.name, disk + ".install.log")
     shutil.rmtree(w)
+    lock.close()
     return disk
 
 
