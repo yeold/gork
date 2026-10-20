@@ -41,7 +41,7 @@ are taken to work too.
 
 | OS | What it would take |
 |---|---|
-| Plan 9, 9front | APE gives a C89 compiler, `fork` and BSD-style sockets, but there is no curses and no termios. Batch mode is plausible through APE; the TUI would have to be rewritten for the Plan 9 console. Runs well in QEMU. |
+| Plan 9: the TUI; Bell Labs' 4th edition | 9front works in batch mode (README). A TUI would have to be written for the Plan 9 console or for rio, since there is no curses. The 4th edition's APE is older: expect more gaps than 9front's. |
 | UEFI application (`gork.efi`) | No operating system at all: a PE executable started from the UEFI shell or boot menu, 64-bit, with all the RAM. Firmware offers TCP4/TCP6, DHCP and DNS protocols, a text console and FAT file access, so the pieces exist. No libc (EDK2's StdLib is a partial one with a socket layer, or write thin replacements), no curses, no `fork` and no signals. Expect to rewrite the transport against the event-based TCP protocol, give the TUI its own screen layer, write `realpath` for `fs0:\dir\file` paths, and leave out `run_command` and MCP. The DOS port is the model: no `fork`, polled timeout, odd path syntax. Test in QEMU with OVMF; start with batch mode. Real firmware often has the network stack off except for PXE. |
 | U-Boot and other boot firmware (coreboot payload, GRUB module, barebox, Open Firmware) | Same idea as UEFI, with less underneath. First question for each is whether it has TCP at all: boot loaders traditionally stop at UDP (TFTP, DHCP). U-Boot: a "standalone application" gets only a small jump table (console, malloc, timers), but newer builds carry an lwIP stack with TCP (`wget`), and U-Boot can also start UEFI applications, so `gork.efi` may run there if its UEFI subset includes the TCP protocols. coreboot: a payload linked against libpayload gets a small libc and a curses, but no network stack. GRUB: has TCP and HTTP in its `net` module, but code must be a GRUB module. barebox: Linux-like shell and drivers, network mostly UDP. Open Firmware: Forth and a client interface; TCP is rare. Nothing here has been checked; find out what each offers before planning. Test in QEMU (`-bios u-boot.bin`, coreboot ROM, OVMF). |
 | Classic Mac OS on m68k: System 6 (6.0.x) and System 7 (7.0 to 7.6; 8.0 and 8.1 likely the same) | No Unix underneath: no processes, no `fork`, no command line and no curses. TCP comes from MacTCP, the only stack System 6 has (Open Transport needs 7.5 or later); neither is BSD sockets, though GUSI wraps them as such (GUSI 1 for MacTCP, GUSI 2 needs Open Transport). The Retro68 cross toolchain (gcc for m68k and PowerPC Macs) has a small console window library, enough for batch mode; the TUI needs its own screen layer, and `run_command` and MCP go, as on DOS. Paths use `:`. System 6 means a 68000 (Mac Plus, SE) with 1 to 4 MB, no colour and 32 KB code segments, so expect the DOS 16-bit limits; System 7 adds 32-bit addressing on a 68020 or better. Test System 7 in QEMU `q800` (7.1 and later) or Basilisk II, both of which can give the guest a network. For System 6 that is the open question: Mini vMac runs it but has no network, and Basilisk II starts at System 7; MAME's Mac II or SE/30 may do it, unchecked. All of them need a Mac ROM image. Find out first whether Retro68 still targets System 6, and whether its libc and GUSI are enough for `relay.c`. |
@@ -74,14 +74,13 @@ reachable from C. These have them and are not listed above.
 
 ## Suggested order
 
-1. Plan 9: batch mode only as a first goal.
-2. UEFI application: reuse the decisions of the DOS and Windows ports
+1. UEFI application: reuse the decisions of the DOS and Windows ports
    (no `fork`, a polled timeout, odd path syntax); batch mode in QEMU with
    OVMF first. Then U-Boot and the other boot firmware: check each for TCP
    first; U-Boot running `gork.efi` is the cheapest thing to try.
-3. Classic Mac OS (System 7 first, in `q800` or Basilisk II), then
+2. Classic Mac OS (System 7 first, in `q800` or Basilisk II), then
    System 6 if an emulator with a network for it turns up.
-4. Tru64 on Alpha, in es40: try a networked install first; the port
+3. Tru64 on Alpha, in es40: try a networked install first; the port
    itself should be small.
 
 Set aside for now: AIX on POWER (AIX 5.1 in QEMU has no working network;

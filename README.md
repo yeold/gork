@@ -53,6 +53,7 @@ of `testing/looptest.py`.
 | OS/2 | Warp 3 Connect (1995), with EMX 0.9d (gcc 2.8.1) and PDCurses 3.4 | Warp 4.52 | eComStation, ArcaOS: untested |
 | GNU/Hurd | Debian GNU/Hurd 2026-03 (gcc 15, glibc 2.42) | | |
 | QNX | 6.2.1 Non-Commercial Edition (2003, gcc 2.95.3, its ncurses), in QEMU | | QNX 4: untested |
+| Plan 9 | 9front 11952 (2026), through APE (`pcc`), in QEMU: batch mode only | | The TUI: no curses on Plan 9; Bell Labs' 4th edition: untested |
 | Haiku | R1/beta6 | | Older releases: may work, untested |
 | BeOS | R5 (2000; the free Personal Edition, gcc 2.9 from the 5.0.1 developer tools), with ncurses 5.9 built there, in QEMU | | BONE, 5.0.3: untested |
 | macOS | Mac OS X 10.4 Tiger on PowerPC (2005, gcc 4.0 from Xcode 2.0, system ncurses 5.4), in QEMU | 26.6 on arm64 (Apple clang 21) | 10.0 to 10.3: untested |

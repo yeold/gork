@@ -109,6 +109,22 @@ int mkstemp(char *tmpl);
 #endif
 #endif
 
+/* Plan 9 (9front), through APE: pcc predefines nothing of its own, so
+   the build passes -DGORK_PLAN9 (docs/BUILD.md).  There is no curses, so
+   notui.c takes tui.c's place and only batch mode works; select is in
+   <sys/select.h> and realpath in plan9.c.  No fchmod, killpg or
+   symbolic links. */
+#ifdef GORK_PLAN9
+#define GORK_NO_TUI
+#include <sys/types.h>
+#include <sys/select.h>
+char *realpath(const char *path, char *out);
+#define killpg(p, sig) kill(-(p), sig)
+#ifndef S_ISLNK
+#define S_ISLNK(m) 0
+#endif
+#endif
+
 /* BeOS R5 (gcc 2.9; its net_server stack, not BONE, and not Haiku):
    sockets are not file descriptors, so they take send, recv and
    closesocket, and select() takes nothing else: a pipe is read with

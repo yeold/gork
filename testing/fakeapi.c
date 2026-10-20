@@ -79,8 +79,15 @@ int main(int argc, char **argv)
     sa.sin_addr.s_addr = htonl(0x7f000001L);
     s = socket(AF_INET, SOCK_STREAM, 0);
     if (s < 0) { perror("socket"); return 1; }
+#ifdef SO_REUSEADDR
     setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *) &one, sizeof one);
-    if (bind(s, (struct sockaddr *) &sa, sizeof sa) < 0) { perror("bind"); return 1; }
+#endif
+    if (bind(s, (struct sockaddr *) &sa, sizeof sa) < 0) {
+        /* Plan 9's APE binds only the wildcard address */
+        sa.sin_addr.s_addr = htonl(INADDR_ANY);
+        if (bind(s, (struct sockaddr *) &sa, sizeof sa) < 0) { perror("bind"); return 1; }
+        fprintf(stderr, "fakeapi: listening on all addresses\n");
+    }
     if (listen(s, 5) < 0) { perror("listen"); return 1; }
     for (;;) {
         c = accept(s, (struct sockaddr *) 0, 0);

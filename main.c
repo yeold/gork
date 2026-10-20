@@ -661,9 +661,9 @@ static const char *save_file(const char *real, const char *data, size_t n)
         goto fail;
     }
 #if !defined(GORK_NO_FORK) && !defined(GORK_EMX) && !defined(GORK_MINIX2) && \
-    !defined(GORK_BEOS)
+    !defined(GORK_BEOS) && !defined(GORK_PLAN9)
     /* the old file's mode, set on the open file: by name, something else
-       could be standing there by now (EMX, Minix 2 and BeOS have no
+       could be standing there by now (EMX, Minix 2, BeOS and APE have no
        fchmod) */
     if (stat(real, &st) == 0) fchmod(fd, st.st_mode & 07777);
 #endif
@@ -672,7 +672,7 @@ static const char *save_file(const char *real, const char *data, size_t n)
         goto fail;
     }
 #if defined(GORK_NO_FORK) || defined(GORK_EMX) || defined(GORK_MINIX2) || \
-    defined(GORK_BEOS)
+    defined(GORK_BEOS) || defined(GORK_PLAN9)
     if (stat(real, &st) == 0) chmod(tmp, st.st_mode & 07777);
 #endif
 #if defined(_WIN32) || defined(GORK_DOS16) || defined(GORK_EMX)
@@ -1196,6 +1196,12 @@ static char *tool_run_command(cJSON *input, int *is_err)
             if (sh == NULL) sh = "cmd.exe";
             execlp(sh, sh, "/c", cmd->valuestring, (char *) NULL);
         }
+#elif defined(GORK_PLAN9)
+        /* /bin/sh is there under ape/psh; started from rc, take APE's
+           shell directly, since the commands a model writes are sh, not
+           rc */
+        execl("/bin/sh", "sh", "-c", cmd->valuestring, (char *) NULL);
+        execl("/bin/ape/sh", "sh", "-c", cmd->valuestring, (char *) NULL);
 #else
         execl("/bin/sh", "sh", "-c", cmd->valuestring, (char *) NULL);
 #endif
@@ -3214,6 +3220,13 @@ int main(int argc, char **argv)
     if (load_allow(cfg(CFG_ALLOW)) != 0) return 2;
     home = getenv("HOME");
 
+#ifdef GORK_NO_TUI
+    if (argc == 1) {
+        fprintf(stderr, "gork: this build has no TUI: give the task on the "
+                        "command line\n");
+        return 2;
+    }
+#endif
     /* Interactive only: a task on the command line is consent already. */
     if (argc == 1 && home != NULL &&
         join(trust_path, sizeof trust_path, home, "/" DOT_GORK "/trusted") == 0) {
