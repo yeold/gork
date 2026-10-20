@@ -84,9 +84,11 @@ emulator and want a run on real hardware.
 
 Releases carry ready-made packages: a `.deb` and an `.rpm`, static Linux
 binaries for ten CPUs (`gork-<version>-linux-<arch>.tar.gz`: amd64, i386,
-arm64, armhf, riscv64, s390x, ppc64el, powerpc, m68k, hppa), a macOS
-installer, and the DOS and Windows zips below. Everything else builds from
-the source tarball.
+arm64, armhf, riscv64, s390x, ppc64el, powerpc, m68k, hppa), static
+binaries for FreeBSD 15.1, NetBSD 11.0 and OpenBSD 7.9 on amd64 and arm64
+(`gork-<version>-<os>-<arch>.tar.gz`; the OpenBSD ones only for that
+release), a macOS installer, and the DOS and Windows zips below.
+Everything else builds from the source tarball.
 
 There are two DOS packages, both without MCP servers, streaming or input
 of several lines.

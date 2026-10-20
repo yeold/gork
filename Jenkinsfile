@@ -2,7 +2,9 @@
 // for ten CPUs (linuxbuild.sh), each run through the suite under qemu-user;
 // the DOS zips, 32-bit (dosbuild.sh) and 16-bit (dos16build.sh), tested on
 // FreeDOS in QEMU (testing/dostest.py); and the legacy Windows zip, cross-
-// built with MinGW (winbuild.sh) and tested under Wine (testing/wintest.py).
+// built with MinGW (winbuild.sh) and tested under Wine (testing/wintest.py);
+// static FreeBSD, NetBSD and OpenBSD binaries cross-built with clang
+// (bsdbuild.sh), each run on its own system in QEMU (testing/bsdtest.py).
 // Each in a throwaway
 // container via plain `docker run` (no Docker Pipeline plugin needed).
 // Containers build as root in their own /tmp and only copy finished
@@ -113,6 +115,32 @@ pipeline {
                                 mkdir /tmp/w && cd /tmp/w && unzip -q /out/gork-*-win32-legacy.zip
                                 cd /src && python3 testing/wintest.py wine /tmp/w/gork.exe &&
                                     python3 testing/wintest.py wine /tmp/w/gorknt3.exe'
+                        '''
+                    }
+                }
+                stage('bsd') {
+                    steps {
+                        // bsdwork/ keeps the release sets, the sysroots and
+                        // the VM images between builds (a few GB)
+                        sh '''
+                            mkdir -p bsdwork
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out -v "$PWD/bsdwork":/work debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends clang lld llvm curl ca-certificates xz-utils >/dev/null
+                                cp -r /src /tmp/src && cd /tmp/src
+                                sh bsdbuild.sh /out /work && chown -R '"$(id -u):$(id -g)"' /out /work'
+                            # and run each on its own system: the official VM
+                            # image, booted in QEMU, the checks of testing/vmcheck.sh
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$PWD/bsdwork":/work debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils qemu-efi-aarch64 ovmf genisoimage python3 xz-utils gzip curl ca-certificates >/dev/null
+                                cd /src && mkdir -p /work/tmp && rc=0
+                                for t in freebsd-amd64 freebsd-arm64 netbsd-amd64 netbsd-arm64 openbsd-amd64 openbsd-arm64; do
+                                    echo "== $t"
+                                    GORK_VM=/work/vm TMPDIR=/work/tmp python3 testing/bsdtest.py $t /out/gork-*-$t.tar.gz /work/$t/fakeapi || rc=1
+                                done
+                                chown -R '"$(id -u):$(id -g)"' /work
+                                exit $rc'
                         '''
                     }
                 }

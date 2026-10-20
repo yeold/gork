@@ -5,10 +5,10 @@
  * read_file, run_command); "w1" a write_file, "t1" a run_command of
  * sleep 100, "m1" a call to the MCP server named fake (testing/fakemcp.py),
  * "m2" one to the MCP server named sh, "esc" two paths outside the working
- * directory, and "slow" waits 30 s.  Only the last
- * user turn counts: one holding tool results, or anything else, gets a
- * short text reply.  Each request
- * body is appended to fakeapi.log.
+ * directory, and "slow" waits 30 s.  Only the last user turn counts: one
+ * holding tool results, or anything else, gets a short text reply.  Each
+ * request body is appended to fakeapi.log.  testing/vmcheck.sh runs gork
+ * against it.
  */
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -70,7 +70,7 @@ int main(int argc, char **argv)
     struct sockaddr_in sa;
     int                s, c, n, len, want, one = 1;
     char              *body, *p, head[256];
-    const char        *rep, *last;
+    const char        *rep, *last, *u;
     FILE              *log;
     int                i;
 
@@ -115,8 +115,8 @@ int main(int argc, char **argv)
         if (log != NULL) { fputs(body, log); fputs("\n", log); fclose(log); }
         /* The last user turn: the TUI sends the whole conversation. */
         last = body;
-        while ((p = strstr(last + 1, "\"role\":\"user\"")) != NULL)
-            last = p;
+        while ((u = strstr(last + 1, "\"role\":\"user\"")) != NULL)
+            last = u;
         rep = text_reply;
         if (strstr(last, "tool_result") == NULL) {
             if (strstr(last, "\"content\":\"go") != NULL ||

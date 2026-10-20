@@ -129,6 +129,11 @@ and its ncurses no `has_colors`.
 
 ## FreeBSD
 
+Releases carry static binaries for FreeBSD 15.1 on amd64 and arm64,
+`gork-<version>-freebsd-<arch>.tar.gz`, cross-built on Linux by
+`bsdbuild.sh` (clang and lld, against the release's own `base.txz`); the
+same script makes the NetBSD and OpenBSD ones below.
+
 **FreeBSD 15.1** (clang 19). The base system has everything needed for a
 tarball build:
 
@@ -153,6 +158,9 @@ gcc -O -Iinc -o gork main.c relay.c tui.c mcp.c cJSON/cJSON.c \
 **FreeBSD 1.x** does not work: its libc has no `realpath`.
 
 ## NetBSD
+
+Releases carry static binaries for NetBSD 11.0 on amd64 and arm64,
+`gork-<version>-netbsd-<arch>.tar.gz`, from `bsdbuild.sh`.
 
 **NetBSD 10.1 and 11.0.** A fresh clone, or the tarball, builds with the
 system curses and make (11.0 also passes the whole test suite):
@@ -180,6 +188,11 @@ gcc -O -I/usr/local/include -o gork main.c relay.c tui.c mcp.c \
 ```
 
 ## OpenBSD
+
+Releases carry static binaries for OpenBSD 7.9 on amd64 and arm64,
+`gork-<version>-openbsd-<arch>.tar.gz`, from `bsdbuild.sh`. OpenBSD keeps
+no system call interface stable between releases, so they are for 7.9
+only; on another release, build from the tarball.
 
 **OpenBSD 7.9** (clang 19). From the tarball, with the base system only:
 

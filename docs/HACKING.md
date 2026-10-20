@@ -125,3 +125,18 @@ named `fake` (`fakemcp.py --http`), "m2" one to the MCP server named
 30 s; anything else, or a turn of tool results, a short text reply.
 Where the loopback address cannot be bound (Plan 9's APE) it listens on
 all addresses. Request bodies go to `fakeapi.log`.
+
+`testing/vmcheck.sh GORK FAKEAPI [MCPSH]` runs gork's batch checks against
+that fake on a system with only a Bourne shell and its base tools (a
+reply, the file tools, `run_command` and its timeout, paths outside the
+working directory, a symbolic link, the request timeout, and MCP on stdio
+through `testing/mcp.sh`, an MCP server in sh). It works under `/tmp` with
+`HOME` pointed there.
+
+`bsdbuild.sh [OUT] [WORK]` cross-builds the FreeBSD, NetBSD and OpenBSD
+packages on Linux with clang, against sysroots unpacked from each
+release's base sets, and the fake API beside each. `testing/bsdtest.py
+TARGET PACKAGE FAKEAPI` boots the release's own VM image in QEMU
+(OpenBSD's is installed once, unattended, from its install image), puts
+the package on a CD and runs `vmcheck.sh` there on the serial console.
+Images go to `$GORK_VM`; everything is checksum-pinned.
