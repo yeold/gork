@@ -16,7 +16,9 @@ pipeline {
         stage('dist') {
             steps {
                 sh '''
-                    rm -rf out && mkdir out
+                    # bsdwork/ was the bsd stage's cache in the workspace
+                    # once; every stage copies the workspace, so not there
+                    rm -rf out bsdwork && mkdir out
                     docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
                         apt-get -qq update
                         DEBIAN_FRONTEND=noninteractive apt-get -qq install -y build-essential autoconf automake libncurses-dev >/dev/null
@@ -120,18 +122,19 @@ pipeline {
                 }
                 stage('bsd') {
                     steps {
-                        // bsdwork/ keeps the release sets, the sysroots and
-                        // the VM images between builds (a few GB)
+                        // the release sets, the sysroots and the VM images,
+                        // kept between builds (about 15 GB), outside the
+                        // workspace: every stage copies that
                         sh '''
-                            mkdir -p bsdwork
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out -v "$PWD/bsdwork":/work debian:stable sh -ec '
+                            BW="$HOME/.cache/gork-bsd" && mkdir -p "$BW"
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out -v "$BW":/work debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends clang lld llvm curl ca-certificates xz-utils >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh bsdbuild.sh /out /work && chown -R '"$(id -u):$(id -g)"' /out /work'
                             # and run each on its own system: the official VM
                             # image, booted in QEMU, the checks of testing/vmcheck.sh
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$PWD/bsdwork":/work debian:stable sh -ec '
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$BW":/work debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils qemu-efi-aarch64 ovmf genisoimage python3 xz-utils gzip curl ca-certificates >/dev/null
                                 cd /src && mkdir -p /work/tmp && rc=0
