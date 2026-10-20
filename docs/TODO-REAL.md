@@ -57,6 +57,12 @@ machine.
 SuSE 8.1, Haiku, NetBSD 10.1 and openSUSE are the Unix results that did
 not come from an emulator.
 
+OPENSTEP 4.2, SunOS 4.1.4, QNX 6.2.1, BeOS R5, HP-UX 10.20, Debian m68k
+and OS/2 Warp 4.52 (listed with the Unix systems above) have also done a
+tool round trip (read_file, write_file, run_command) against a real model
+instead of the fake: Qwen3.6-35B-A3B in LM Studio, on another machine on
+the LAN, reached through the emulator's NAT.
+
 ## gork-relay
 
 | Part | Tried in | Unproven |
