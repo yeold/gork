@@ -33,8 +33,8 @@ pipeline {
                         sh '''
                             docker run --rm -v "$PWD/out":/out fedora:latest sh -ec '
                                 dnf -yq install rpm-build gcc make ncurses-devel
-                                # the source tarball, not the Linux binaries beside it
-                                rpmbuild -ta "$(ls /out/gork-*.tar.gz | grep -v -- -linux-)" --define "_topdir /tmp/rpm"
+                                # the source tarball, not the Linux and BSD binaries beside it
+                                rpmbuild -ta "$(ls /out/gork-*.tar.gz | grep -vE -- "-(linux|freebsd|netbsd|openbsd)-")" --define "_topdir /tmp/rpm"
                                 cp /tmp/rpm/SRPMS/*.rpm /tmp/rpm/RPMS/*/*.rpm /out/ && chown -R '"$(id -u):$(id -g)"' /out'
                         '''
                     }
@@ -150,7 +150,7 @@ pipeline {
                             docker run --rm -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y build-essential debhelper libncurses-dev >/dev/null
-                                mkdir /tmp/deb && tar xzf "$(ls /out/gork-*.tar.gz | grep -v -- -linux-)" -C /tmp/deb
+                                mkdir /tmp/deb && tar xzf "$(ls /out/gork-*.tar.gz | grep -vE -- "-(linux|freebsd|netbsd|openbsd)-")" -C /tmp/deb
                                 cd /tmp/deb/gork-* && dpkg-buildpackage -us -uc
                                 cd /tmp/deb && cp *.deb *.dsc *.tar.xz *.buildinfo *.changes /out/ && chown -R '"$(id -u):$(id -g)"' /out'
                         '''
