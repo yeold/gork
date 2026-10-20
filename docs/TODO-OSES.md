@@ -18,7 +18,7 @@ are taken to work too.
 | AIX on POWER (3.x, 4.3, 5.x, 7.x) | QEMU's `40p` (PReP) runs 4.3 with a network, and 5.1 without one (its network driver fails); `ppc64` runs AIX 7.2; 3.x wants real RS/6000 hardware. WinWorld has 3.x to 5.1 | System V curses as on Solaris. Needs gcc from the AIX Toolbox, or `xlc`. Sockets are in libc. AIX PS/2 1.3 works (README); its fixes are under `GORK_AIXPS2`, which needs `_I386`, so they stay off here. |
 | HP-UX 11i v3 | A PA-RISC 2.0 or Itanium machine | 10.20 and 11.11 work, cross-compiled (README). |
 | IRIX (5.3, 6.5) | No good emulator; MAME's Indy boots but is slow. Real SGI hardware is the practical route | System V curses, MIPSpro `cc` or gcc. Should be close to Solaris. |
-| DEC OSF/1, Digital UNIX, Tru64 (2.x to 5.1B, all on WinWorld) | QEMU's Alpha runs only Linux; the ES40 emulator is slow and finicky; real hardware | Similar to the other System V systems. |
+| DEC OSF/1, Digital UNIX, Tru64 (2.x to 5.1B, all on WinWorld) | QEMU's Alpha runs only Linux (no SRM console). The es40 emulator boots Tru64 but is slow and finicky; FreeAXP and AlphaVM run it, on Windows only; real hardware | Sockets in libc, a system curses, DEC's ANSI C or gcc. 64-bit (LP64), as Linux and the BSDs already are, so likely a small `port.h` block at most. The emulator is the hard part. |
 | UnixWare, SCO OpenServer | 86Box: UnixWare 2.1's install floppy boots there (QEMU's BIOS will not boot it, and with that fixed its kernel panics). The 2.1.2 Free Edition's installer then asks for a serial number and activation key, which SCO gave out per user | SVR4 and SVR3 curses; old SCO needs `-lsocket`, which `configure` already looks for. |
 | Ultrix, A/UX 1.x and 2.x | GXemul's DECstation (MIPS Ultrix 4.x, with a network) or SIMH (VAX Ultrix), Shoebill (A/UX, fragile) | Pre-ANSI bundled compilers, so gcc, as on SunOS 4 (see docs/BUILD.md). |
 | m68k Macintosh, NetBSD/mac68k or A/UX | QEMU's `q800` machine (a Quadra 800) runs NetBSD/mac68k, and newer QEMU is said to boot A/UX 3; Shoebill runs A/UX on an emulated Mac II | Debian on the same `q800` works (README). NetBSD/mac68k should be `configure` and `make`. A/UX is System V with BSD sockets and a pre-ANSI `cc`, so it needs gcc, as SunOS 4 did. The classic Mac OS on the same machines is a port: see below. |
@@ -81,6 +81,8 @@ reachable from C. These have them and are not listed above.
    first; U-Boot running `gork.efi` is the cheapest thing to try.
 3. Classic Mac OS (System 7 first, in `q800` or Basilisk II), then
    System 6 if an emulator with a network for it turns up.
+4. Tru64 on Alpha, in es40: try a networked install first; the port
+   itself should be small.
 
 Set aside for now: AIX on POWER (AIX 5.1 in QEMU has no working network;
 AIX 7.2 media is IBM's licensed software), ArcaOS (a current commercial
