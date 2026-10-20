@@ -52,7 +52,8 @@ machine.
 | HP-UX 10.20 and 11i v1 (11.11) | QEMU's B160L (PA-RISC 1.1), with gork cross-compiled to assembly on Linux and assembled and linked on HP-UX; fake API and MCP server across QEMU's user network | Real hardware; a native gcc build on PA-RISC 2.0; a real terminal instead of the serial console |
 | Linux on s390x, armhf, arm64, ppc64el, riscv64, m68k, powerpc, hppa | QEMU's user-mode emulation: the suite only, on the host's kernel; m68k also natively, the whole suite, on Debian in QEMU's Quadra 800 | The machines themselves; the TUI on a real terminal |
 | OpenBSD 7.9 on SPARC64 | QEMU, batch checks | The TUI; a real machine |
-| macOS | GitHub's runner: the suite | The TUI; Intel Macs; older releases |
+| Mac OS X 10.4 (PowerPC) | QEMU's mac99 (a G4), over ssh; fake API on the same machine, and Qwen in LM Studio across the LAN | Real PowerPC Macs; Terminal.app; Tiger on Intel |
+| macOS | GitHub's runner: the suite | The TUI; Intel Macs; releases between 10.4 and 26 |
 
 SuSE 8.1, Haiku, NetBSD 10.1 and openSUSE are the Unix results that did
 not come from an emulator.

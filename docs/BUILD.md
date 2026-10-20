@@ -538,6 +538,18 @@ command line tools and curses with the system. A git checkout also needs
 `brew install autoconf automake`. Then build as under
 [Everywhere](#everywhere).
 
+**Mac OS X 10.4** (PowerPC, gcc 4.0 from the Xcode Tools on the install
+DVD, ncurses 5.4 with the system) builds without `configure`:
+
+```sh
+cc -O2 -o gork main.c relay.c tui.c mcp.c cJSON/cJSON.c -lncurses -lm
+```
+
+Batch mode, the TUI (over ssh) and MCP on stdio and over HTTP work,
+tested on QEMU's `mac99` machine (a G4) with the 10.4.0 retail DVD. Its
+OpenSSH 3.8 server wants old key exchanges and a 1024-bit RSA host key,
+which today's ssh client accepts only when told to.
+
 ## Cygwin
 
 **Cygwin 3.6** (gcc 14, ncurses 6.5). Install `gcc-core`, `make` and
