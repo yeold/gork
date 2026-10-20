@@ -1,3 +1,26 @@
+gork (1.2) unstable; urgency=medium
+
+  * New: packages for FreeBSD 15.1, NetBSD 11.0 and OpenBSD 7.9, on amd64
+    and arm64: static binaries (gork-<version>-<os>-<arch>.tar.gz),
+    cross-built with clang against each release's own base sets
+    (bsdbuild.sh), and each run on its own system in QEMU before release.
+    The OpenBSD ones are for 7.9 only.
+  * New: Plan 9 (9front, through APE), in batch mode: there is no curses,
+    so notui.c stands in for the TUI.
+  * Newly confirmed, built and run in emulators: AIX PS/2 1.3 and AIX
+    4.3.3, HP-UX 10.20 and 11i v1, OS/2 Warp 3 Connect and 4.52, Minix
+    2.0.4, NeXTSTEP 3.3 and OPENSTEP 4.2, SunOS 4.1.4, System V Release
+    4.0 (Dell Unix), BeOS R5, QNX 6.2.1, Mac OS X 10.4 on PowerPC, and
+    Debian and NetBSD on m68k.  What they need is in docs/build/, one
+    guide for each system built by hand.
+  * The TUI draws dim text plainly on QNX's qansi terminal, where dim is
+    black.
+  * testing/: fakeapi.c, a fake Messages API in C89 for systems without
+    Python; vmcheck.sh, the batch checks in plain sh; mcp.sh, an MCP
+    server in sh; and bsdtest.py, which runs the BSD packages in QEMU.
+
+ -- Yeold <isac.selea@gmail.com>  Tue, 20 Oct 2026 18:20:00 +0200
+
 gork (1.1) unstable; urgency=medium
 
   * New: streamed replies.  With `stream` (auto: on in the TUI, off in
