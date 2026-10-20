@@ -25,7 +25,7 @@ are taken to work too.
 | Mac OS X (old): 10.0 to 10.3, and Mac OS X Server 1.0 (Rhapsody) | `qemu-system-ppc`; 10.0 and Rhapsody boot less reliably in it | 10.4 on PowerPC works (README), with no change to the source. gcc comes with the Developer Tools. |
 | SVR4 on the 386: AT&T System V, Intel Unix System V, ESIX | x86 in QEMU or 86Box (floppy installs) | Dell Unix SVR4 works (README). ESIX 4.0.3 on archive.org lacks base disk 10; AT&T's 2.1 on WinWorld has no C compiler or TCP/IP. |
 | NeXTSTEP 0.x to 2.x | Previous (68k NeXT machines, with a network) | 68k only. Likely close to OPENSTEP 4.2, with an older NeXT cc. |
-| QNX 4 | x86 in QEMU | QNX 6.2.1 works (README). QNX 4 is a different system underneath, with Watcom C. |
+| QNX 4 | x86 in QEMU: the 4.25 CD (WinWorld) boots there and its installer runs, but its product installer wants a licence number for every product, the OS included, and installs nothing without one | QNX 6.2.1 works (README). QNX 4 is a different system underneath, with Watcom C 10.6 and a TCP/IP toolkit, both on the same CD. |
 | Linux with dietlibc | A cross toolchain | No curses port in common use; batch mode only, if at all. |
 
 ## Not Unix, but a POSIX layer exists
@@ -86,4 +86,4 @@ reachable from C. These have them and are not listed above.
 Set aside for now: AIX on POWER (AIX 5.1 in QEMU has no working network;
 AIX 7.2 media is IBM's licensed software), ArcaOS (a current commercial
 product), IRIX (hardware or a slow MAME), UnixWare (a licence key for
-the Free Edition).
+the Free Edition), QNX 4 (a licence number for each product).
