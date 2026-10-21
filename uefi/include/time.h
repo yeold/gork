@@ -1,0 +1,20 @@
+#ifndef _TIME_H
+#define _TIME_H
+#include <sys/types.h>
+
+typedef long clock_t;
+#define CLOCKS_PER_SEC 100L
+
+struct tm {
+    int tm_sec, tm_min, tm_hour, tm_mday, tm_mon, tm_year;
+    int tm_wday, tm_yday, tm_isdst;
+};
+
+time_t     time(time_t *t);
+clock_t    clock(void);
+double     difftime(time_t a, time_t b);
+time_t     mktime(struct tm *tm);
+struct tm *gmtime(const time_t *t);
+struct tm *localtime(const time_t *t);
+size_t     strftime(char *s, size_t n, const char *fmt, const struct tm *tm);
+#endif

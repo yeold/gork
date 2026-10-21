@@ -68,6 +68,13 @@ tool round trip (read_file, write_file, run_command) against a real model
 instead of the fake: Qwen3.6-35B-A3B in LM Studio, on another machine on
 the LAN, reached through the emulator's NAT.
 
+## UEFI
+
+| System | Tried in | Unproven |
+|---|---|---|
+| `gorkx64.efi`, batch mode | OVMF 2025.02 in QEMU, virtio network card, EDK2's UEFI shell 2.2; fake API across QEMU's user network | A PC's own firmware: its network stack and card driver, its shell or one booted from a USB stick, its clock |
+| `gorkaa64.efi`, batch mode | AAVMF 2025.02 in QEMU's `virt` machine (`-cpu max`), the same otherwise | An arm64 machine with UEFI (a server, an Ampere or Snapdragon laptop, a Raspberry Pi with its UEFI firmware) |
+
 ## gork-relay
 
 | Part | Tried in | Unproven |

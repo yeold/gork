@@ -32,6 +32,7 @@ of their own:
 - [QNX](build/qnx.md)
 - [SunOS 4](build/sunos4.md)
 - [System V Release 4.0](build/svr4.md)
+- [UEFI](build/uefi.md) (`gork.efi`, no operating system)
 - [Windows (native)](build/windows.md)
 
 ## Everywhere

@@ -60,6 +60,7 @@ of `testing/looptest.py`.
 | Windows (native, experimental; the `win32-legacy` package) | Windows NT 3.1 (1993), with `gorknt3.exe` from the same package; `gork.exe` from NT 3.51 and the first Windows 95 (both 1995), each with `msvcrt.dll` added. Built with MinGW, PDCurses and Winsock 1.1 | Windows 95 OSR2, NT 4.0, 98 SE, Me, 2000, XP SP3, 11, Server 2025; Wine 10 | |
 | Windows (Cygwin; the `win32` package) | Cygwin 3.6 on Windows Server 2025 (gcc 14, ncurses 6.5) | | 64-bit Windows 10 and later only. The package was run on GitHub's Windows runner, batch mode only |
 | DOS, 32-bit (experimental; the `dos` package) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | MS-DOS 2 and Windows/386 2.11: use the 16-bit build (DJGPP needs DOS 3) |
+| UEFI (experimental; the `uefi` package) | UEFI 2.70 on x86-64, no operating system: `gorkx64.efi` from the UEFI shell, on the firmware's TCP/IP; EDK2's OVMF 2025.02, in QEMU. Batch mode only | arm64 (`gorkaa64.efi`), on EDK2's AAVMF in QEMU | U-Boot 2025.01: runs, but its UEFI has no TCP. Real PC firmware: untested |
 | DOS, 16-bit (experimental; the `dos16` package) | MS-DOS 2.11 (1984, Compaq's), real mode, built with Open Watcom for the 8086 | MS-DOS 3.30, 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04, 2.11/386, 3.0 and 3.1, also in standard mode | An emulated 8086 and 286 (DOSBox-X), no real one. Small limits (below) |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
@@ -87,7 +88,9 @@ binaries for ten CPUs (`gork-<version>-linux-<arch>.tar.gz`: amd64, i386,
 arm64, armhf, riscv64, s390x, ppc64el, powerpc, m68k, hppa), static
 binaries for FreeBSD 15.1, NetBSD 11.0 and OpenBSD 7.9 on amd64 and arm64
 (`gork-<version>-<os>-<arch>.tar.gz`; the OpenBSD ones only for that
-release), a macOS installer, and the DOS and Windows zips below.
+release), a macOS installer, `gork-<version>-uefi.zip` with `gorkx64.efi`
+and `gorkaa64.efi` for the UEFI shell ([docs/build/uefi.md](docs/build/uefi.md)), and the DOS and
+Windows zips below.
 Everything else builds from the source tarball.
 
 There are two DOS packages, both without MCP servers, streaming or input
@@ -336,20 +339,20 @@ gork reads `~/.gork.conf`, or the file `GORK_CONFIG` names. One
 or a malformed line stops gork with the line number rather than being
 skipped. Sample files are in [docs/examples](docs/examples/).
 
-The DOS and Windows builds use other names, as a name with a leading dot
-is awkward or impossible to create there. Wherever this README says
-`~/.gork.conf`, `~/.gork` or `.gork`, read:
+The DOS, Windows and UEFI builds use other names, as a name with a
+leading dot is awkward or impossible to create there. Wherever this README
+says `~/.gork.conf`, `~/.gork` or `.gork`, read:
 
-| | Unix | DOS | Windows |
+| | Unix | DOS and UEFI | Windows |
 |---|---|---|---|
-| Config file | `~/.gork.conf` | `gork.cnf` beside `gork.exe` | `%USERPROFILE%\gork.cnf` (Windows 9x: beside `gork.exe`) |
-| gork's directory (`trusted`, `skills`) | `~/.gork` | `_gork` beside `gork.exe` | `%USERPROFILE%\_gork` (Windows 9x: beside `gork.exe`) |
+| Config file | `~/.gork.conf` | `gork.cnf` beside `gork.exe` (`gork.efi`) | `%USERPROFILE%\gork.cnf` (Windows 9x: beside `gork.exe`) |
+| gork's directory (`trusted`, `skills`) | `~/.gork` | `_gork` beside `gork.exe` (`gork.efi`) | `%USERPROFILE%\_gork` (Windows 9x: beside `gork.exe`) |
 | Project skills, in the working directory | `.gork/skills` | `_gork\skills` | `_gork\skills` |
 
-If `HOME` is set, DOS and Windows look there instead (it is, for one, in
-Git Bash). gork's own messages name the full path of the file it means.
-Neither build checks who can read the config file, and neither has MCP
-servers, so there is no `mcp.json`.
+If `HOME` is set, DOS, UEFI and Windows look there instead (it is, for
+one, in Git Bash; on UEFI it is a shell variable). gork's own messages name
+the full path of the file it means. None of these builds checks who can
+read the config file, and none has MCP servers, so there is no `mcp.json`.
 
 | Key | Env override | Default | Meaning |
 |---|---|---|---|
@@ -370,8 +373,8 @@ servers, so there is no `mcp.json`.
 
 A set environment variable beats the file, and gork says so at startup (e.g. `model meta/muse-glimmer from AGENT_MODEL overrides ~/.gork.conf`), since a stale `export` in an old shell is easy to forget. If the file holds `api_key` and
 anyone but you can read it, gork refuses to start: `chmod 600 ~/.gork.conf`.
-(Not on DOS and Windows, the Cygwin build included: there are no such
-modes there.)
+(Not on DOS, UEFI and Windows, the Cygwin build included: there are no
+such modes there.)
 
 Two more switches are environment-only:
 

@@ -4,8 +4,9 @@
 // FreeDOS in QEMU (testing/dostest.py); and the legacy Windows zip, cross-
 // built with MinGW (winbuild.sh) and tested under Wine (testing/wintest.py);
 // static FreeBSD, NetBSD and OpenBSD binaries cross-built with clang
-// (bsdbuild.sh), each run on its own system in QEMU (testing/bsdtest.py).
-// Each in a throwaway
+// (bsdbuild.sh), each run on its own system in QEMU (testing/bsdtest.py);
+// and gork for x86-64 and arm64 UEFI (uefibuild.sh), run in the UEFI
+// shell under OVMF and AAVMF (testing/uefitest.py).  Each in a throwaway
 // container via plain `docker run` (no Docker Pipeline plugin needed).
 // Containers build as root in their own /tmp and only copy finished
 // packages into out/, chowned back to the Jenkins user.
@@ -143,6 +144,28 @@ pipeline {
                                     GORK_VM=/work/vm TMPDIR=/work/tmp python3 testing/bsdtest.py $t /out/gork-*-$t.tar.gz /work/$t/fakeapi || rc=1
                                 done
                                 chown -R '"$(id -u):$(id -g)"' /work
+                                exit $rc'
+                        '''
+                    }
+                }
+                stage('uefi') {
+                    steps {
+                        sh '''
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends clang lld zip >/dev/null
+                                cp -r /src /tmp/src && cd /tmp/src
+                                sh uefibuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
+                            # and run both from the UEFI shell, in QEMU with OVMF and AAVMF
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 qemu-system-arm ovmf qemu-efi-aarch64 efi-shell-x64 efi-shell-aa64 mtools dosfstools python3 gcc libc6-dev >/dev/null
+                                gcc -o /tmp/fakeapi /src/testing/fakeapi.c
+                                cd /src && rc=0
+                                for a in x64 aa64; do
+                                    echo "== $a"
+                                    python3 testing/uefitest.py /out/gork-*-uefi.zip /tmp/fakeapi $a || rc=1
+                                done
                                 exit $rc'
                         '''
                     }

@@ -203,8 +203,8 @@ char *os2_realpath(const char *path, char *out)
 #define WB "wb"
 #endif
 
-/* Windows and OS/2 file names do not tell upper case from lower. */
-#if defined(_WIN32) || defined(GORK_EMX)
+/* Windows, OS/2 and UEFI file names do not tell upper case from lower. */
+#if defined(_WIN32) || defined(GORK_EMX) || defined(GORK_EFI)
 #define PATHNCMP strnicmp
 #else
 #define PATHNCMP strncmp
@@ -568,7 +568,8 @@ static const char *confine(const char *path, char *out, int writing)
     size_t      n;
     struct stat st;
     int         i;
-#if defined(_WIN32) || defined(GORK_EMX)  /* the model may write either slash */
+#if defined(_WIN32) || defined(GORK_EMX) || defined(GORK_EFI)
+    /* the model may write either slash */
     char        norm[PATH_MAX];
 
     if (strlen(path) >= sizeof norm) return "path too long";
@@ -587,7 +588,7 @@ static const char *confine(const char *path, char *out, int writing)
         } else {
             n = (base == path) ? 1 : (size_t) (base - path);   /* "/x" -> "/" */
 #if defined(GORK_NO_FORK) || defined(GORK_EMX)
-            if (n == 2 && path[1] == ':') n = 3;        /* "c:/x" -> "c:/" */
+            if (path[n - 1] == ':') n++;    /* "c:/x" -> "c:/", "fs0:/x" too */
 #endif
             if (n >= sizeof dir) return "path too long";
             memcpy(dir, path, n);
@@ -1518,6 +1519,9 @@ static const struct tool TOOLS[] = {
 #ifdef __MSDOS__
                       "\"description\":\"Command line for DOS "
                       "(COMMAND.COM).\"}},"
+#elif defined(GORK_EFI)
+                      "\"description\":\"Command line for the UEFI "
+                      "shell.\"}},"
 #elif defined(_WIN32)
                       "\"description\":\"Command line for Windows "
                       "(cmd.exe; COMMAND.COM on Windows 9x).\"}},"

@@ -19,6 +19,16 @@
 #endif
 #endif
 
+/* UEFI (gork.efi, started from the UEFI shell): the build passes
+   -DGORK_EFI, and its C library is uefi/libc.c.  One program at a time,
+   as on DOS, and no curses: notui.c takes tui.c's place, so only batch
+   mode works.  Paths are the shell's, fs0:\dir\file, which realpath()
+   gives back as fs0:/dir/file; names do not tell upper case from lower. */
+#ifdef GORK_EFI
+#define GORK_NO_FORK
+#define GORK_NO_TUI
+#endif
+
 #if defined(__MSDOS__) || defined(_WIN32)
 #define GORK_NO_FORK
 #endif
