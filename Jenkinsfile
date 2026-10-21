@@ -121,6 +121,9 @@ pipeline {
                         '''
                     }
                 }
+                // The BSD packages, and the UEFI programs in the same
+                // containers: they want the same clang and QEMU, and a stage
+                // of their own beside the others filled the agent's disk
                 stage('bsd') {
                     steps {
                         // the release sets, the sysroots and the VM images,
@@ -130,44 +133,30 @@ pipeline {
                             BW="$HOME/.cache/gork-bsd" && mkdir -p "$BW"
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out -v "$BW":/work debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends clang lld llvm curl ca-certificates xz-utils >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends clang lld llvm curl ca-certificates xz-utils zip >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh bsdbuild.sh /out /work && chown -R '"$(id -u):$(id -g)"' /out /work'
+                                sh bsdbuild.sh /out /work && sh uefibuild.sh /out /tmp/uefi &&
+                                    chown -R '"$(id -u):$(id -g)"' /out /work'
                             # and run each on its own system: the official VM
                             # image, booted in QEMU, the checks of testing/vmcheck.sh
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$BW":/work debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils qemu-efi-aarch64 ovmf genisoimage python3 xz-utils gzip curl ca-certificates >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils qemu-efi-aarch64 ovmf genisoimage python3 xz-utils gzip curl ca-certificates \
+                                    u-boot-qemu efi-shell-x64 efi-shell-aa64 mtools dosfstools gcc libc6-dev >/dev/null
                                 cd /src && mkdir -p /work/tmp && rc=0
                                 for t in freebsd-amd64 freebsd-arm64 netbsd-amd64 netbsd-arm64 openbsd-amd64 openbsd-arm64; do
                                     echo "== $t"
                                     GORK_VM=/work/vm TMPDIR=/work/tmp python3 testing/bsdtest.py $t /out/gork-*-$t.tar.gz /work/$t/fakeapi || rc=1
                                 done
-                                chown -R '"$(id -u):$(id -g)"' /work
-                                exit $rc'
-                        '''
-                    }
-                }
-                stage('uefi') {
-                    steps {
-                        sh '''
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
-                                apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends clang lld zip >/dev/null
-                                cp -r /src /tmp/src && cd /tmp/src
-                                sh uefibuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
-                            # and run both from the UEFI shell, in QEMU: on the firmware's
-                            # TCP/IP (OVMF, AAVMF) and on gork's own (OVMF without its
-                            # network stack, U-Boot)
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
-                                apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 qemu-system-arm ovmf qemu-efi-aarch64 u-boot-qemu efi-shell-x64 efi-shell-aa64 mtools dosfstools python3 gcc libc6-dev >/dev/null
-                                gcc -o /tmp/fakeapi /src/testing/fakeapi.c
-                                cd /src && rc=0
-                                for a in x64 aa64 x64-own uboot; do
-                                    echo "== $a"
-                                    python3 testing/uefitest.py /out/gork-*-uefi.zip /tmp/fakeapi $a || rc=1
+                                # gork for UEFI from the UEFI shell: on the firmware's TCP/IP
+                                # (OVMF, AAVMF) and on its own (OVMF without its network
+                                # stack, U-Boot), against a fake API for this container
+                                gcc -o /tmp/fakeapi testing/fakeapi.c
+                                for m in x64 aa64 x64-own uboot; do
+                                    echo "== uefi $m"
+                                    TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi.zip /tmp/fakeapi $m || rc=1
                                 done
+                                chown -R '"$(id -u):$(id -g)"' /work
                                 exit $rc'
                         '''
                     }
