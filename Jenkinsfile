@@ -148,9 +148,10 @@ pipeline {
                                     echo "== $t"
                                     GORK_VM=/work/vm TMPDIR=/work/tmp python3 testing/bsdtest.py $t /out/gork-*-$t.tar.gz /work/$t/fakeapi || rc=1
                                 done
-                                # gork for UEFI from the UEFI shell: on the firmware's TCP/IP
-                                # (OVMF, AAVMF) and on its own (OVMF without its network
-                                # stack, U-Boot), against a fake API for this container
+                                # gork for UEFI from the UEFI shell: on the TCP/IP of the
+                                # firmware (OVMF, AAVMF) and on its own (OVMF without its
+                                # network stack, U-Boot), against a fake API built here
+                                # (no apostrophes in here: this is all one quoted script)
                                 gcc -o /tmp/fakeapi testing/fakeapi.c
                                 for m in x64 aa64 x64-own uboot; do
                                     echo "== uefi $m"
