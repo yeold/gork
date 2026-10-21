@@ -429,6 +429,64 @@ typedef struct EFI_DNS4_PROTOCOL {
                                 EFI_DNS4_COMPLETION_TOKEN *);
 } EFI_DNS4_PROTOCOL;
 
+/* The network card itself, for ip.c: whole Ethernet frames. */
+#define EFI_SIMPLE_NETWORK_PROTOCOL_GUID \
+    { 0xa19832b9, 0xac25, 0x11d3, \
+      { 0x9a, 0x2d, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d } }
+
+enum { EfiSimpleNetworkStopped, EfiSimpleNetworkStarted,
+       EfiSimpleNetworkInitialized };
+#define EFI_SIMPLE_NETWORK_RECEIVE_UNICAST   0x01
+#define EFI_SIMPLE_NETWORK_RECEIVE_BROADCAST 0x04
+
+typedef struct {
+    uint32_t        State;
+    uint32_t        HwAddressSize;
+    uint32_t        MediaHeaderSize;
+    uint32_t        MaxPacketSize;
+    uint32_t        NvRamSize;
+    uint32_t        NvRamAccessSize;
+    uint32_t        ReceiveFilterMask;
+    uint32_t        ReceiveFilterSetting;
+    uint32_t        MaxMCastFilterCount;
+    uint32_t        MCastFilterCount;
+    EFI_MAC_ADDRESS MCastFilter[16];
+    EFI_MAC_ADDRESS CurrentAddress;
+    EFI_MAC_ADDRESS BroadcastAddress;
+    EFI_MAC_ADDRESS PermanentAddress;
+    uint8_t         IfType;
+    BOOLEAN         MacAddressChangeable;
+    BOOLEAN         MultipleTxSupported;
+    BOOLEAN         MediaPresentSupported;
+    BOOLEAN         MediaPresent;
+} EFI_SIMPLE_NETWORK_MODE;
+
+typedef struct EFI_SIMPLE_NETWORK_PROTOCOL {
+    uint64_t Revision;
+    EFI_STATUS (EFIAPI *Start)(struct EFI_SIMPLE_NETWORK_PROTOCOL *);
+    EFI_STATUS (EFIAPI *Stop)(struct EFI_SIMPLE_NETWORK_PROTOCOL *);
+    EFI_STATUS (EFIAPI *Initialize)(struct EFI_SIMPLE_NETWORK_PROTOCOL *,
+                                    UINTN extra_rx, UINTN extra_tx);
+    void *Reset, *Shutdown;
+    EFI_STATUS (EFIAPI *ReceiveFilters)(struct EFI_SIMPLE_NETWORK_PROTOCOL *,
+                                        uint32_t enable, uint32_t disable,
+                                        BOOLEAN reset_mcast, UINTN n,
+                                        EFI_MAC_ADDRESS *mcast);
+    void *StationAddress, *Statistics, *MCastIpToMac, *NvData;
+    EFI_STATUS (EFIAPI *GetStatus)(struct EFI_SIMPLE_NETWORK_PROTOCOL *,
+                                   uint32_t *irq, void **txbuf);
+    EFI_STATUS (EFIAPI *Transmit)(struct EFI_SIMPLE_NETWORK_PROTOCOL *,
+                                  UINTN header_size, UINTN size, void *buf,
+                                  EFI_MAC_ADDRESS *src, EFI_MAC_ADDRESS *dst,
+                                  uint16_t *proto);
+    EFI_STATUS (EFIAPI *Receive)(struct EFI_SIMPLE_NETWORK_PROTOCOL *,
+                                 UINTN *header_size, UINTN *size, void *buf,
+                                 EFI_MAC_ADDRESS *src, EFI_MAC_ADDRESS *dst,
+                                 uint16_t *proto);
+    EFI_EVENT                WaitForPacket;
+    EFI_SIMPLE_NETWORK_MODE *Mode;
+} EFI_SIMPLE_NETWORK_PROTOCOL;
+
 /* ---- for the rest of the library (libc.c, net.c) --------------------- */
 
 extern EFI_HANDLE          efi_image;
@@ -450,5 +508,16 @@ int     efi_sock_write(int fd, const void *p, size_t n);
 int     efi_sock_close(int fd);
 /* Let the network stack run (net.c), from anywhere that waits. */
 void    efi_net_poll(void);
+
+/* ip.c: gork's own TCP/IP on the network card, for firmware without TCP4.
+   One TCP connection at a time; -1 with errno on failure. */
+int  ip_start(void);
+void ip_poll(void);
+int  ip_resolve(const char *name, uint8_t *addr);
+int  ip_tcp_connect(const uint8_t *addr, unsigned port);
+int  ip_tcp_write(const void *p, size_t n);
+int  ip_tcp_read(void *p, size_t n);
+int  ip_tcp_ready(void);
+void ip_tcp_close(void);
 
 #endif /* GORK_EFI_H */

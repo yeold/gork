@@ -4,7 +4,9 @@
  * IPv4, one connection at a time as relay.c makes them.  Names are
  * looked up with DNS4 when the firmware has it.  The first network card
  * with an address is used; one without gets DHCP started, and is waited
- * for.
+ * for.  Firmware with no TCP4 at all (U-Boot, a PC with its network
+ * stack turned off) gets gork's own stack instead, ip.c, on the card
+ * itself.
  *
  * Everything the firmware does is asynchronous: a call takes a token
  * whose event is signalled when it is done, and the stack only moves
@@ -34,10 +36,15 @@ static EFI_GUID dns_guid    = EFI_DNS4_PROTOCOL_GUID;
 
 static EFI_HANDLE nic;          /* the card in use, once tcp_service() found it */
 
+/* which stack: 0 not chosen yet, 1 the firmware's, 2 ip.c, -1 none */
+static int stack;
+static int fw_tcp;              /* the firmware has TCP4, address or not */
+
 #define RX_SIZE 16384
 
 struct sock {
     int                           used;
+    int                           own;      /* on ip.c */
     EFI_SERVICE_BINDING_PROTOCOL *sb;
     EFI_HANDLE                    child;
     EFI_TCP4_PROTOCOL            *tcp;
@@ -74,6 +81,7 @@ void efi_net_poll(void)
     for (i = 0; i < NSOCK; i++)
         if (socks[i].used && socks[i].tcp != NULL)
             socks[i].tcp->Poll(socks[i].tcp);
+    if (stack == 2) ip_poll();
 }
 
 /* Wait for *flag, polling tcp, for at most `secs`: 0, or -1 at the end. */
@@ -146,10 +154,10 @@ static EFI_SERVICE_BINDING_PROTOCOL *tcp_service(void)
     if (n == 0 &&
         (efi_bs->LocateHandleBuffer(ByProtocol, &tcp_sb_guid, NULL, &n, &h)
             != EFI_SUCCESS || n == 0)) {
-        fprintf(stderr, "gork: no TCP here: the firmware has no network "
-                        "stack, or no driver for the network card\n");
-        return NULL;
+        n = 0;
+        return NULL;            /* choose_stack() takes ip.c then */
     }
+    fw_tcp = 1;
     end = clock() + 20 * CLOCKS_PER_SEC;
     for (;;) {
         for (i = 0; i < n; i++) {
@@ -186,6 +194,17 @@ static EFI_SERVICE_BINDING_PROTOCOL *tcp_service(void)
     fprintf(stderr, "gork: no network card got an address; set one with "
                     "the shell's ifconfig\n");
     return NULL;
+}
+
+/* The firmware's TCP4 if it has one, else gork's own: 1 or 2, or -1
+   with a message.  Never both: the firmware's stack, once loaded, takes
+   the card's frames itself. */
+static int choose_stack(void)
+{
+    if (stack != 0) return stack;
+    if (tcp_service() != NULL) return stack = 1;
+    if (fw_tcp) return stack = -1;          /* TCP4, but no address */
+    return stack = ip_start() == 0 ? 2 : -1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -240,10 +259,20 @@ int connect(int fd, const struct sockaddr *addr, socklen_t len)
         errno = EAFNOSUPPORT;
         return -1;
     }
-    if ((k->sb = tcp_service()) == NULL) {
+    if (choose_stack() < 0) {
         errno = ENETDOWN;
         return -1;
     }
+    if (stack == 2) {
+        uint8_t a[4];
+
+        memcpy(a, &in->sin_addr.s_addr, 4);
+        if (ip_tcp_connect(a, ntohs(in->sin_port)) != 0) return -1;
+        k->own = 1;
+        k->connected = 1;
+        return 0;
+    }
+    k->sb = tcp_service();
     if ((s = k->sb->CreateChild(k->sb, &k->child)) != EFI_SUCCESS ||
         (s = efi_bs->HandleProtocol(k->child, &tcp_guid, (void **) &k->tcp))
             != EFI_SUCCESS) {
@@ -336,6 +365,7 @@ int efi_sock_ready(int i)
 {
     struct sock *k = &socks[i];
 
+    if (k->own) return ip_tcp_ready();
     if (k->rx_at < k->rx_len || k->eof || k->error) return 1;
     rx_start(k);
     k->tcp->Poll(k->tcp);
@@ -347,6 +377,7 @@ int efi_sock_read(int i, void *p, size_t n)
 {
     struct sock *k = &socks[i];
 
+    if (k->own) return ip_tcp_read(p, n);
     while (k->rx_at == k->rx_len && !k->eof && !k->error) {
         rx_start(k);
         if (k->rx_pending) wait_for(k->tcp, &k->rx_done, 3600);
@@ -372,6 +403,7 @@ int efi_sock_write(int i, const void *p, size_t n)
     EFI_STATUS             s;
     size_t                 part = n > 32768 ? 32768 : n;
 
+    if (k->own) return ip_tcp_write(p, n);
     if (!k->connected) {
         errno = EBADF;
         return -1;
@@ -408,6 +440,7 @@ int efi_sock_close(int i)
     EFI_TCP4_CLOSE_TOKEN tok;
     volatile int         done;
 
+    if (k->own) ip_tcp_close();
     if (k->tcp != NULL) {
         if (k->rx_pending) {
             k->tcp->Cancel(k->tcp, &k->rx_token.CompletionToken);
@@ -499,7 +532,8 @@ static int dns_lookup(const char *name, in_addr_t *out)
     EFI_STATUS                    s;
     int                           rc = -1;
 
-    if (tcp_service() == NULL) return -1;
+    if (choose_stack() < 0) return -1;
+    if (stack == 2) return ip_resolve(name, (uint8_t *) out) == 0 ? 0 : -1;
     if (efi_bs->HandleProtocol(nic, &dns_sb_guid, (void **) &sb) != EFI_SUCCESS) {
         fprintf(stderr, "gork: %s: the firmware has no DNS: give the relay "
                         "as an address\n", name);

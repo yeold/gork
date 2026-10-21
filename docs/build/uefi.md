@@ -66,7 +66,9 @@ copied to `\EFI\BOOT\BOOTX64.EFI` on a FAT USB stick.
 
 ## The network
 
-gork uses the first network card that has an address. A card without one
+gork uses the firmware's TCP/IP when it has one, and its own otherwise
+(below). With the firmware's, gork uses the first network card that has
+an address. A card without one
 gets DHCP started, as `ifconfig -s eth0 dhcp` would, and gork waits up to
 20 seconds; for a static address, set it in the shell first:
 
@@ -101,10 +103,31 @@ qemu-system-aarch64 -M virt -cpu max -m 1024 \
 Booted straight from a disk, firmware may leave the network drivers
 unconnected; gork connects them itself when it finds no TCP.
 
+**Without the firmware's TCP/IP** -- U-Boot, or a PC with its network
+stack turned off but a driver for its card -- gork uses a TCP/IP stack of
+its own (`uefi/ip.c`) on the card itself: IPv4, DHCP, DNS and one TCP
+connection at a time, enough for the relay. It answers ARP and ping for
+its address. For a static address, without DHCP, set a shell variable:
+
+```
+set GORK_IP "192.168.1.50/24 192.168.1.1 192.168.1.1"
+```
+
+(address and prefix, gateway, DNS server; the last two may be left out).
+gork does DHCP afresh at each start there, which takes a moment.
+
 **U-Boot** (2025.01, `qemu_arm64`) starts EDK2's shell from a disk through
-its own UEFI layer, and `gorkaa64.efi` runs there, but U-Boot offers only
-the raw network card (SimpleNetwork) and PXE, no TCP: gork says so and
-stops. See [TODO-OSES.md](../TODO-OSES.md).
+its own UEFI layer (put the shell at `\EFI\BOOT\BOOTAA64.EFI`), and
+`gorkaa64.efi` runs there on its own TCP/IP. U-Boot renames no files, so a
+`write_file` there copies the new file over the old one instead: not
+atomic.
+
+```sh
+qemu-system-aarch64 -M virt -cpu max -m 1024 \
+    -bios /usr/lib/u-boot/qemu_arm64/u-boot.bin \
+    -drive if=none,id=esp,format=raw,file=esp.img -device virtio-blk-pci,drive=esp \
+    -nic user,model=virtio-net-pci
+```
 
 ## What UEFI lacks, and what gork does about it
 
@@ -120,12 +143,14 @@ stops. See [TODO-OSES.md](../TODO-OSES.md).
 
 ## Testing
 
-`python3 testing/uefitest.py ZIP FAKEAPI [x64|aa64]` boots OVMF (or
-AAVMF) in QEMU with the UEFI shell, gork and the checks on a FAT image, against the fake
+`python3 testing/uefitest.py ZIP FAKEAPI [MACHINE]` boots OVMF (`x64`),
+AAVMF (`aa64`), OVMF without its network stack (`x64-own`, so gork's own
+TCP/IP) or U-Boot (`uboot`) in QEMU with the UEFI shell, gork and the
+checks on a FAT image, against the fake
 API (`testing/fakeapi.c`, built for the host): a reply, the file tools,
 `run_command`, paths outside the working directory, a subdirectory, a
 UTF-16 config, the request timeout and the exit status. It needs
 QEMU, the firmware and a UEFI shell for the architecture (Debian's
 `qemu-system-x86`, `ovmf` and `efi-shell-x64`, or `qemu-system-arm`,
-`qemu-efi-aarch64` and `efi-shell-aa64`), mtools and dosfstools. Jenkins
-runs it for both on every build.
+`qemu-efi-aarch64` and `efi-shell-aa64`; `u-boot-qemu` for U-Boot), mtools
+and dosfstools. Jenkins runs all four on every build.

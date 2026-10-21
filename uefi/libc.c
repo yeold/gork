@@ -1550,6 +1550,37 @@ int remove(const char *path)
 int unlink(const char *path) { return remove(path); }
 int rmdir(const char *path)  { return remove(path); }
 
+/* rename() where the firmware renames nothing (U-Boot): a copy, then
+   the old one removed. */
+static int copy_over(const char *from, const char *to)
+{
+    char   buf[4096];
+    int    in, out, e = 0;
+    ssize_t n;
+
+    if ((in = open(from, O_RDONLY)) < 0) return -1;
+    if ((out = open(to, O_WRONLY | O_CREAT | O_TRUNC, 0666)) < 0) {
+        e = errno;
+        close(in);
+        errno = e;
+        return -1;
+    }
+    while ((n = read(in, buf, sizeof buf)) > 0)
+        if (write(out, buf, (size_t) n) != n) {
+            e = errno ? errno : ENOSPC;
+            break;
+        }
+    if (n < 0) e = errno;
+    close(in);
+    close(out);
+    if (e != 0) {
+        remove(to);
+        errno = e;
+        return -1;
+    }
+    return remove(from);
+}
+
 /* The new name goes in the file's information: as \dir\name, from the
    root of its file system, so both must be on the same one.  An existing
    `to` is removed first, so this is not atomic. */
@@ -1602,6 +1633,8 @@ int rename(const char *from, const char *to)
     free(ninfo);
     free(w);
     efi_shell->CloseFile(h);
+    if (s == EFI_ACCESS_DENIED || s == EFI_UNSUPPORTED || s == EFI_WRITE_PROTECTED)
+        return copy_over(f, t);
     if (s != EFI_SUCCESS) {
         errno = efi_errno(s);
         return -1;

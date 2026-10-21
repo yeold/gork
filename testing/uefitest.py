@@ -1,33 +1,52 @@
 #!/usr/bin/env python3
 """Run gork from uefibuild.sh in the UEFI shell, in QEMU.
 
-Usage:  python3 testing/uefitest.py PACKAGE FAKEAPI [ARCH [SHELL]]
+Usage:  python3 testing/uefitest.py PACKAGE FAKEAPI [MACHINE [SHELL]]
 
 PACKAGE is gork-<version>-uefi.zip, FAKEAPI testing/fakeapi.c built for
-this machine, ARCH x64 (gorkx64.efi, on OVMF in a q35 machine; the
-default) or aa64 (gorkaa64.efi, on AAVMF in QEMU's virt machine), SHELL
-a UEFI shell for it (default: Debian's efi-shell-x64 or -aa64).  A FAT
+this machine.  MACHINE is x64 (gorkx64.efi, on OVMF in a q35 machine; the
+default), aa64 (gorkaa64.efi, on AAVMF in QEMU's virt machine), x64-own
+(OVMF without its network stack, so on gork's own TCP/IP) or uboot
+(gorkaa64.efi under U-Boot's UEFI, on gork's own TCP/IP).  SHELL is a
+UEFI shell for it (default: Debian's efi-shell-x64 or -aa64).  A FAT
 disk gets the shell as \\EFI\\BOOT\\BOOT<ARCH>.EFI, gork as gork.efi, its
 gork.cnf and a startup.nsh that runs the checks; QEMU's user network takes
 the guest to the fake API on 10.0.2.2.  The disk's files are read back
 afterwards.  Prints "ok:" or "FAIL:" per check and exits 1 if any
 failed.  Needs qemu-system-x86_64 and OVMF, or qemu-system-aarch64 and
-qemu-efi-aarch64, mtools and dosfstools.
+qemu-efi-aarch64 (u-boot-qemu for uboot), mtools and dosfstools.
 """
-import os, shutil, subprocess, sys, tempfile, time, zipfile
+import json, os, shutil, subprocess, sys, tempfile, time, zipfile
 
 PORT = 8099
 
-# ARCH: the firmware's code and variables, and how QEMU boots it
+OVMF, AAVMF = "/usr/share/OVMF/OVMF_%s_4M.fd", "/usr/share/AAVMF/AAVMF_%s.fd"
+NOPXE = ["-fw_cfg", "name=opt/org.tianocore/IPv4PXESupport,string=n",
+         "-fw_cfg", "name=opt/org.tianocore/IPv6PXESupport,string=n"]
+NIC = ["-nic", "user,model=virtio-net-pci"]
+
+# MACHINE: the gork it runs (x64 or aa64), its firmware's code and
+# variables (None: U-Boot, which keeps none), and the rest of QEMU's line.
+# The firmware's network stack waits for a random number generator: a
+# virtio one on x86-64; on arm64 the RNDR instruction of `-cpu max`, as a
+# virtio one comes too late there.  Without one, OVMF has the network card
+# but no TCP/IP, as a PC with its network stack turned off: gork's own
+# stack (uefi/ip.c) is what runs then, and under U-Boot.
 MACHINES = {
-    "x64": ("/usr/share/OVMF/OVMF_CODE_4M.fd", "/usr/share/OVMF/OVMF_VARS_4M.fd",
-            ["qemu-system-x86_64", "-machine", "q35", "-m", "512"],
-            "ide-hd,drive=esp,bus=ide.0,bootindex=0"),
-    "aa64": ("/usr/share/AAVMF/AAVMF_CODE.fd", "/usr/share/AAVMF/AAVMF_VARS.fd",
-             # "max": its RNDR instruction is the random number generator
-             # the network stack waits for; a virtio one comes too late here
-             ["qemu-system-aarch64", "-M", "virt", "-cpu", "max", "-m", "1024"],
-             "virtio-blk-pci,drive=esp,bootindex=0"),
+    "x64": ("x64", OVMF % "CODE", OVMF % "VARS",
+            ["qemu-system-x86_64", "-machine", "q35", "-m", "512",
+             "-device", "ide-hd,drive=esp,bus=ide.0,bootindex=0",
+             "-device", "virtio-rng-pci"] + NOPXE + NIC),
+    "x64-own": ("x64", OVMF % "CODE", OVMF % "VARS",
+                ["qemu-system-x86_64", "-machine", "q35", "-m", "512",
+                 "-device", "ide-hd,drive=esp,bus=ide.0,bootindex=0"] + NOPXE + NIC),
+    "aa64": ("aa64", AAVMF % "CODE", AAVMF % "VARS",
+             ["qemu-system-aarch64", "-M", "virt", "-cpu", "max", "-m", "1024",
+              "-device", "virtio-blk-pci,drive=esp,bootindex=0"] + NOPXE + NIC),
+    "uboot": ("aa64", None, None,
+              ["qemu-system-aarch64", "-M", "virt", "-cpu", "max", "-m", "1024",
+               "-bios", "/usr/lib/u-boot/qemu_arm64/u-boot.bin",
+               "-device", "virtio-blk-pci,drive=esp"] + NIC),
 }
 
 # Each check: a line of startup.nsh, and what the console must show after
@@ -74,10 +93,10 @@ def main():
             (len(sys.argv) > 3 and sys.argv[3] not in MACHINES):
         sys.exit(__doc__)
     pkg, fake = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
-    arch = sys.argv[3] if len(sys.argv) > 3 else "x64"
+    machine = sys.argv[3] if len(sys.argv) > 3 else "x64"
+    arch, code, varstore, qemu = MACHINES[machine]
     shell = sys.argv[4] if len(sys.argv) > 4 else \
         "/usr/share/efi-shell-%s/shell%s.efi" % (arch, arch)
-    code, varstore, qemu, disk = MACHINES[arch]
     t = tempfile.mkdtemp(prefix="uefitest.")
     esp, back, fdir = (os.path.join(t, d) for d in ("esp", "back", "f"))
     for d in (esp, back, fdir, os.path.join(esp, "EFI", "BOOT"),
@@ -100,25 +119,20 @@ def main():
     sh("mkfs.fat", "-C", "-F", "16", "-n", "GORK", img, "65536",
        stdout=subprocess.DEVNULL)
     sh("mcopy", "-i", img, "-s", "-Q", *[os.path.join(esp, n) for n in os.listdir(esp)], "::/")
-    vars_fd = os.path.join(t, "vars.fd")
-    shutil.copy(varstore, vars_fd)
+    flash = []
+    if code is not None:
+        vars_fd = os.path.join(t, "vars.fd")
+        shutil.copy(varstore, vars_fd)
+        flash = ["-drive", "if=pflash,format=raw,readonly=on,file=" + code,
+                 "-drive", "if=pflash,format=raw,file=" + vars_fd]
 
     fp = subprocess.Popen([fake, str(PORT)], cwd=fdir, stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL)
     time.sleep(1)
     try:
         q = subprocess.run(
-            qemu + ["-nographic", "-no-reboot",
-             "-drive", "if=pflash,format=raw,readonly=on,file=" + code,
-             "-drive", "if=pflash,format=raw,file=" + vars_fd,
-             "-drive", "if=none,id=esp,format=raw,file=" + img,
-             "-device", disk,
-             # no network boot before the disk; the firmware's network
-             # stack wants a random number generator
-             "-fw_cfg", "name=opt/org.tianocore/IPv4PXESupport,string=n",
-             "-fw_cfg", "name=opt/org.tianocore/IPv6PXESupport,string=n",
-             "-device", "virtio-rng-pci",
-             "-nic", "user,model=virtio-net-pci"],
+            qemu + flash + ["-nographic", "-no-reboot",
+                            "-drive", "if=none,id=esp,format=raw,file=" + img],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, timeout=900)
         out = q.stdout.decode("utf-8", "replace")
@@ -144,6 +158,18 @@ def main():
         with open(os.path.join(fdir, "fakeapi.log")) as f:
             log = f.read()
 
+    # what the tools returned: each tool_result's text, from the fake's log
+    results = []
+    for line in log.splitlines():
+        try:
+            for m in json.loads(line).get("messages", [])[-1:]:
+                for b in m["content"] if isinstance(m["content"], list) else []:
+                    if b.get("type") == "tool_result":
+                        c = b.get("content")
+                        results.append(c if isinstance(c, str) else json.dumps(c))
+        except (ValueError, KeyError, TypeError):
+            pass
+
     def read(*p):
         try:
             with open(os.path.join(back, "w", *p), "rb") as f:
@@ -156,7 +182,7 @@ def main():
         ("batch mode only", "no TUI" in part("notui")),
         ("a reply", "PONG" in part("hello")),
         ("write_file", read("out.txt") == b"a\r\nb\r\n"),
-        ("read_file", '"content":"a\\nb\\n"' in log),
+        ("read_file", "a\nb\n" in results),
         ("list_dir", "abcdefghijkl.c" in log),
         ("run_command", "[exit " in log),
         ("paths outside the working directory refused",
@@ -172,7 +198,10 @@ def main():
         fails += not good
     if fails and not os.environ.get("UEFITEST_VERBOSE"):
         print(out[-3000:])
-    shutil.rmtree(t, ignore_errors=True)
+    if os.environ.get("UEFITEST_KEEP"):
+        print("kept: " + t)
+    else:
+        shutil.rmtree(t, ignore_errors=True)
     sys.exit(1 if fails else 0)
 
 
