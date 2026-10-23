@@ -403,6 +403,8 @@ static tcp_Socket sock16;
 
 static int tcp_connect(const char *host, long port) {
   static int started;
+  static char last_host[256];
+  static DWORD last_ip;
   DWORD ip;
   int status = 0;
 
@@ -414,10 +416,18 @@ static int tcp_connect(const char *host, long port) {
     return -1;
   }
   started = 1;
-  ip = resolve((char *)host);           /* a name, or a dotted address */
-  if (ip == 0) {
-    fprintf(stderr, "gork: cannot resolve %s\n", host);
-    return -1;
+  if (last_ip != 0 && strcmp(host, last_host) == 0) {
+    ip = last_ip;
+  } else {
+    ip = resolve((char *)host);         /* a name, or a dotted address */
+    if (ip == 0) {
+      fprintf(stderr, "gork: cannot resolve %s\n", host);
+      return -1;
+    }
+    if (strlen(host) < sizeof last_host) {
+      strcpy(last_host, host);
+      last_ip = ip;
+    }
   }
   if (!tcp_open(&sock16, 0, ip, (WORD)port, NULL)) {
     fprintf(stderr, "gork: connect: no route to %s\n", host);
@@ -520,16 +530,28 @@ static int winsock_start(void) {
 #ifdef GORK_MINIX2
 /* No sockets: a connection is a /dev/tcp opened and set up by ioctl. */
 static int tcp_connect(const char *host, long port) {
+  static char last_host[256];
+  static ipaddr_t last_addr;
   nwio_tcpconf_t conf;
   nwio_tcpcl_t cl;
   struct hostent *he;
   char *dev = getenv("TCP_DEVICE");
   int fd;
 
-  he = gethostbyname(host);
-  if (he == NULL || he->h_addr_list[0] == NULL) {
-    fprintf(stderr, "gork: cannot resolve %s\n", host);
-    return -1;
+  memset(&conf, 0, sizeof conf);
+  if (last_host[0] != '\0' && strcmp(host, last_host) == 0) {
+    conf.nwtc_remaddr = last_addr;
+  } else {
+    he = gethostbyname(host);
+    if (he == NULL || he->h_addr_list[0] == NULL) {
+      fprintf(stderr, "gork: cannot resolve %s\n", host);
+      return -1;
+    }
+    memcpy(&conf.nwtc_remaddr, he->h_addr_list[0], sizeof conf.nwtc_remaddr);
+    if (strlen(host) < sizeof last_host) {
+      strcpy(last_host, host);
+      last_addr = conf.nwtc_remaddr;
+    }
   }
   if (dev == NULL)
     dev = TCP_DEVICE;
@@ -538,9 +560,7 @@ static int tcp_connect(const char *host, long port) {
     fprintf(stderr, "gork: %s: %s\n", dev, strerror(errno));
     return -1;
   }
-  memset(&conf, 0, sizeof conf);
   conf.nwtc_flags = NWTC_LP_SEL | NWTC_SET_RA | NWTC_SET_RP;
-  memcpy(&conf.nwtc_remaddr, he->h_addr_list[0], sizeof conf.nwtc_remaddr);
   conf.nwtc_remport = htons((tcpport_t)port);
   memset(&cl, 0, sizeof cl);
   if (ioctl(fd, NWIOSTCPCONF, &conf) < 0 || ioctl(fd, NWIOTCPCONN, &cl) < 0) {
@@ -552,6 +572,8 @@ static int tcp_connect(const char *host, long port) {
 }
 #else
 static int tcp_connect(const char *host, long port) {
+  static char last_host[256];
+  static struct in_addr last_addr;
   struct hostent *he;
   struct sockaddr_in addr;
   int fd;
@@ -562,25 +584,33 @@ static int tcp_connect(const char *host, long port) {
 #endif
 
   memset(&addr, 0, sizeof addr);
+  if (last_host[0] != '\0' && strcmp(host, last_host) == 0) {
+    addr.sin_addr = last_addr;
+  } else {
 #if defined(_WIN32) || defined(GORK_AIXPS2) || defined(__EMX__) || \
     defined(GORK_NEXT) || defined(GORK_SUNOS4) || defined(GORK_SVR40) || \
     defined(GORK_PLAN9)
-  /* gethostbyname() on Windows 9x, AIX PS/2, OS/2 Warp 3, OPENSTEP,
-     SunOS 4, SVR4.0 and Plan 9's APE does not take a numeric address. */
-  addr.sin_addr.s_addr = inet_addr(host);
-  if (addr.sin_addr.s_addr == INADDR_NONE)
+    /* gethostbyname() on Windows 9x, AIX PS/2, OS/2 Warp 3, OPENSTEP,
+       SunOS 4, SVR4.0 and Plan 9's APE does not take a numeric address. */
+    addr.sin_addr.s_addr = inet_addr(host);
+    if (addr.sin_addr.s_addr == INADDR_NONE)
 #endif
-  {
-    he = gethostbyname(host);
-    if (he == NULL || he->h_addr_list[0] == NULL) {
-      fprintf(stderr, "gork: cannot resolve %s\n", host);
-      return -1;
+    {
+      he = gethostbyname(host);
+      if (he == NULL || he->h_addr_list[0] == NULL) {
+        fprintf(stderr, "gork: cannot resolve %s\n", host);
+        return -1;
+      }
+      if (he->h_addrtype != AF_INET) {
+        fprintf(stderr, "gork: %s is not IPv4\n", host);
+        return -1;
+      }
+      memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
     }
-    if (he->h_addrtype != AF_INET) {
-      fprintf(stderr, "gork: %s is not IPv4\n", host);
-      return -1;
+    if (strlen(host) < sizeof last_host) {
+      strcpy(last_host, host);
+      last_addr = addr.sin_addr;
     }
-    memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
   }
 
   fd = socket(AF_INET, SOCK_STREAM, 0);

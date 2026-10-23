@@ -106,17 +106,9 @@ CodeQL does not see the DOS and Windows code, which is behind `#ifdef`.
 
 ## Open questions
 
-- Minix 3.3.0: on its console the screen scrolls up one line when the
-  first reply is drawn. The same curses on NetBSD draws correctly.
 - HP-UX 11.11 installs in QEMU, but no compiler for its PA-RISC 1.1
   processor was found.
 - OpenBSD on SPARC64 passes the batch checks; the TUI could not be run
   there.
 - [TODO-DOS.md](TODO-DOS.md) has the open DOS items, and
   [TODO-FEATURES.md](TODO-FEATURES.md) the planned features and build flags.
-- Since 2026-10-19 Jenkins' `dos` stage (and once `dos16`) fails about
-  every other build, each time at a different step of the TUI check
-  (`Allow write_file`, `aborted`, `Enter send` not on screen), and passes
-  again on the next build without a change to the code it tests: a
-  timing problem of `testing/dostest.py` under load, it seems, not found
-  yet.

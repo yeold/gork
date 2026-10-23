@@ -38,5 +38,4 @@ system is too small), then build from the tarball:
 make
 ```
 
-Batch mode and the TUI work. On the Minix console itself the TUI's status
-line scrolls off the top after the first reply; the cause is not found yet.
+Batch mode and the TUI work.

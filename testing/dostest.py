@@ -258,8 +258,10 @@ def build_images(zip_path):
                       "my_ip = 10.0.2.15\nnetmask = 255.255.255.0\n"
                       "gateway = 10.0.2.2\nnameserver = 10.0.2.3\n",
         "GORK.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
-                    "timeout = 6\nretries = 0\n"
+                    "timeout = 20\nretries = 0\n"
                     "allow = d:/shared;c:/tmp\n" % PORT,
+        "SHORT.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
+                     "timeout = 6\nretries = 0\n" % PORT,
         "BAD.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
                    "allow = c:/nope\n" % PORT,
         "STREAM.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
@@ -693,7 +695,9 @@ def check_stream(g):
 def check_timeout(g):
     """A reply that never comes ends in a timeout, not a crash."""
     script[:] = [text("late", delay=12)]
+    g.run("set GORK_CONFIG=c:\\short.cnf")
     s = g.run(GORK + " t")
+    g.run("set GORK_CONFIG=")
     assert "timeout on socket" in s, s
     time.sleep(7)                       # let the late reply drain
     print("ok: timeout")
@@ -704,34 +708,72 @@ def check_tui(g):
     exit."""
     del requests[:]
     script[:] = [tool("write_file", path="tui.txt", content="x\n"),
-                 text("all done"), text("never seen", delay=10)]
+                 text("all done"), text("never seen", delay=30)]
     g.type("cls\n")
+    g.wait(r"^C:\\W>$", 10)
     g.type(GORK + "\n")
-    g.wait("Trust this directory")
+    g.wait("no, quit")
     g.type("y\n")
     try:
         g.wait("Enter send", 15)
     except AssertionError:              # a busy host can lose a key
-        g.type("\n")
+        g.type("y\n")
         g.wait("Enter send")
-    g.type("ix")                        # Home, h; End, Backspace: hi
-    g.key("home")
-    g.type("h")
-    g.key("end")
-    g.type("\b\n")
-    g.wait("Allow write_file")
+    for attempt in range(3):
+        g.type("ix")                    # Home, h; End, Backspace: hi
+        g.key("home")
+        g.type("h")
+        g.key("end")
+        g.type("\b")
+        try:
+            g.wait(r"> hi$", 10)
+            break
+        except AssertionError:
+            if attempt == 2:
+                raise
+            g.key("ctrl-u")
+            time.sleep(1)
+    g.type("\n")
+    try:
+        g.wait("Allow write_file", 15)
+    except AssertionError:
+        g.type("\n")
+        g.wait("Allow write_file")
     g.type("y")
-    g.wait("all done")
+    try:
+        g.wait("all done", 15)
+    except AssertionError:
+        g.type("y")
+        g.wait("all done")
     assert requests[0]["messages"][0]["content"] == "hi", requests[0]
+    g.wait("Enter send")
     g.key("pgup")
     g.key("pgdn")
-    g.wait("Enter send")
-    g.key("up")                         # the line before, again
+    for attempt in range(3):
+        g.key("up")                     # the line before, again
+        try:
+            g.wait(r"> hi$", 10)
+            break
+        except AssertionError:
+            if attempt == 2:
+                raise
     g.type("\n")
-    g.wait("Esc to abort")
+    try:
+        g.wait("Esc to abort", 15)
+    except AssertionError:
+        g.type("\n")
+        g.wait("Esc to abort")
+    end = time.time() + 20
+    while len(requests) < 3 and time.time() < end:
+        time.sleep(0.2)
     g.key("esc")
-    g.wait("aborted")
+    try:
+        g.wait("aborted", 10)
+    except AssertionError:
+        g.key("esc")
+        g.wait("aborted")
     assert requests[-1]["messages"][-1]["content"] == "hi", requests[-1]
+    g.wait("Enter send")
     g.type("/quit\n")
     s = g.wait(r"C:\\W>$", 20)
     assert "Enter send" not in s, s     # the screen was cleared
@@ -749,6 +791,7 @@ def main():
     fetch()
     boot, disk, disk2 = build_images(os.path.abspath(zip_path))
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    srv.daemon_threads = True
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     relay = RELAY and subprocess.Popen(
         [RELAY, "-p", "-t", "0", "-x", "udp:127.0.0.1:%d" % RELAY_PORT,

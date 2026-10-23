@@ -188,7 +188,10 @@ static int input_line(size_t pos, size_t *start, size_t *end)
 
 static void draw(void)
 {
-    int    w = COLS, avail, total = 0, first, g, k, rows, off;
+    /* Leave the rightmost column untouched: on the Minix 3.3.0 console it
+       wraps at once while curses expects xenl, and the next linefeed
+       scrolls the screen. */
+    int    w = COLS - 1, avail, total = 0, first, g, k, rows, off;
     int    in_rows, in_all, cur, top, y;
     size_t i, a, b;
 
@@ -210,18 +213,17 @@ static void draw(void)
     hline(' ', w);
     put(0, 0, status_text, w);
 
-    for (i = 0; i < nlines; i++) total += line_rows(i, w);
+    if (scroll_rows < 0) scroll_rows = 0;
+    for (i = nlines; i > 0 && total < scroll_rows + avail; ) {
+        i--;
+        total += line_rows(i, w);
+    }
     if (scroll_rows > total - avail) scroll_rows = total - avail;
     if (scroll_rows < 0) scroll_rows = 0;
     first = total > avail ? total - avail - scroll_rows : 0;
 
-    g = 0;
-    for (i = 0; i < nlines && g < first + avail; i++) {
+    for (g = 0; i < nlines && g < first + avail; i++) {
         rows = line_rows(i, w);
-        if (g + rows <= first) {
-            g += rows;
-            continue;
-        }
         attrset(style_attr[lines[i].style]);
         for (k = 0; k < rows; k++, g++) {
             if (g < first || g >= first + avail) continue;
