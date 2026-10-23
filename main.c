@@ -184,9 +184,8 @@ char *os2_realpath(const char *path, char *out)
 #define CONF_NAME ".gork.conf"
 #endif
 
-#ifdef GORK_NO_FORK
-#define ALLOW_SEP ";"           /* ':' belongs to the drive letter */
-/* No fork, so no MCP servers: mcp.c is left out of the build. */
+#if defined(GORK_NO_FORK) || defined(GORK_NO_MCP)
+/* No fork (or --without-mcp), so no MCP servers: mcp.c is left out. */
 #define mcp_start(path)          ((void) (path))
 #define mcp_stop()               ((void) 0)
 #define mcp_tool_count()         0
@@ -194,6 +193,10 @@ char *os2_realpath(const char *path, char *out)
 #define mcp_find(name)           (-1)
 #define mcp_always(i)            ((int *) 0)
 #define mcp_call(i, input, err)  ((char *) 0)
+#endif
+
+#ifdef GORK_NO_FORK
+#define ALLOW_SEP ";"           /* ':' belongs to the drive letter */
 /* Text mode for the files the model reads and writes: it sees and sends
    bare newlines, the files keep their CR LF. */
 #define RB "r"
@@ -3010,6 +3013,99 @@ static int run_task(const struct conn *c, cJSON *messages)
     return -1;
 }
 
+#ifndef GORK_BARE
+#if defined(GORK_NO_FORK) || defined(GORK_EMX)
+#define SESSION_FILE DOT_GORK "/session.jsn"
+#else
+#define SESSION_FILE DOT_GORK "/session.json"
+#endif
+
+static void save_session(const cJSON *messages, const char *arg)
+{
+    const char *path = *arg ? arg : SESSION_FILE, *why;
+    char        real[PATH_MAX], *json;
+
+    if (!*arg) (void) mkdir(DOT_GORK, 0700);
+    if ((why = confine(path, real, 1)) != NULL) {
+        fprintf(stderr, "gork: %s: %s\n", path, why);
+        return;
+    }
+    json = cJSON_PrintUnformatted(messages);
+    if (json == NULL) {
+        fprintf(stderr, "gork: out of memory\n");
+        return;
+    }
+    why = save_file(real, json, strlen(json));
+    free(json);
+    if (why != NULL)
+        fprintf(stderr, "gork: %s: %s\n", path, why);
+    else
+        fprintf(stderr, "gork: saved %d messages to %s\n",
+                cJSON_GetArraySize(messages), path);
+}
+
+static void load_session(const struct conn *c, cJSON **messages,
+                         const char *arg)
+{
+    const char *path = *arg ? arg : SESSION_FILE, *why;
+    char        real[PATH_MAX];
+    FILE       *f;
+    struct buf  b;
+    cJSON      *loaded, *m, *role, *content;
+    int         rc;
+
+    if ((why = confine(path, real, 0)) != NULL) {
+        fprintf(stderr, "gork: %s: %s\n", path, why);
+        return;
+    }
+    f = fopen(real, RB);
+    if (f == NULL) {
+        fprintf(stderr, "gork: %s: %s\n", path, strerror(errno));
+        return;
+    }
+    if (buf_init(&b) != 0) {
+        fclose(f);
+        fprintf(stderr, "gork: out of memory\n");
+        return;
+    }
+    rc = read_stream(f, &b, TOOL_EDIT_MAX);
+    fclose(f);
+    if (rc != 0) {
+        buf_free(&b);
+        fprintf(stderr, "gork: %s: %s\n", path,
+                rc > 0 ? "file too large" : "out of memory");
+        return;
+    }
+    loaded = cJSON_Parse(b.p);
+    if (!cJSON_IsArray(loaded)) {
+        cJSON_Delete(loaded);
+        buf_free(&b);
+        fprintf(stderr, "gork: %s: not a saved session\n", path);
+        return;
+    }
+    cJSON_ArrayForEach(m, loaded) {
+        role    = cJSON_GetObjectItem(m, "role");
+        content = cJSON_GetObjectItem(m, "content");
+        if (!cJSON_IsString(role) ||
+            (strcmp(role->valuestring, "user") != 0 &&
+             strcmp(role->valuestring, "assistant") != 0) ||
+            (!cJSON_IsString(content) && !cJSON_IsArray(content))) {
+            cJSON_Delete(loaded);
+            buf_free(&b);
+            fprintf(stderr, "gork: %s: invalid message in session\n", path);
+            return;
+        }
+    }
+    cJSON_Delete(*messages);
+    *messages = loaded;
+    ctx_tokens = (long) (b.len / 4);
+    buf_free(&b);
+    update_status(c);
+    fprintf(stderr, "gork: loaded %d messages from %s\n",
+            cJSON_GetArraySize(*messages), path);
+}
+#endif
+
 /* Chat until the user quits.  One conversation, so each message builds on
    the last; /new starts over, /compact squeezes it into a summary, and Esc
    aborts the running task. */
@@ -3055,6 +3151,21 @@ static int interactive(const struct conn *c)
             fprintf(stderr, "gork: new task, conversation cleared\n");
             continue;
         }
+#ifndef GORK_BARE
+        if (strncmp(line, "/save", 5) == 0 &&
+            (line[5] == '\0' || line[5] == ' ')) {
+            save_session(messages, trim(line + 5));
+            continue;
+        }
+        if ((strncmp(line, "/load", 5) == 0 &&
+             (line[5] == '\0' || line[5] == ' ')) ||
+            (strncmp(line, "/resume", 7) == 0 &&
+             (line[7] == '\0' || line[7] == ' '))) {
+            arg = line[1] == 'l' ? line + 5 : line + 7;
+            load_session(c, &messages, trim(arg));
+            continue;
+        }
+#endif
         if (strncmp(line, "/effort", 7) == 0 &&
             (line[7] == '\0' || line[7] == ' ')) {
             arg = line + 7 + strspn(line + 7, " ");

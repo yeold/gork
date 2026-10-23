@@ -11,6 +11,10 @@
  * tools/list, and offers each tool to the model as mcp__<server>__<tool>.
  */
 
+#include "port.h"
+#ifdef GORK_NO_MCP
+typedef int gork_no_mcp;
+#else
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,7 +27,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "port.h"
 #ifndef GORK_NO_SELECT
 #include <sys/time.h>
 #endif
@@ -1010,3 +1013,4 @@ oom:
     cJSON_Delete(res);
     return NULL;
 }
+#endif /* !GORK_NO_MCP */

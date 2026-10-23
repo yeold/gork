@@ -15,6 +15,10 @@
  *                                 input has several lines)
  */
 
+#include "port.h"
+#ifdef GORK_NO_TUI
+#include "notui.c"
+#else
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,7 +28,6 @@
 #ifdef GORK_UNICODE
 #include <locale.h>
 #endif
-#include "port.h"
 #if !defined(_WIN32) && !defined(GORK_DOS16)
 #include <termios.h>
 #endif
@@ -819,3 +822,4 @@ int tui_poll_abort(void)
     }
     return esc;
 }
+#endif /* !GORK_NO_TUI */

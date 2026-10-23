@@ -83,6 +83,8 @@ Useful `configure` arguments:
 |---|---|
 | `--with-max-file-size=BYTES` | Change the maximum file size `read_file`, `write_file` and `edit_file` accept |
 | `--enable-unicode` / `--disable-unicode` | Force UTF-8 support in the TUI on or off (by default `configure` enables it when `ncursesw` and `locale.h` are present and falls back to ASCII otherwise) |
+| `--without-tui` | Build without curses (batch mode only) |
+| `--without-mcp` | Build without the MCP client |
 | `CPPFLAGS=-I/usr/include/ncurses` | `/usr/include/curses.h` is not ncurses but ncurses is installed |
 | `CPPFLAGS=-I/path/include LDFLAGS=-L/path/lib` | curses lives outside the system directories |
 

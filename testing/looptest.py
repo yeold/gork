@@ -1330,8 +1330,8 @@ def check_tui_tty_prompt():
                     {"type": "tool_use", "id": "t1", "name": "run_command", "input": {
                         "command": "printf 'P''w:' >/dev/tty; read -r x </dev/tty; echo got:$x"}}]})
             else:
-                reply(self, {"id": "m", "stop_reason": "end_turn",
-                             "content": [{"type": "text", "text": "done"}]})
+                reply(self, {"id": "m", "stop_reason": "end_turn", "content": [
+                    {"type": "text", "text": "done" if len(turns) == 2 else "resumed"}]})
 
         def log_message(self, *a):
             pass
@@ -1374,6 +1374,18 @@ def check_tui_tty_prompt():
                 os.write(fd, b"secret\r")  # the mode switch skip ICRNL
                 step = 3
             elif step == 3 and idle_after(out, b"done"):
+                os.write(fd, b"/save\r")
+                step = 3.1
+            elif step == 3.1 and b"gork: saved 4 messages" in out:
+                os.write(fd, b"/new\r")
+                step = 3.2
+            elif step == 3.2 and b"conversation cleared" in out:
+                os.write(fd, b"/load\r")
+                step = 3.3
+            elif step == 3.3 and b"gork: loaded 4 messages" in out:
+                os.write(fd, b"more\r")
+                step = 4
+            elif step == 4 and idle_after(out, b"resumed"):
                 os.write(fd, b"/quit\r")
                 step = 5
         if step < 5:
@@ -1385,8 +1397,9 @@ def check_tui_tty_prompt():
     result = turns[1]["messages"][-1]["content"][0]["content"]
     assert "got:secret" in json.dumps(result), result
     assert turns[0]["output_config"] == {"effort": "max"}, "/effort max"
+    assert len(turns[2]["messages"]) == 5, turns[2]["messages"]
 
-    print("ok: run_command can prompt on /dev/tty, /effort")
+    print("ok: run_command can prompt on /dev/tty, /effort, /save and /load")
 
 
 def check_tui_mcp_esc_and_editing():

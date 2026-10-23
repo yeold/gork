@@ -35,6 +35,27 @@ case "$enable_unicode" in
   *) AC_MSG_ERROR([--enable-unicode=$enable_unicode: want yes, no or auto]) ;;
 esac
 
+AC_ARG_WITH([tui],
+  [AS_HELP_STRING([--without-tui],
+                  [build without the curses TUI (batch mode only)])],
+  [with_tui=$withval], [with_tui=yes])
+case "$with_tui" in
+  yes|no) ;;
+  *) AC_MSG_ERROR([--with-tui=$with_tui: want yes or no]) ;;
+esac
+
+AC_ARG_WITH([mcp],
+  [AS_HELP_STRING([--without-mcp],
+                  [build without the MCP client])],
+  [with_mcp=$withval], [with_mcp=yes])
+case "$with_mcp" in
+  yes|no) ;;
+  *) AC_MSG_ERROR([--with-mcp=$with_mcp: want yes or no]) ;;
+esac
+if test "$with_mcp" = no; then
+  CPPFLAGS="$CPPFLAGS -DGORK_NO_MCP"
+fi
+
 # -W, not -Wextra: the spelling gcc 3.2 (SUSE 8.1) knows.
 if test "$GCC" = yes; then
   AM_CFLAGS="-std=gnu89 -pedantic -Wall -W"
@@ -54,34 +75,38 @@ AC_SUBST([AM_CPPFLAGS])
 save_CFLAGS=$CFLAGS
 CFLAGS="$CFLAGS $AM_CFLAGS"
 
-AC_CHECK_HEADER([curses.h], [], [AC_MSG_ERROR([curses.h not found; install ncurses headers])])
-gork_have_locale=no
-if test "$enable_unicode" != no; then
-  AC_CHECK_HEADER([locale.h],
-    [AC_CHECK_FUNC([setlocale], [gork_have_locale=yes])])
-fi
-# ncursesw first when Unicode is wanted, then plain ncurses/curses as
-# fallback.  A System V curses.h (it renames initscr) needs libcurses
-# even where a libncurses is installed too, as on illumos.
-if test "$enable_unicode" != no && test "$gork_have_locale" = yes; then
-  AC_CHECK_DECL([initscr32], [gork_curses="curses ncurses"], [gork_curses="ncursesw ncurses curses"],
-                [[#include <curses.h>]])
+if test "$with_tui" = no; then
+  CPPFLAGS="$CPPFLAGS -DGORK_NO_TUI"
 else
-  AC_CHECK_DECL([initscr32], [gork_curses="curses ncurses"], [gork_curses="ncurses curses ncursesw"],
-                [[#include <curses.h>]])
-fi
-AC_SEARCH_LIBS([initscr], [$gork_curses], [], [AC_MSG_ERROR([no curses library found])])
-gork_unicode=no
-if test "$enable_unicode" != no && test "$gork_have_locale" = yes; then
-  AC_CHECK_FUNC([waddnwstr], [gork_unicode=yes])
-  if test "$enable_unicode" = yes; then
-    gork_unicode=yes
+  AC_CHECK_HEADER([curses.h], [], [AC_MSG_ERROR([curses.h not found; install ncurses headers])])
+  gork_have_locale=no
+  if test "$enable_unicode" != no; then
+    AC_CHECK_HEADER([locale.h],
+      [AC_CHECK_FUNC([setlocale], [gork_have_locale=yes])])
   fi
-elif test "$enable_unicode" = yes; then
-  AC_MSG_ERROR([--enable-unicode requested, but locale.h / setlocale was not found])
-fi
-if test "$gork_unicode" = yes; then
-  CPPFLAGS="$CPPFLAGS -DGORK_UNICODE"
+  # ncursesw first when Unicode is wanted, then plain ncurses/curses as
+  # fallback.  A System V curses.h (it renames initscr) needs libcurses
+  # even where a libncurses is installed too, as on illumos.
+  if test "$enable_unicode" != no && test "$gork_have_locale" = yes; then
+    AC_CHECK_DECL([initscr32], [gork_curses="curses ncurses"], [gork_curses="ncursesw ncurses curses"],
+                  [[#include <curses.h>]])
+  else
+    AC_CHECK_DECL([initscr32], [gork_curses="curses ncurses"], [gork_curses="ncurses curses ncursesw"],
+                  [[#include <curses.h>]])
+  fi
+  AC_SEARCH_LIBS([initscr], [$gork_curses], [], [AC_MSG_ERROR([no curses library found])])
+  gork_unicode=no
+  if test "$enable_unicode" != no && test "$gork_have_locale" = yes; then
+    AC_CHECK_FUNC([waddnwstr], [gork_unicode=yes])
+    if test "$enable_unicode" = yes; then
+      gork_unicode=yes
+    fi
+  elif test "$enable_unicode" = yes; then
+    AC_MSG_ERROR([--enable-unicode requested, but locale.h / setlocale was not found])
+  fi
+  if test "$gork_unicode" = yes; then
+    CPPFLAGS="$CPPFLAGS -DGORK_UNICODE"
+  fi
 fi
 AC_SEARCH_LIBS([fabs], [m])
 # Solaris keeps sockets and the resolver out of libc, Haiku in libnetwork.

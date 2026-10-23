@@ -278,6 +278,9 @@ itself, in batch mode too, once the context passes `auto_compact` percent of
 `medium`, `high`, `xhigh`, `max`, or `default` to send none); `/effort` alone
 shows it, and so does the status bar. It starts at `default_effort`.
 
+`/save [path]` writes the conversation to `.gork/session.json` (`_gork/session.jsn`
+on Windows) or the given file; `/load [path]` (or `/resume [path]`) restores it.
+
 <a id="local-models"></a>
 ### Local models (LM Studio, Ollama, llama.cpp, vLLM & OpenAI)
 
