@@ -1638,32 +1638,30 @@ static const struct tool *tool_lookup(const char *name)
 /* request construction                                               */
 /* ------------------------------------------------------------------ */
 
-/* Borrows `messages`: the returned object holds a reference, so deleting it
-   leaves the conversation intact for the next turn.  `system` may be NULL. */
-static cJSON *build_request(cJSON *messages, const char *system)
+static cJSON *tools_cache;
+
+/* Add a borrowed string to `obj` under `name`; freeing `obj` leaves `s`
+   alone. */
+static cJSON *add_str_ref(cJSON *obj, const char *name, const char *s)
 {
-    cJSON *req, *tools, *t, *schema;
+    cJSON *v = cJSON_CreateStringReference(s);
+
+    if (v != NULL && cJSON_AddItemToObject(obj, name, v)) return v;
+    cJSON_Delete(v);
+    return NULL;
+}
+
+/* Build the tools array once: tool_enabled() and the MCP tools do not
+   change after startup, and the caller attaches it by reference. */
+static cJSON *get_tools(void)
+{
+    cJSON *tools, *oa, *t, *w, *fn, *schema, *v;
     int    i;
 
-    req = cJSON_CreateObject();
-    if (req == NULL) return NULL;
+    if (tools_cache != NULL) return tools_cache;
 
-    if (cJSON_AddStringToObject(req, "model",
-                                cfg(CFG_MODEL)) == NULL ||
-        cJSON_AddNumberToObject(req, "max_tokens", MAX_TOKENS) == NULL)
-        goto fail;
-    if (system != NULL && cJSON_AddStringToObject(req, "system", system) == NULL)
-        goto fail;
-    /* Unset sends nothing: the model's own default, and local servers never
-       see a field they may not know. */
-    if (*effort != '\0') {
-        t = cJSON_AddObjectToObject(req, "output_config");
-        if (t == NULL || cJSON_AddStringToObject(t, "effort", effort) == NULL)
-            goto fail;
-    }
-
-    tools = cJSON_AddArrayToObject(req, "tools");
-    if (tools == NULL) goto fail;
+    tools = cJSON_CreateArray();
+    if (tools == NULL) return NULL;
 
     for (i = 0; i < NTOOLS; i++) {
         if (!tool_enabled(&TOOLS[i])) continue;
@@ -1673,9 +1671,8 @@ static cJSON *build_request(cJSON *messages, const char *system)
 
         schema = cJSON_Parse(TOOLS[i].schema);
         if (schema == NULL ||
-            cJSON_AddStringToObject(t, "name", TOOLS[i].name) == NULL ||
-            cJSON_AddStringToObject(t, "description",
-                                    TOOLS[i].description) == NULL) {
+            add_str_ref(t, "name", TOOLS[i].name) == NULL ||
+            add_str_ref(t, "description", TOOLS[i].description) == NULL) {
             cJSON_Delete(schema);
             goto fail;
         }
@@ -1683,7 +1680,66 @@ static cJSON *build_request(cJSON *messages, const char *system)
     }
     if (mcp_add_tools(tools) != 0) goto fail;
 
-    if (!cJSON_AddItemReferenceToObject(req, "messages", messages))
+    if (openai) {
+        oa = cJSON_CreateArray();
+        if (oa == NULL) goto fail;
+        cJSON_ArrayForEach(t, tools) {
+            w = cJSON_CreateObject();
+            if (w == NULL) break;
+            cJSON_AddItemToArray(oa, w);
+            fn = cJSON_AddObjectToObject(w, "function");
+            v  = cJSON_Duplicate(cJSON_GetObjectItem(t, "input_schema"), 1);
+            if (v != NULL) cJSON_AddItemToObject(fn, "parameters", v);
+            if (fn == NULL || v == NULL ||
+                add_str_ref(w, "type", "function") == NULL ||
+                !cJSON_AddItemToObject(fn, "name", cJSON_Duplicate(
+                    cJSON_GetObjectItem(t, "name"), 1)) ||
+                !cJSON_AddItemToObject(fn, "description", cJSON_Duplicate(
+                    cJSON_GetObjectItem(t, "description"), 1)))
+                break;
+        }
+        cJSON_Delete(tools);
+        if (t != NULL) {                /* left the loop early */
+            cJSON_Delete(oa);
+            return NULL;
+        }
+        tools = oa;
+    }
+
+    tools_cache = tools;
+    return tools_cache;
+
+fail:
+    cJSON_Delete(tools);
+    return NULL;
+}
+
+/* Borrows `messages`, `tools` and `system`: the returned object holds
+   references, so deleting it leaves the conversation and tool list intact
+   for the next turn.  `system` may be NULL. */
+static cJSON *build_request(cJSON *messages, const char *system)
+{
+    cJSON *req, *tools, *t;
+
+    tools = get_tools();
+    req   = tools != NULL ? cJSON_CreateObject() : NULL;
+    if (req == NULL) return NULL;
+
+    if (add_str_ref(req, "model", cfg(CFG_MODEL)) == NULL ||
+        cJSON_AddNumberToObject(req, "max_tokens", MAX_TOKENS) == NULL)
+        goto fail;
+    if (system != NULL && add_str_ref(req, "system", system) == NULL)
+        goto fail;
+    /* Unset sends nothing: the model's own default, and local servers never
+       see a field they may not know. */
+    if (*effort != '\0') {
+        t = cJSON_AddObjectToObject(req, "output_config");
+        if (t == NULL || add_str_ref(t, "effort", effort) == NULL)
+            goto fail;
+    }
+
+    if (!cJSON_AddItemReferenceToObject(req, "tools", tools) ||
+        !cJSON_AddItemReferenceToObject(req, "messages", messages))
         goto fail;
 
     return req;
@@ -1973,14 +2029,16 @@ static long usage_of(cJSON *usage, const char *field)
    form; only the request and the reply are translated, here, so the loop,
    the tools and compacting never see the difference. */
 
-static cJSON *oa_message(cJSON *out, const char *role, const char *content)
+static cJSON *oa_message(cJSON *out, const char *role, const char *content,
+                         int ref)
 {
     cJSON *m = cJSON_CreateObject();
 
     if (m == NULL) return NULL;
     cJSON_AddItemToArray(out, m);
-    if (cJSON_AddStringToObject(m, "role", role) == NULL ||
-        cJSON_AddStringToObject(m, "content", content) == NULL)
+    if (add_str_ref(m, "role", role) == NULL ||
+        (ref ? add_str_ref(m, "content", content)
+             : cJSON_AddStringToObject(m, "content", content)) == NULL)
         return NULL;
     return m;
 }
@@ -1999,7 +2057,7 @@ static int oa_convert(cJSON *out, cJSON *msg)
     if (!cJSON_IsString(role)) return 0;
     if (cJSON_IsString(content))
         return oa_message(out, role->valuestring,
-                          content->valuestring) != NULL ? 0 : -1;
+                          content->valuestring, 1) != NULL ? 0 : -1;
     asst = strcmp(role->valuestring, "assistant") == 0;
     if (buf_init(&txt) != 0) return -1;
 
@@ -2016,10 +2074,10 @@ static int oa_convert(cJSON *out, cJSON *msg)
             v  = cJSON_GetObjectItem(b, "content");
             id = cJSON_GetObjectItem(b, "tool_use_id");
             m  = oa_message(out, "tool",
-                            cJSON_IsString(v) ? v->valuestring : "");
+                            cJSON_IsString(v) ? v->valuestring : "", 1);
             if (m == NULL ||
-                cJSON_AddStringToObject(m, "tool_call_id", cJSON_IsString(id)
-                                        ? id->valuestring : "") == NULL)
+                add_str_ref(m, "tool_call_id", cJSON_IsString(id)
+                            ? id->valuestring : "") == NULL)
                 goto fail;
         } else if (asst && strcmp(type->valuestring, "tool_use") == 0) {
             id = cJSON_GetObjectItem(b, "id");
@@ -2032,11 +2090,11 @@ static int oa_convert(cJSON *out, cJSON *msg)
             args = cJSON_PrintUnformatted(cJSON_GetObjectItem(b, "input"));
             fn   = cJSON_AddObjectToObject(call, "function");
             if (fn == NULL ||
-                cJSON_AddStringToObject(call, "id", cJSON_IsString(id)
-                                        ? id->valuestring : "") == NULL ||
-                cJSON_AddStringToObject(call, "type", "function") == NULL ||
-                cJSON_AddStringToObject(fn, "name", cJSON_IsString(v)
-                                        ? v->valuestring : "") == NULL ||
+                add_str_ref(call, "id", cJSON_IsString(id)
+                            ? id->valuestring : "") == NULL ||
+                add_str_ref(call, "type", "function") == NULL ||
+                add_str_ref(fn, "name", cJSON_IsString(v)
+                            ? v->valuestring : "") == NULL ||
                 cJSON_AddStringToObject(fn, "arguments",
                                         args != NULL ? args : "{}") == NULL) {
                 free(args);
@@ -2049,7 +2107,7 @@ static int oa_convert(cJSON *out, cJSON *msg)
     /* Text of a user turn goes after its tool results: those have to
        follow the assistant's tool_calls directly. */
     if (asst || txt.len > 0) {
-        m = oa_message(out, role->valuestring, txt.p);
+        m = oa_message(out, role->valuestring, txt.p, 0);
         if (m == NULL) goto fail;
         if (calls != NULL) cJSON_AddItemToObject(m, "tool_calls", calls);
         calls = NULL;
@@ -2063,53 +2121,33 @@ fail:
     return -1;
 }
 
-/* The chat completions request for a Messages API one; NULL if out of
-   memory.  No token limit is sent: servers disagree on the name of the
-   field (max_tokens, max_completion_tokens), and all have a default. */
-static cJSON *to_openai(cJSON *req)
+/* Build a chat completions request directly from `messages` and `system`;
+   NULL if out of memory.  No token limit is sent: servers disagree on the
+   name of the field (max_tokens, max_completion_tokens), and all have a
+   default. */
+static cJSON *to_openai(cJSON *messages, const char *system)
 {
-    cJSON *out = cJSON_CreateObject(), *msgs, *tools, *t, *w, *fn, *v;
+    cJSON *out, *msgs, *tools, *t;
 
+    tools = get_tools();
+    out   = tools != NULL ? cJSON_CreateObject() : NULL;
     if (out == NULL) return NULL;
-    if (cJSON_AddStringToObject(out, "model", cfg(CFG_MODEL)) == NULL ||
+    if (add_str_ref(out, "model", cfg(CFG_MODEL)) == NULL ||
         (*effort != '\0' &&
-         cJSON_AddStringToObject(out, "reasoning_effort", effort) == NULL))
+         add_str_ref(out, "reasoning_effort", effort) == NULL))
         goto fail;
 
     msgs = cJSON_AddArrayToObject(out, "messages");
     if (msgs == NULL) goto fail;
-    v = cJSON_GetObjectItem(req, "system");
-    if (cJSON_IsString(v) &&
-        oa_message(msgs, "system", v->valuestring) == NULL)
+    if (system != NULL && oa_message(msgs, "system", system, 1) == NULL)
         goto fail;
-    cJSON_ArrayForEach(t, cJSON_GetObjectItem(req, "messages"))
+    cJSON_ArrayForEach(t, messages)
         if (oa_convert(msgs, t) != 0) goto fail;
 
-    tools = cJSON_CreateArray();
-    if (tools == NULL) goto fail;
-    cJSON_ArrayForEach(t, cJSON_GetObjectItem(req, "tools")) {
-        w = cJSON_CreateObject();
-        if (w == NULL) break;
-        cJSON_AddItemToArray(tools, w);
-        fn = cJSON_AddObjectToObject(w, "function");
-        v  = cJSON_Duplicate(cJSON_GetObjectItem(t, "input_schema"), 1);
-        if (v != NULL) cJSON_AddItemToObject(fn, "parameters", v);
-        if (fn == NULL || v == NULL ||
-            cJSON_AddStringToObject(w, "type", "function") == NULL ||
-            !cJSON_AddItemToObject(fn, "name", cJSON_Duplicate(
-                cJSON_GetObjectItem(t, "name"), 1)) ||
-            !cJSON_AddItemToObject(fn, "description", cJSON_Duplicate(
-                cJSON_GetObjectItem(t, "description"), 1)))
-            break;
-    }
-    if (t != NULL) {                    /* left the loop early */
-        cJSON_Delete(tools);
+    /* an empty list is refused */
+    if (cJSON_GetArraySize(tools) > 0 &&
+        !cJSON_AddItemReferenceToObject(out, "tools", tools))
         goto fail;
-    }
-    if (cJSON_GetArraySize(tools) > 0)
-        cJSON_AddItemToObject(out, "tools", tools);
-    else
-        cJSON_Delete(tools);            /* an empty list is refused */
     return out;
 
 fail:
@@ -2638,12 +2676,8 @@ static cJSON *post(const struct conn *c, cJSON *messages)
     int         status, try, wait, stream = want_stream && !no_stream;
 
     streamed_said = -1;
-    req = build_request(messages, c->system);
-    if (req != NULL && openai) {
-        root = to_openai(req);
-        cJSON_Delete(req);
-        req = root;
-    }
+    req = openai ? to_openai(messages, c->system)
+                 : build_request(messages, c->system);
     if (req != NULL && stream) {
         /* stream_options: or an OpenAI server leaves the token counts out */
         root = openai ? cJSON_AddObjectToObject(req, "stream_options") : req;
