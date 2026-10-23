@@ -43,6 +43,12 @@ sysroot() {
 }
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
+gver=$ver
+if [ -e .git ] && git rev-parse --verify HEAD >/dev/null 2>&1; then
+    dirty=
+    git diff HEAD --quiet 2>/dev/null || dirty=-dirty
+    gver="v${ver%%[~-]*}-beta-$(git rev-list HEAD | wc -l | tr -d ' 	')$dirty"
+fi
 for t in $TARGETS; do
     extra= rt=
     case $t in
@@ -100,7 +106,7 @@ for t in $TARGETS; do
     b=$WORK/$t
     mkdir -p "$b"
     clang --target=$triple --sysroot="$WORK/sys/$t" -fuse-ld=lld -static \
-        -std=gnu89 -O2 $extra $link -DVERSION="\"$ver\"" -o "$b/gork" \
+        -std=gnu89 -O2 $extra $link -DGORK_UNICODE -DVERSION="\"$gver\"" -o "$b/gork" \
         main.c relay.c tui.c mcp.c cJSON/cJSON.c $libs -lm $rt \
         2>"$b/build.log" || { cat "$b/build.log"; exit 1; }
     llvm-strip "$b/gork" 2>/dev/null || strip "$b/gork" 2>/dev/null || true

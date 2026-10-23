@@ -1693,7 +1693,7 @@ def check_run_timeout_and_esc():
 
 
 out = subprocess.run([BINARY, "--version"], capture_output=True, text=True)
-assert out.returncode == 0 and re.match(r"gork \d+\.\d+", out.stdout), out
+assert out.returncode == 0 and re.match(r"gork v?\d+\.\d+", out.stdout), out
 print("ok: --version")
 check_tool_loop()
 check_openai()

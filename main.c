@@ -162,8 +162,13 @@ char *os2_realpath(const char *path, char *out)
 }
 #endif
 
-/* configure passes VERSION; this is for builds by hand and Makefile.dj.
-   Bumped with configure.ac at each release. */
+/* configure passes VERSION (and GORK_VERSION from a git checkout);
+   this is for builds by hand and Makefile.dj.  Bumped with configure.ac
+   at each release. */
+#ifdef GORK_VERSION
+#undef VERSION
+#define VERSION GORK_VERSION
+#endif
 #ifndef VERSION
 #define VERSION "1.2"
 #endif
@@ -238,18 +243,36 @@ char *os2_realpath(const char *path, char *out)
    cJSON prints none over 32K (INT_MAX).  So the conversation is kept well
    under that: compacting starts at 4000 tokens, some 16K of JSON, and the
    tools return little at a time. */
-#define CTX_WINDOW    "8000"
-#define AUTO_COMPACT  "50"
-#define TOOL_READ_MAX 8192
-#define TOOL_RUN_MAX  8192
-#define TOOL_EDIT_MAX 30000
+#define CTX_WINDOW     "8000"
+#define AUTO_COMPACT   "50"
+#ifndef TOOL_READ_MAX
+#define TOOL_READ_MAX  8192
+#endif
+#ifndef TOOL_RUN_MAX
+#define TOOL_RUN_MAX   8192
+#endif
+#ifndef TOOL_EDIT_MAX
+#define TOOL_EDIT_MAX  30000
+#endif
+#ifndef TOOL_WRITE_MAX
+#define TOOL_WRITE_MAX 30000
+#endif
 #else
-#define CTX_WINDOW    "200000"
-#define AUTO_COMPACT  "80"
+#define CTX_WINDOW     "200000"
+#define AUTO_COMPACT   "80"
 
-#define TOOL_READ_MAX 65536     /* refuse to inline a file bigger than this */
-#define TOOL_RUN_MAX  65536     /* command output beyond this is cut off */
-#define TOOL_EDIT_MAX 1048576   /* edit_file works on files up to this size */
+#ifndef TOOL_READ_MAX
+#define TOOL_READ_MAX  65536    /* refuse to inline a file bigger than this */
+#endif
+#ifndef TOOL_RUN_MAX
+#define TOOL_RUN_MAX   65536    /* command output beyond this is cut off */
+#endif
+#ifndef TOOL_EDIT_MAX
+#define TOOL_EDIT_MAX  1048576  /* edit_file works on files up to this size */
+#endif
+#ifndef TOOL_WRITE_MAX
+#define TOOL_WRITE_MAX 1048576  /* write_file and edit_file output ceiling */
+#endif
 #endif
 #define MAX_ALLOW     8         /* `allow` directories in the config */
 #define LIST_MAX      2000      /* list_dir entries before it stops */
@@ -943,6 +966,8 @@ static char *tool_write_file(cJSON *input, int *is_err)
         return kstrdup("error: \"path\" and \"content\" must be strings");
 
     n = strlen(content->valuestring);
+    if (n > (size_t) TOOL_WRITE_MAX)
+        return kstrdup("error: content exceeds maximum file size");
     if ((why = confine(path->valuestring, real, 1)) != NULL ||
         (why = save_file(real, content->valuestring, n)) != NULL) {
         sprintf(msg, "error: %.200s", why);
@@ -1019,6 +1044,10 @@ static char *tool_edit_file(cJSON *input, int *is_err)
     }
     buf_free(&b);
 
+    if (out.len > (size_t) TOOL_WRITE_MAX) {
+        buf_free(&out);
+        return kstrdup("error: edited file exceeds maximum file size");
+    }
     why = save_file(real, out.p, out.len);
     buf_free(&out);
     if (why != NULL) {
@@ -1818,7 +1847,7 @@ static int print_text_blocks(cJSON *content)
  */
 static cJSON *run_tools(cJSON *content)
 {
-    cJSON            *results, *block, *type, *id, *name, *input, *res;
+    cJSON            *results, *block, *type, *id, *name, *input, *arg, *res;
     const struct tool *tool;
     char             *out;
     int               is_err, m;
@@ -1840,7 +1869,17 @@ static cJSON *run_tools(cJSON *content)
             continue;
         }
 
-        fprintf(stderr, "[tool] %s\n", name->valuestring);
+        arg = cJSON_GetObjectItem(input, "path");
+        if (arg == NULL && strcmp(name->valuestring, "skill") == 0)
+            arg = cJSON_GetObjectItem(input, "name");
+        if (arg == NULL && strcmp(name->valuestring, "list_dir") == 0)
+            fprintf(stderr, "[tool] %s .\n", name->valuestring);
+        else if (cJSON_IsString(arg))
+            fprintf(stderr, "[tool] %s %s\n", name->valuestring,
+                    arg->valuestring);
+        else
+            fprintf(stderr, "[tool] %s\n", name->valuestring);
+        tui_drain();
 
         is_err = 1;
         tool   = tool_lookup(name->valuestring);
@@ -2006,7 +2045,7 @@ static void update_status(const struct conn *c)
     else
         strcpy(ctx, "ctx -");
     /* What matters most first: a narrow terminal cuts the bar on the right. */
-    sprintf(status_line, " gork %.16s | %.90s | %.100s @ %.100s | effort %.32s | ",
+    sprintf(status_line, " gork %.32s | %.90s | %.100s @ %.100s | effort %.32s | ",
             VERSION, ctx,
             cfg(CFG_MODEL), c->api_host, *effort ? effort : "default");
     /* the directory last, cut short if it must be */

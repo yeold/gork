@@ -14,25 +14,75 @@ if test ! -f /usr/include/curses.h && test -f "$HOME/local/include/curses.h"; th
   LDFLAGS="$LDFLAGS -L$HOME/local/lib"
 fi
 
+AC_ARG_WITH([max-file-size],
+  [AS_HELP_STRING([--with-max-file-size=BYTES],
+                  [maximum file size for read_file, write_file and edit_file])],
+  [case "$withval" in
+     ''|yes|no) AC_MSG_ERROR([--with-max-file-size requires a byte count]) ;;
+     *[!0-9]*)  AC_MSG_ERROR([--with-max-file-size=$withval: want a positive integer]) ;;
+     *)         if test "$withval" -le 0 2>/dev/null; then
+                  AC_MSG_ERROR([--with-max-file-size=$withval: want a positive integer])
+                fi ;;
+   esac
+   CPPFLAGS="$CPPFLAGS -DTOOL_READ_MAX=${withval}UL -DTOOL_WRITE_MAX=${withval}UL -DTOOL_EDIT_MAX=${withval}UL"])
+
+AC_ARG_ENABLE([unicode],
+  [AS_HELP_STRING([--enable-unicode],
+                  [UTF-8 in the TUI (default: auto, falls back to ASCII)])],
+  [enable_unicode=$enableval], [enable_unicode=auto])
+case "$enable_unicode" in
+  yes|no|auto) ;;
+  *) AC_MSG_ERROR([--enable-unicode=$enable_unicode: want yes, no or auto]) ;;
+esac
+
 # -W, not -Wextra: the spelling gcc 3.2 (SUSE 8.1) knows.
 if test "$GCC" = yes; then
   AM_CFLAGS="-std=gnu89 -pedantic -Wall -W"
 fi
 AC_SUBST([AM_CFLAGS])
+# In a git checkout, stamp the build with v<version>-beta-<commits> and
+# -dirty when tracked files are modified.  Evaluated by make's shell so
+# edits after ./configure still flip -dirty; dist tarballs have no .git
+# and keep the release VERSION from AC_INIT.
+if (cd "$srcdir" && test -e .git && git rev-parse --verify HEAD) >/dev/null 2>&1; then
+  gork_base=`echo "$PACKAGE_VERSION" | sed 's/[~-].*//'`
+  AM_CPPFLAGS='-DGORK_VERSION=\"v'"$gork_base"'-beta-`cd $(srcdir) && git rev-list HEAD 2>/dev/null | wc -l | tr -d " 	"``cd $(srcdir) && git diff HEAD --quiet 2>/dev/null || echo -dirty`\"'
+fi
+AC_SUBST([AM_CPPFLAGS])
 # Run the checks as C89 too: new autoconf puts -std=gnu23 in CC, and the
 # Solaris curses.h (typedef char bool) does not compile as C23.
 save_CFLAGS=$CFLAGS
 CFLAGS="$CFLAGS $AM_CFLAGS"
 
 AC_CHECK_HEADER([curses.h], [], [AC_MSG_ERROR([curses.h not found; install ncurses headers])])
-# ncurses on Linux/FreeBSD/OpenBSD, plain curses on NetBSD and Solaris.
-# `./configure LIBS=-lncursesw` for UTF-8 terminals; it is also the last
-# resort, for systems that have only the wide library.
-# A System V curses.h (it renames initscr) needs libcurses even where a
-# libncurses is installed too, as on illumos.
-AC_CHECK_DECL([initscr32], [gork_curses="curses ncurses"], [gork_curses="ncurses curses ncursesw"],
-              [[#include <curses.h>]])
+gork_have_locale=no
+if test "$enable_unicode" != no; then
+  AC_CHECK_HEADER([locale.h],
+    [AC_CHECK_FUNC([setlocale], [gork_have_locale=yes])])
+fi
+# ncursesw first when Unicode is wanted, then plain ncurses/curses as
+# fallback.  A System V curses.h (it renames initscr) needs libcurses
+# even where a libncurses is installed too, as on illumos.
+if test "$enable_unicode" != no && test "$gork_have_locale" = yes; then
+  AC_CHECK_DECL([initscr32], [gork_curses="curses ncurses"], [gork_curses="ncursesw ncurses curses"],
+                [[#include <curses.h>]])
+else
+  AC_CHECK_DECL([initscr32], [gork_curses="curses ncurses"], [gork_curses="ncurses curses ncursesw"],
+                [[#include <curses.h>]])
+fi
 AC_SEARCH_LIBS([initscr], [$gork_curses], [], [AC_MSG_ERROR([no curses library found])])
+gork_unicode=no
+if test "$enable_unicode" != no && test "$gork_have_locale" = yes; then
+  AC_CHECK_FUNC([waddnwstr], [gork_unicode=yes])
+  if test "$enable_unicode" = yes; then
+    gork_unicode=yes
+  fi
+elif test "$enable_unicode" = yes; then
+  AC_MSG_ERROR([--enable-unicode requested, but locale.h / setlocale was not found])
+fi
+if test "$gork_unicode" = yes; then
+  CPPFLAGS="$CPPFLAGS -DGORK_UNICODE"
+fi
 AC_SEARCH_LIBS([fabs], [m])
 # Solaris keeps sockets and the resolver out of libc, Haiku in libnetwork.
 AC_SEARCH_LIBS([gethostbyname], [nsl network])

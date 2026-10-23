@@ -21,6 +21,9 @@
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
+#ifdef GORK_UNICODE
+#include <locale.h>
+#endif
 #include "port.h"
 #if !defined(_WIN32) && !defined(GORK_DOS16)
 #include <termios.h>
@@ -83,8 +86,6 @@ static size_t       input_pos;          /* the cursor: a byte offset */
 static char        *hist[NHIST];
 static int          nhist;
 
-/* ponytail: history is wrapped by byte count, so UTF-8 text wraps a
-   little early. */
 static void add_line(int style, const char *text, size_t len)
 {
     struct line *nl;
@@ -140,11 +141,6 @@ static int style_of(const char *s)
     return ST_TEXT;
 }
 
-static int line_rows(size_t i, int w)
-{
-    return lines[i].len == 0 ? 1 : (int) ((lines[i].len + w - 1) / w);
-}
-
 /* Text at a position, by move + waddnstr only.  Old ncurses lacks addnstr
    (1.8.5) and mvhline (1.9.4), and the mvaddnstr macro of the 1993 one
    does not parse. */
@@ -154,11 +150,10 @@ static void put(int y, int x, const char *s, int n)
     waddnstr(stdscr, (char *) s, n);
 }
 
-/* Is `c` a byte inside a UTF-8 character, not its first?  Never on DOS,
-   Windows and OS/2, where the keyboard gives one byte for each character. */
+/* Is `c` a byte inside a UTF-8 character, not its first? */
 static int is_cont(char c)
 {
-#if defined(GORK_NO_FORK) || defined(GORK_EMX)
+#ifndef GORK_UNICODE
     (void) c;
     return 0;
 #else
@@ -175,6 +170,39 @@ static int columns(const char *s, size_t n)
     for (i = 0; i < n; i++)
         if (!is_cont(s[i])) c++;
     return c;
+}
+
+/* Byte offset in s[0..len) after at most `w` characters starting at `off`. */
+static size_t next_row(const char *s, size_t len, size_t off, int w)
+{
+    int c = 0;
+
+    while (off < len && c < w) {
+        off++;
+        while (off < len && is_cont(s[off])) off++;
+        c++;
+    }
+    return off;
+}
+
+static int line_rows(size_t i, int w)
+{
+    int cols = columns(lines[i].text, lines[i].len);
+
+    return cols == 0 ? 1 : (cols + w - 1) / w;
+}
+
+static size_t input_scroll(size_t a, size_t pos, int max_cols)
+{
+    size_t off = 0;
+    int    cols = columns(input + a, pos - a);
+
+    while (cols > max_cols && a + off < pos) {
+        off++;
+        while (a + off < pos && is_cont(input[a + off])) off++;
+        cols--;
+    }
+    return off;
 }
 
 /* The line of the input that holds byte `pos`: where it starts and ends
@@ -201,9 +229,9 @@ static void draw(void)
     /* Leave the rightmost column untouched: on the Minix 3.3.0 console it
        wraps at once while curses expects xenl, and the next linefeed
        scrolls the screen. */
-    int    w = COLS - 1, avail, total = 0, first, g, k, rows, off;
+    int    w = COLS - 1, avail, total = 0, first, g, k, rows;
     int    in_rows, in_all, cur, top, y;
-    size_t i, a, b;
+    size_t i, a, b, off, end;
 
     /* The input takes a row for each of its lines, up to a third of the
        screen; with more, the rows around the cursor show. */
@@ -221,7 +249,8 @@ static void draw(void)
     attrset(A_REVERSE);
     move(0, 0);
     hline(' ', w);
-    put(0, 0, status_text, w);
+    put(0, 0, status_text,
+        (int) next_row(status_text, strlen(status_text), 0, w));
 
     if (scroll_rows < 0) scroll_rows = 0;
     for (i = nlines; i > 0 && total < scroll_rows + avail; ) {
@@ -233,16 +262,21 @@ static void draw(void)
     first = total > avail ? total - avail - scroll_rows : 0;
 
     for (g = 0; i < nlines && g < first + avail; i++) {
+        size_t pos = 0;
+
         rows = line_rows(i, w);
         attrset(style_attr[lines[i].style]);
         for (k = 0; k < rows; k++, g++) {
-            if (g < first || g >= first + avail) continue;
-            put(1 + g - first, 0, lines[i].text + (size_t) k * w, w);
+            end = next_row(lines[i].text, lines[i].len, pos, w);
+            if (g >= first && g < first + avail)
+                put(1 + g - first, 0, lines[i].text + pos, (int) (end - pos));
+            pos = end;
         }
     }
 
     attrset(dim_attr);
-    put(LINES - 1 - in_rows, 0, hint_text, w);
+    put(LINES - 1 - in_rows, 0, hint_text,
+        (int) next_row(hint_text, strlen(hint_text), 0, w));
     if (scroll_rows > 0) mvaddstr(LINES - 1 - in_rows, w - 10, "[scrolled]");
 
     /* Input: of a line wider than the screen, the part with the cursor
@@ -257,22 +291,16 @@ static void draw(void)
             attrset(A_BOLD);
             mvaddstr(y, 0, k == 0 ? "> " : "  ");
             attrset(A_NORMAL);
-            off = 0;
-            if (k == cur) {
-                off = (int) (input_pos - a) > w - 3
-                      ? (int) (input_pos - a) - (w - 3) : 0;
-                while (a + off < input_pos && is_cont(input[a + off])) off++;
-            }
-            rows = (int) (b - a) - off;         /* bytes to show */
-            put(y, 2, input + a + off, rows < w - 3 ? rows : w - 3);
+            off = k == cur ? input_scroll(a, input_pos, w - 3) : 0;
+            end = next_row(input, b, a + off, w - 3);
+            put(y, 2, input + a + off, (int) (end - (a + off)));
         }
         a = b + 1;
     }
     input_line(input_pos, &a, &b);
-    off = (int) (input_pos - a) > w - 3 ? (int) (input_pos - a) - (w - 3) : 0;
-    while (a + off < input_pos && is_cont(input[a + off])) off++;
+    off = input_scroll(a, input_pos, w - 3);
     move(LINES - in_rows + (cur - top),
-         2 + columns(input + a + off, input_pos - a - (size_t) off));
+         2 + columns(input + a + off, input_pos - a - off));
     refresh();
 }
 
@@ -363,6 +391,9 @@ int tui_init(const char *status, const char *title)
        never shows: have it use the console's own. */
     if (getenv("PDC_RESTORE_SCREEN") == NULL) putenv("PDC_RESTORE_SCREEN=0");
     win_own_console();
+#endif
+#ifdef GORK_UNICODE
+    setlocale(LC_ALL, "");
 #endif
     /* $TERM spelled out: AIX PS/2's curses fails on NULL, which elsewhere
        means the same thing. */
