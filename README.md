@@ -1,29 +1,61 @@
-# <img src="images/gork.png" width="64" alt=""> gork
+# <img src="images/gork.png" width="64" alt="gork logo"> gork -- C89 AI Coding Agent for Retro, Vintage & Classic Operating Systems
 
-A lightweight AI agent harness for old and obscure operating systems.
+A lightweight terminal AI coding agent and LLM client for old, retro and
+obscure operating systems -- from 1980s MS-DOS and classic Unix to modern
+Linux, BSD, macOS and Windows.
 
-gork is an AI agent for the machines everything else has left behind. It
-runs the usual tool-use loop -- send a task, get tool calls back, execute
-them locally, feed the results in, repeat -- on systems from 1984 to today:
+gork is an AI agent for the machines everything else has left behind. Like
+Claude Code or Cline in a terminal, it runs the usual agentic tool-use loop
+-- send a task, get tool calls back, execute them locally, feed the results
+in, repeat -- on vintage and modern systems from 1984 to today:
 MS-DOS 2.11 and Windows 1.04, Linux 1.0, the first BSDs, Solaris 2.5.1,
-Windows 95, Minix, GNU/Hurd and Haiku, and just as well on a current
-Linux, macOS or Windows 11. One source for all of them, with a batch mode
-and a full-screen interactive one. The [table below](#tested-systems) says what
-it has been run on.
+SunOS 4, AIX, HP-UX, SVR4, NeXTSTEP, OS/2 Warp, BeOS, QNX, Plan 9,
+Windows 95 and NT 3.1, Minix, GNU/Hurd, Haiku and bare-metal UEFI, and just
+as well on a current Linux, macOS or Windows 11. One codebase for all of
+them, with a batch CLI mode and a full-screen interactive curses TUI. The
+[table below](#tested-systems) says what it has been run on.
 
-It is small: about 5,000 lines of strict C89 and a binary of about 100 KB
-(x86-64 Linux, stripped), with no dependencies beyond libc, a curses
-library and the vendored cJSON.
+It is small: about 5,000 lines of strict ANSI C89 and a binary of about
+100 KB (x86-64 Linux, stripped), with no dependencies beyond libc, a curses
+library (`ncurses`, System V `curses`, or `PDCurses`) and the vendored cJSON.
 It builds with gcc 2.4.5, with a single compiler command where `configure`
-cannot run, and asks the system for little: TCP sockets, a terminal, a
-file system. No TLS, no threads, no C99.
+cannot run, and asks the system for little: TCP sockets (or IPX/SPX on DOS
+and Windows), a terminal, a file system. No TLS, no threads, no C99.
 
-It talks to any server that speaks the Messages API format: Anthropic's own
-API, or a local model behind LM Studio or a similar compatible server (see
-[Local models](#local-models)). With `protocol = openai` it speaks the
-OpenAI chat completions format instead. It speaks plaintext HTTP/1.0
+It talks to any server that speaks the Anthropic Messages API (`/v1/messages`)
+or OpenAI Chat Completions (`/v1/chat/completions`) format: Claude on
+Anthropic's API, OpenAI, or a local LLM behind Ollama, llama.cpp, vLLM or
+LM Studio (see [Local models](#local-models)). It speaks plaintext HTTP/1.0
 only; reaching an HTTPS endpoint is the job of a [relay](#why-a-relay),
 not gork's.
+
+## Features at a glance
+
+- **Strict ANSI C89 / ISO C90**: ~5,000 lines of portable C, ~100 KB stripped binary, no C99, no threads, no OpenSSL/TLS library required on the target machine.
+- **Runs across four decades of hardware and OSes**: 16-bit real-mode MS-DOS (8086, 640 KB RAM) and 32-bit DOS (DJGPP), Windows 1.0 to 11 and NT 3.1+, early Linux (kernel 1.0, Slackware, Debian), FreeBSD/NetBSD/OpenBSD/DragonFly/MidnightBSD, commercial Unix (SunOS 4, Solaris, illumos, AIX, HP-UX, SVR4), NeXTSTEP/OPENSTEP, OS/2 Warp, BeOS, Haiku, QNX, Minix 2 & 3, Plan 9 (9front), GNU/Hurd, macOS (PowerPC Tiger to Apple silicon), and bare-metal UEFI (`x86-64` and `arm64`, with its own built-in TCP/IP stack when firmware lacks one).
+- **Full agentic coding workflow**: local tools for reading, creating and editing files (`read_file`, `write_file`, `edit_file`), directory listing (`list_dir`), shell command execution (`run_command`), project rules (`GORK.md`), `SKILL.md` skills (compatible with Claude Code and Cline), and **Model Context Protocol (MCP)** servers over stdio and streamable HTTP.
+- **Interactive curses TUI & batch CLI**: full-screen terminal chat interface with tool approval prompts, directory trust, context window tracking and auto-compaction (`/compact`), or scriptable one-shot batch mode.
+- **Anthropic, OpenAI & local LLMs**: native `/v1/messages` and `/v1/chat/completions` (`protocol = openai`) support for Claude, OpenAI, Ollama, llama.cpp, LM Studio and vLLM over TCP/IP or IPX/SPX.
+
+## Contents
+
+- [Features at a glance](#features-at-a-glance)
+- [Tested systems](#tested-systems)
+- [Packages](#packages)
+- [Why a relay](#why-a-relay)
+- [Build](#build)
+- [Run](#run)
+  - [Interactive TUI](#interactive)
+  - [Local models (LM Studio, Ollama, llama.cpp, OpenAI)](#local-models)
+  - [Without TCP/IP: IPX/SPX](#without-tcpip-spx)
+  - [Config](#config)
+  - [Rules (`GORK.md`)](#rules)
+  - [Skills (`SKILL.md`)](#skills)
+  - [MCP servers (Model Context Protocol)](#mcp-servers)
+  - [Tools](#tools)
+- [Known gaps](#known-gaps)
+- [Working on gork](#working-on-gork)
+- [Licence](#licence)
 
 ## Tested systems
 
@@ -106,25 +138,6 @@ There are two Windows packages:
 |---|---|---|---|
 | `gork-<version>-win32.zip` | 64-bit Windows 10 and later. The Cygwin build, with the Cygwin DLLs it needs; start `gork.cmd` | yes | a POSIX shell, `bin\sh.exe` in the package |
 | `gork-<version>-win32-legacy.zip` | Windows 95 and NT 3.51 up to Windows 11: one small 32-bit `gork.exe`. `gorknt3.exe` beside it is the same for NT 3.1 and 3.5 | **no** (see [MCP servers](#mcp-servers)) | `cmd.exe` (`COMMAND.COM` on Windows 9x) |
-
-## Contents
-
-- [Tested systems](#tested-systems)
-- [Packages](#packages)
-- [Why a relay](#why-a-relay)
-- [Build](#build)
-- [Run](#run)
-  - [Interactive](#interactive)
-  - [Local models](#local-models)
-  - [Without TCP/IP: SPX](#without-tcpip-spx)
-  - [Config](#config)
-  - [Rules](#rules)
-  - [Skills](#skills)
-  - [MCP servers](#mcp-servers)
-  - [Tools](#tools)
-- [Known gaps](#known-gaps)
-- [Working on gork](#working-on-gork)
-- [Licence](#licence)
 
 ## Why a relay
 
@@ -214,7 +227,8 @@ Agent text goes to stdout; tool calls and diagnostics go to stderr, so
 `./gork ... 2>/dev/null` gives you just the answer.
 `./gork --version` prints the version and exits.
 
-### Interactive
+<a id="interactive"></a>
+### Interactive TUI (Terminal User Interface)
 
 Leave off the task to get a chat TUI, Cline-style:
 
@@ -264,7 +278,8 @@ itself, in batch mode too, once the context passes `auto_compact` percent of
 `medium`, `high`, `xhigh`, `max`, or `default` to send none); `/effort` alone
 shows it, and so does the status bar. It starts at `default_effort`.
 
-### Local models
+<a id="local-models"></a>
+### Local models (LM Studio, Ollama, llama.cpp, vLLM & OpenAI)
 
 LM Studio 0.4.1+ serves a native Anthropic-compatible `/v1/messages`, which is
 the same wire format gork already speaks -- so a local model needs **no
@@ -316,7 +331,8 @@ same: tools, skills, MCP servers and compacting. What differs:
 - A hosted service is HTTPS, so it needs a relay that forwards to it, as
   for Anthropic.
 
-### Without TCP/IP: SPX
+<a id="without-tcpip-spx"></a>
+### Without TCP/IP: IPX/SPX
 
 On an IPX network without TCP/IP, the DOS and Windows builds can reach a
 [gork-relay](https://github.com/yeold/gork-relay) over SPX. The relay
@@ -415,7 +431,8 @@ with a warning.
 The frontmatter parser understands one-line values and `>` / `|` blocks,
 which is what skills use in practice -- not YAML in general.
 
-### MCP servers
+<a id="mcp-servers"></a>
+### MCP servers (Model Context Protocol)
 
 gork is an MCP client for **stdio** servers, local programs it starts and
 talks to over their stdin/stdout, and for **streamable HTTP** servers. List
@@ -533,7 +550,9 @@ interrupt it too.
 
 [docs/HACKING.md](docs/HACKING.md) has the layout of the source, how the
 loop works, how to add a tool and how to run the tests;
-[CONTRIBUTING.md](CONTRIBUTING.md) says how to send reports and changes.
+[docs/TODO-FEATURES.md](docs/TODO-FEATURES.md) lists planned features and
+build flags; [CONTRIBUTING.md](CONTRIBUTING.md) says how to send reports
+and changes.
 
 ## Licence
 
