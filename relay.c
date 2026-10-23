@@ -80,6 +80,7 @@ static void sock_perror(const char *what) {
 int (*relay_abort)(void);
 int relay_timeout = 120;
 int relay_bearer;
+int relay_retry_after;
 
 /* The connection is SPX and not TCP: on DOS, where it is no descriptor. */
 static int spx;
@@ -376,6 +377,13 @@ static int rx_take(const char *p, size_t n) {
       rx.left = strtoul(v, NULL, 10);
       if (rx.left == 0)
         rx.done = 1;
+    }
+    v = header("retry-after");
+    if (v != NULL) {
+      long ra = strtol(v, NULL, 10);
+
+      if (ra > 0)
+        relay_retry_after = ra > 300 ? 300 : (int)ra;
     }
     rc = rx_body(rx.head.p + off, rx.head.len - off);
     rx.head.len = off;
@@ -925,6 +933,7 @@ int relay_http(const char *method, const char *conn_host, long conn_port,
     fprintf(stderr, "gork: out of memory\n");
     return -1;
   }
+  relay_retry_after = 0;
   memset(&rx, 0, sizeof rx);
   rx.body = resp;
   if (buf_init(&rx.head) != 0) {

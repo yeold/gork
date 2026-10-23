@@ -74,30 +74,40 @@ static size_t       input_pos;          /* the cursor: a byte offset */
 
 /* Earlier lines, for the Up and Down keys. */
 #ifdef GORK_DOS16
-#define NHIST 8
+#define NHIST     8
+#define MAX_LINES 256
 #else
-#define NHIST 32
+#define NHIST     32
+#define MAX_LINES 4096
 #endif
 static char        *hist[NHIST];
 static int          nhist;
 
-/* ponytail: history grows without bound and is wrapped by byte count, so
-   UTF-8 text wraps a little early.  Fine for a session; cap it if needed. */
+/* ponytail: history is wrapped by byte count, so UTF-8 text wraps a
+   little early. */
 static void add_line(int style, const char *text, size_t len)
 {
     struct line *nl;
     char        *t;
     size_t       i;
 
-    if (nlines == cap_lines) {
+    t = (char *) malloc(len + 1);
+    if (t == NULL) return;
+    if (nlines == MAX_LINES) {
+        free(lines[0].text);
+        memmove(lines, lines + 1, (MAX_LINES - 1) * sizeof *lines);
+        nlines--;
+        if (open_line >= 0) open_line--;
+    } else if (nlines == cap_lines) {
         size_t ncap = cap_lines ? cap_lines * 2 : 256;
         nl = (struct line *) realloc(lines, ncap * sizeof *lines);
-        if (nl == NULL) return;
+        if (nl == NULL) {
+            free(t);
+            return;
+        }
         lines = nl;
         cap_lines = ncap;
     }
-    t = (char *) malloc(len + 1);
-    if (t == NULL) return;
     /* Control bytes (tabs, ANSI colour from commands) would render as ^X
        and throw off the wrapping, so they become spaces. */
     for (i = 0; i < len; i++)
@@ -458,36 +468,40 @@ void tui_drain(void)
 
     /* The unfinished line was shown as it stood (a streamed reply grows
        word by word): take that out again, it is about to be redone. */
-    if (open_line >= 0 && (size_t) open_line < nlines) {
-        free(lines[open_line].text);
-        memmove(lines + open_line, lines + open_line + 1,
-                (nlines - (size_t) open_line - 1) * sizeof *lines);
-        nlines--;
-    }
-    open_line = -1;
+    {
+        int prev_open = open_line;
 
-    start = partial.p;
-    while ((nl = (char *) memchr(start, '\n',
-                                 partial.len - (start - partial.p))) != NULL) {
-        *nl = '\0';
-        add_line(style_of(start), start, (size_t) (nl - start));
-        start = nl + 1;
-    }
-    rest = partial.len - (start - partial.p);   /* unfinished line: keep */
-    memmove(partial.p, start, rest);
-    partial.len = rest;
-    partial.p[rest] = '\0';
-    if (rest > 0) {
-        size_t before = nlines;
+        if (open_line >= 0 && (size_t) open_line < nlines) {
+            free(lines[open_line].text);
+            memmove(lines + open_line, lines + open_line + 1,
+                    (nlines - (size_t) open_line - 1) * sizeof *lines);
+            nlines--;
+        }
+        open_line = -1;
 
-        add_line(style_of(partial.p), partial.p, rest);
-        if (nlines > before) {
-            /* nothing new: leave the view where the user scrolled it */
-            if (open_line >= 0 && (size_t) open_line == before &&
-                rest == open_len)
-                scroll_rows = was;
-            open_line = (int) before;
-            open_len = rest;
+        start = partial.p;
+        while ((nl = (char *) memchr(start, '\n',
+                                     partial.len - (start - partial.p))) != NULL) {
+            *nl = '\0';
+            add_line(style_of(start), start, (size_t) (nl - start));
+            start = nl + 1;
+        }
+        rest = partial.len - (start - partial.p);   /* unfinished line: keep */
+        memmove(partial.p, start, rest);
+        partial.len = rest;
+        partial.p[rest] = '\0';
+        if (rest > 0) {
+            size_t want = nlines < MAX_LINES ? nlines : MAX_LINES - 1;
+
+            add_line(style_of(partial.p), partial.p, rest);
+            if (nlines > want) {
+                /* nothing new: leave the view where the user scrolled it */
+                if (prev_open >= 0 && (size_t) prev_open == want &&
+                    rest == open_len)
+                    scroll_rows = was;
+                open_line = (int) want;
+                open_len = rest;
+            }
         }
     }
 

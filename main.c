@@ -2718,11 +2718,11 @@ static cJSON *post(const struct conn *c, cJSON *messages)
             break;
         if (status > 0) report_api_error(status, resp.p);
         buf_free(&resp);
-        wait = try < 5 ? 2 << try : 60;         /* 2, 4, 8, 16, 32, 60... */
+        wait = relay_retry_after > 0 ? relay_retry_after
+                                     : (try < 5 ? 2 << try : 60);
         fprintf(stderr, "gork: retrying in %ds (%d of %d)\n",
                 wait, try + 1, c->retries);
-        wait_secs(wait);    /* ponytail: ignores retry-after; relay_post
-                               drops headers */
+        wait_secs(wait);
         if (aborted) {
             free(body);
             return NULL;
@@ -2885,7 +2885,8 @@ oom:
 }
 
 /* Run turns until the model stops asking for tools.  Returns 1 if the task
-   finished, 0 on any failure (already reported on stderr). */
+   finished, -1 if it stopped at max_turns, 0 on any failure (already
+   reported on stderr). */
 static int run_task(const struct conn *c, cJSON *messages)
 {
     cJSON      *root, *content, *stop, *results;
@@ -2967,7 +2968,7 @@ static int run_task(const struct conn *c, cJSON *messages)
 
     fprintf(stderr, "gork: gave up after %d turns; raise max_turns in "
                     "%s to allow more\n", c->max_turns, conf_hint);
-    return 0;
+    return -1;
 }
 
 /* Chat until the user quits.  One conversation, so each message builds on
@@ -2977,7 +2978,7 @@ static int interactive(const struct conn *c)
 {
     cJSON *messages;
     char  *line, *arg;
-    int    n, before;
+    int    n, before, rc;
 
     update_status(c);
 
@@ -3041,19 +3042,21 @@ static int interactive(const struct conn *c)
         before = compactions;
         if (append_text_message(messages, "user", line) != 0) break;
 
-        if (run_task(c, messages)) {
+        rc = run_task(c, messages);
+        if (rc > 0) {
             /* done */
-        } else if (aborted) {
-            /* Aborts land where the conversation ends in a complete user
-               turn, so it is kept; this reply restores the alternation. */
+        } else if (aborted || rc < 0) {
+            /* Aborts and max_turns land where the conversation ends in a
+               complete user turn, so it is kept; this reply restores the
+               alternation. */
             if (append_text_message(messages, "assistant",
-                                    "(aborted by the user)") != 0)
+                                    aborted ? "(aborted by the user)"
+                                            : "(stopped at max_turns)") != 0)
                 break;
         } else {
             /* A failed task can leave a tool_use with no tool_result, which
                the API rejects on every later request -- so drop the whole
-               exchange (all but the summary, if it was compacted meanwhile).
-               ponytail: also drops the work of a task that hit max_turns. */
+               exchange (all but the summary, if it was compacted meanwhile). */
             if (compactions != before) n = 1;
             while (cJSON_GetArraySize(messages) > n)
                 cJSON_DeleteItemFromArray(messages, n);
@@ -3324,20 +3327,26 @@ int main(int argc, char **argv)
 #ifdef _WIN32   /* the command line is in the ANSI code page */
         char       *utf8 = win_input_to_utf8(task, 0);
 
-        if (utf8 != NULL) task = utf8;  /* ponytail: never freed */
+        if (utf8 != NULL) task = utf8;
 #endif
         messages = cJSON_CreateArray();
         if (messages == NULL ||
             append_text_message(messages, "user", task) != 0) {
             fprintf(stderr, "gork: out of memory\n");
             cJSON_Delete(messages);
+#ifdef _WIN32
+            free(utf8);
+#endif
             free(rules.p);
             return 1;
         }
         report_overrides();
         if (c.mcp_config != NULL) mcp_start(c.mcp_config);
-        done = run_task(&c, messages);
+        done = run_task(&c, messages) > 0;
         cJSON_Delete(messages);
+#ifdef _WIN32
+        free(utf8);
+#endif
     }
 
     mcp_stop();

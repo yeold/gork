@@ -74,4 +74,7 @@ extern int relay_bearer;
 /* Seconds one request (and one MCP tool call) may take; `timeout`. */
 extern int relay_timeout;
 
+/* Seconds the last reply's Retry-After header asked to wait, or 0. */
+extern int relay_retry_after;
+
 #endif /* GORK_RELAY_H */
