@@ -480,6 +480,7 @@ void tui_drain(void)
 
     if (!active) return;
     fflush(stdout);
+    fflush(stderr);             /* msvcrt buffers it when it is a file */
 
 #ifdef GORK_NO_FORK
     /* A second handle does not see what the first appends until the file
