@@ -94,7 +94,10 @@ python3 testing/looptest.py ./gork
 Stands up a fake API, drives gork through a full `tool_use` round-trip, and
 asserts the wire shape: headers, tool declaration, the verbatim assistant
 echo, and one correctly-matched `tool_result` in a single user turn. This is
-the check that fails if the loop breaks.
+the check that fails if the loop breaks. With `GORK_RELAY` naming a
+[gork-relay](https://github.com/yeold/gork-relay) binary, every fake API
+sits behind it. A build made `--without-tui` or `--without-mcp` skips the
+checks it cannot run, and says so.
 
 `testing/oldvm.sh build` makes a Debian 1.3 (1997: Linux 2.0.33, libc5,
 gcc 2.7.2.1) disk image for QEMU, and `testing/oldvm.sh run` boots it with
@@ -102,7 +105,7 @@ the current tree as a tarball on `/dev/hdb`; `./build.sh` inside builds it.
 The header of the script has the details.
 
 `testing/wintest.py` checks the Windows `gork.exe` in batch mode, under
-Wine or on Windows. `testing/dostest.py` does the same for DOS: it boots FreeDOS in QEMU, runs
+Wine or on Windows, and under Wine the TUI as well. `testing/dostest.py` does the same for DOS: it boots FreeDOS in QEMU, runs
 the `gork.exe` that `sh dosbuild.sh` built, and checks a round trip, path
 confinement, an `allow` directory on a second drive, `edit_file`,
 `run_command`, long output, the timeout and the TUI. Jenkins runs it on

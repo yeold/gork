@@ -58,8 +58,8 @@ the system's libc all the same (tried on Alpine, which has none).
 
 | Suite | What it runs |
 |---|---|
-| `python3 testing/looptest.py ./gork` | The Unix build against fake APIs: 23 checks |
-| `python3 testing/wintest.py [wine] gork.exe` | The legacy Windows programs, batch mode |
+| `python3 testing/looptest.py ./gork` | The Unix build against fake APIs: 23 checks; those of the TUI or MCP are skipped when the build has none |
+| `python3 testing/wintest.py [wine] gork.exe` | The legacy Windows programs: batch mode, and under Wine the TUI with `/save` and `/load` |
 | `python3 testing/dostest.py ZIP` | Either DOS zip on FreeDOS in QEMU: ten checks, the TUI among them |
 | `python3 testing/dosboxtest.py ZIP` | The 16-bit zip in DOSBox-X: two tool calls over the network on a 286, the TUI on an 8086 |
 | `sh testing/linuxtest.sh OUT` | Every Linux binary, under qemu-user |
@@ -68,6 +68,10 @@ the system's libc all the same (tried on Alpine, which has none).
 | `python3 testing/bsdtest.py TARGET PACKAGE FAKEAPI` | A BSD package on its own system in QEMU, through `vmcheck.sh`; OpenBSD is installed once, unattended |
 | `python testing\cygpacktest.py DIR` | The Cygwin package, without Cygwin; the TUI in a console, with pywinpty |
 | `python3 testing/winspxtest.py ZIP` | SPX from Windows: `gork.exe` on a Windows 95 to Me disk image in QEMU, through gork-relay. By hand: it needs an installed Windows |
+
+With `GORK_RELAY` naming a gork-relay binary (`sh testing/getrelay.sh`
+builds one), `looptest.py` and `wintest.py` put it in front of every fake
+API, as Jenkins does.
 
 `dostest.py` takes other systems through environment variables, described
 at its top: another DOS (`GORK_DOS_FLOPPY`, with `GORK_DOS_SMALL_DISKS`

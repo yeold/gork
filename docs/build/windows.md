@@ -16,7 +16,7 @@ Workstation (as shipped, no service pack), Windows 2000 Professional
 emulated Pentium or 486: batch mode, every file tool, `run_command` through
 `COMMAND.COM` or `cmd.exe`, and the TUI, all by hand against a fake API.
 `testing/wintest.py` runs the batch-mode checks under Wine 10 (Jenkins)
-and on the Windows of GitHub's runners, and the release zip of 0.9~beta is
+and on the Windows of GitHub's runners, and the TUI under Wine, and the release zip of 0.9~beta is
 reported working on Windows 11, TUI included. Windows Vista to 10 were
 not tried; XP and 11, on either side of them, work.
 

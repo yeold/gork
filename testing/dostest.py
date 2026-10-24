@@ -183,12 +183,24 @@ def results():
 # ------------------------------------------------------------ the guest
 
 def fetch():
+    """Each download once into $GORK_VM, checksum checked.  When the site
+    fails (ibiblio answers 503 now and then), the Wayback Machine's copy
+    of the same URL; the checksum keeps that honest."""
     os.makedirs(VM, exist_ok=True)
     for url, digest in DOWNLOADS:
         path = os.path.join(VM, os.path.basename(url))
         if not os.path.exists(path):
-            print("fetching", url)
-            urllib.request.urlretrieve(url, path)
+            for src in (url, "https://web.archive.org/web/2024id_/" + url):
+                print("fetching", src)
+                try:
+                    urllib.request.urlretrieve(src, path + ".part")
+                except OSError as e:        # URLError and HTTPError among them
+                    print("  failed:", e)
+                    continue
+                os.replace(path + ".part", path)
+                break
+            else:
+                raise SystemExit("cannot fetch " + url)
         with open(path, "rb") as f:
             assert hashlib.sha256(f.read()).hexdigest() == digest, path
 

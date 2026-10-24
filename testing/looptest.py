@@ -2,17 +2,55 @@
 
 Usage:  python3 testing/looptest.py ./gork
 Exits 0 only if every check passes.  Fails loudly on anything else.
+
+With $GORK_RELAY naming a gork-relay binary, every fake API server sits
+behind it: the fake listens on port + 1000 and `gork-relay -p` on the
+port gork is given.  Checks that need a TUI or MCP are skipped, and say
+so, when the build has none (--without-tui, --without-mcp).
 """
 import atexit, http.server, json, os, pty, re, select, socket, subprocess, sys, tempfile, threading, time
 
 BINARY = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "./gork")
+RELAY = os.environ.get("GORK_RELAY")
 
 
-def serve(handler_cls, port):
+class Served:
+    """A fake server, and the gork-relay in front of it if there is one."""
+
+    def __init__(self, srv, relay=None):
+        self.srv, self.relay = srv, relay
+
+    def shutdown(self):
+        if self.relay is not None:
+            self.relay.kill()
+            self.relay.wait()
+        self.srv.shutdown()
+        self.srv.server_close()
+
+
+def serve(handler_cls, port, threaded=False):
     """Run handler_cls on port until the returned shutdown() is called."""
-    srv = http.server.HTTPServer(("127.0.0.1", port), handler_cls)
+    cls = http.server.ThreadingHTTPServer if threaded else http.server.HTTPServer
+    srv = cls(("127.0.0.1", port + 1000 if RELAY else port), handler_cls)
+    srv.daemon_threads = True       # a hung request must not block the others
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    return srv
+    if not RELAY:
+        return Served(srv)
+    log = tempfile.TemporaryFile()
+    relay = subprocess.Popen([RELAY, "-p", "-v", "-t", "127.0.0.1:%d" % port,
+                              "127.0.0.1:%d" % (port + 1000)],
+                             stdout=subprocess.DEVNULL, stderr=log)
+    end = time.time() + 10
+    while True:
+        log.seek(0)
+        if b"TCP on" in log.read():
+            return Served(srv, relay)
+        if relay.poll() is not None or time.time() > end:
+            log.seek(0)
+            srv.shutdown()
+            raise AssertionError("gork-relay did not start on %d: %r"
+                                 % (port, log.read()[-500:]))
+        time.sleep(0.05)
 
 
 def run_gork(port, task, cwd=None, config=None, mode=0o600, **env_extra):
@@ -1130,9 +1168,7 @@ def check_tui_stream():
         def log_message(self, *a):
             pass
 
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 8101), H)
-    srv.daemon_threads = True
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    srv = serve(H, 8101, threaded=True)
     with tempfile.TemporaryDirectory() as tmp:
         tmp = os.path.realpath(tmp)
         os.makedirs(os.path.join(tmp, ".gork"))
@@ -1260,9 +1296,7 @@ def check_tui_abort():
         def log_message(self, *a):
             pass
 
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 8096), H)
-    srv.daemon_threads = True           # the hung first request must not block
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    srv = serve(H, 8096, threaded=True)
     with tempfile.TemporaryDirectory() as tmp:
         tmp = os.path.realpath(tmp)
         os.makedirs(os.path.join(tmp, ".gork"))
@@ -1705,29 +1739,93 @@ def check_run_timeout_and_esc():
     print("ok: run_command timeout, Esc interrupts it")
 
 
+def has_tui():
+    """Does this build have a TUI?  Without one, gork refuses to start
+    with no task (--without-tui)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = os.path.join(tmp, "c.conf")
+        with open(conf, "w") as f:
+            f.write("relay = 127.0.0.1:1\n")
+        os.chmod(conf, 0o600)
+        env = dict(os.environ, ANTHROPIC_API_KEY="sk-test", HOME=tmp,
+                   GORK_CONFIG=conf)
+        try:
+            p = subprocess.run([BINARY], cwd=tmp, env=env, capture_output=True,
+                               stdin=subprocess.DEVNULL, timeout=10)
+        except subprocess.TimeoutExpired:
+            return True
+    return b"this build has no TUI" not in p.stderr
+
+
+def has_mcp():
+    """Does this build offer the tools of a server in ~/.gork/mcp.json?"""
+    tools = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            req = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            tools.extend(t["name"] for t in req["tools"])
+            reply(self, {"id": "m", "stop_reason": "end_turn",
+                         "content": [{"type": "text", "text": "done"}]})
+
+        def log_message(self, *a):
+            pass
+
+    with tempfile.TemporaryDirectory() as home:
+        os.makedirs(os.path.join(home, ".gork"))
+        with open(os.path.join(home, ".gork", "mcp.json"), "w") as f:
+            json.dump({"mcpServers": {"fake": {"command": sys.executable,
+                                               "args": [FAKEMCP]}}}, f)
+        srv = serve(H, 8106)
+        try:
+            proc = run_gork(8106, "go", HOME=home)
+        finally:
+            srv.shutdown()
+    assert proc.returncode == 0, f"MCP probe: exit {proc.returncode}: {proc.stderr}"
+    return any(n.startswith("mcp__") for n in tools)
+
+
 out = subprocess.run([BINARY, "--version"], capture_output=True, text=True)
 assert out.returncode == 0 and re.match(r"gork v?\d+\.\d+", out.stdout), out
 print("ok: --version")
-check_tool_loop()
-check_openai()
-check_rules_and_tools()
-check_local_no_key()
-check_key_still_required_for_anthropic()
-check_allow_and_edit()
-check_list_dir()
-check_trust()
-check_skills()
-check_mcp()
-check_mcp_http()
-check_config()
-check_chunked()
-check_stream()
-check_stream_openai()
-check_tui_stream()
-check_auto_compact()
-check_tui_abort()
-check_tui_tty_prompt()
-check_tui_mcp_esc_and_editing()
-check_tui_mcp_http_esc()
-check_run_timeout_and_esc()
-print("all checks passed")
+FEATURES = {"TUI": has_tui(), "MCP": has_mcp()}
+print("build: " + ", ".join(("" if v else "no ") + k for k, v in FEATURES.items())
+      + (", through gork-relay" if RELAY else ""))
+skipped = []
+
+
+def run(check, *needs):
+    """Run check, unless the build lacks something it needs."""
+    missing = [n for n in needs if not FEATURES[n]]
+    if missing:
+        skipped.append(check.__name__)
+        print("skip: %s (no %s)" % (check.__name__, " or ".join(missing)))
+    else:
+        check()
+
+
+run(check_tool_loop)
+run(check_openai)
+run(check_rules_and_tools)
+run(check_local_no_key)
+run(check_key_still_required_for_anthropic)
+run(check_allow_and_edit)
+run(check_list_dir)
+run(check_trust, "TUI")
+run(check_skills)
+run(check_mcp, "MCP")
+run(check_mcp_http, "MCP")
+run(check_config)
+run(check_chunked)
+run(check_stream)
+run(check_stream_openai)
+run(check_tui_stream, "TUI")
+run(check_auto_compact)
+run(check_tui_abort, "TUI")
+run(check_tui_tty_prompt, "TUI")
+run(check_tui_mcp_esc_and_editing, "TUI", "MCP")
+run(check_tui_mcp_http_esc, "TUI", "MCP")
+run(check_run_timeout_and_esc, "TUI")
+print("all checks passed" + (" (%d skipped: not in this build)" % len(skipped) if skipped else ""))

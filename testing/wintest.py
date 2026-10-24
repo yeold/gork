@@ -2,13 +2,19 @@
 
 Usage:  python testing\\wintest.py gork.exe          on Windows
         python3 testing/wintest.py wine gork.exe     elsewhere, under Wine
-Exits 0 only if every check passes.  Batch mode only: the TUI needs a
-console, which neither a CI runner nor a pipe is.
+Exits 0 only if every check passes.  Batch mode, and under Wine the TUI
+too: Wine gives a program on a pty a console.  On Windows the TUI check is
+skipped, as a CI runner has no console and a pipe is not one.
+
+With $GORK_RELAY naming a gork-relay binary, every fake API server sits
+behind it: the fake listens on port + 1000 and `gork-relay -p` on the
+port gork is given.
 """
-import http.server, json, os, subprocess, sys, tempfile, threading, time
+import http.server, json, os, re, select, subprocess, sys, tempfile, threading, time
 
 CMD = sys.argv[1:-1] + [os.path.abspath(sys.argv[-1])]
 WINE = os.name != "nt"
+RELAY = os.environ.get("GORK_RELAY")
 
 
 def win(path):
@@ -16,10 +22,41 @@ def win(path):
     return "Z:" + path.replace("/", "\\") if WINE else path
 
 
+class Served:
+    """A fake server, and the gork-relay in front of it if there is one."""
+
+    def __init__(self, srv, relay=None):
+        self.srv, self.relay = srv, relay
+
+    def shutdown(self):
+        if self.relay is not None:
+            self.relay.kill()
+            self.relay.wait()
+        self.srv.shutdown()
+        self.srv.server_close()
+
+
 def serve(handler_cls, port):
-    srv = http.server.HTTPServer(("127.0.0.1", port), handler_cls)
+    srv = http.server.HTTPServer(("127.0.0.1", port + 1000 if RELAY else port),
+                                 handler_cls)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    return srv
+    if not RELAY:
+        return Served(srv)
+    log = tempfile.TemporaryFile()
+    relay = subprocess.Popen([RELAY, "-p", "-v", "-t", "127.0.0.1:%d" % port,
+                              "127.0.0.1:%d" % (port + 1000)],
+                             stdout=subprocess.DEVNULL, stderr=log)
+    end = time.time() + 10
+    while True:
+        log.seek(0)
+        if b"TCP on" in log.read():
+            return Served(srv, relay)
+        if relay.poll() is not None or time.time() > end:
+            log.seek(0)
+            srv.shutdown()
+            raise AssertionError("gork-relay did not start on %d: %r"
+                                 % (port, log.read()[-500:]))
+        time.sleep(0.05)
 
 
 def run_gork(task, cwd, config=None, **env_extra):
@@ -329,6 +366,85 @@ def check_timeout():
     print("ok: timeout, refused connection")
 
 
+def plain(b):
+    """Screen output with the escapes taken out; Wine draws a character
+    at a time, with a cursor move for each run of spaces."""
+    b = re.sub(rb"\x1b\[(\d*)C", lambda m: b" " * int(m.group(1) or 1), b)
+    b = re.sub(rb"\x1b(\[[0-9;?]*[A-Za-z]|\][^\x07]*\x07|[()][0-9A-Z]|[=>])", b"", b)
+    return b.replace(b"\r", b"").replace(b"\n", b"")
+
+
+def check_tui_save_load():
+    """The TUI on a pty: trust, a turn, and the replies to /effort, /save,
+    /new and /load, which only show if stderr reaches the chat pane."""
+    if not WINE:
+        print("skip: TUI (needs a console)")
+        return
+    import pty
+    turns = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            turns.append(json.loads(self.rfile.read(int(self.headers["content-length"]))))
+            reply(self, {"id": "m", "stop_reason": "end_turn", "content": [
+                {"type": "text", "text": "done" if len(turns) == 1 else "resumed"}]})
+
+        def log_message(self, *a):
+            pass
+
+    steps = [(b"Trust this directory", b"y\r"), (b"/quit", b"hello\r"),
+             (b"done", b"/effort max\r"), (b"gork: effort max", b"/save\r"),
+             (b"saved 2 messages", b"/new\r"), (b"conversation cleared", b"/load\r"),
+             (b"loaded 2 messages", b"more\r"), (b"resumed", b"/quit\r")]
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        with open(os.path.join(tmp, "gork.cnf"), "w") as f:
+            f.write("relay = 127.0.0.1:8107\r\n")
+        env = dict(os.environ, WINEDEBUG="-all", ANTHROPIC_API_KEY="sk-test",
+                   AGENT_HOST="fake.local", TERM="xterm",
+                   GORK_CONFIG=win(tmp + "/gork.cnf"), USERPROFILE=win(tmp))
+        for k in ("HOME", "GORK_ALLOW_RUN", "AGENT_MODEL", "AGENT_PATH"):
+            env.pop(k, None)
+        srv = serve(H, 8107)
+        try:
+            pid, fd = pty.fork()
+            if pid == 0:
+                os.chdir(tmp)
+                os.execvpe(CMD[0], CMD, env)
+            out, i, mark = b"", 0, 0
+            end = time.time() + 120
+            while time.time() < end and i < len(steps):
+                if select.select([fd], [], [], 0.5)[0]:
+                    try:
+                        d = os.read(fd, 65536)
+                    except OSError:
+                        break
+                    if not d:
+                        break
+                    out += d
+                if steps[i][0] in plain(out[mark:]):
+                    time.sleep(0.5)
+                    os.write(fd, steps[i][1])
+                    mark = len(out)
+                    i += 1
+            if i < len(steps):
+                os.kill(pid, 9)
+            os.waitpid(pid, 0)
+            os.close(fd)
+        finally:
+            srv.shutdown()
+        saved = os.path.exists(os.path.join(tmp, "_gork", "session.jsn"))
+    assert i == len(steps), "stuck waiting for %r; the screen: %r" % (
+        steps[i][0], plain(out[mark:])[-1500:])
+    assert saved, "no _gork/session.jsn"
+    assert turns[1].get("output_config") == {"effort": "max"}, "/effort max"
+    assert len(turns) == 2 and len(turns[1]["messages"]) == 3, turns[-1]["messages"]
+
+    print("ok: TUI, /effort, /save and /load")
+
+
 out = subprocess.run(CMD + ["--version"], capture_output=True, text=True,
                      env=dict(os.environ, WINEDEBUG="-all"))
 assert out.returncode == 0 and out.stdout.startswith("gork "), out
@@ -339,4 +455,5 @@ check_stream()
 check_home()
 check_text()
 check_timeout()
+check_tui_save_load()
 print("all Windows checks passed")

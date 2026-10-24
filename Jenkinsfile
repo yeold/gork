@@ -1,5 +1,6 @@
 // Source tarball, then RPMs and debs built from it; static Linux binaries
 // for ten CPUs (linuxbuild.sh), each run through the suite under qemu-user;
+// the --without-tui and --without-mcp builds, through the same suite;
 // the DOS zips, 32-bit (dosbuild.sh) and 16-bit (dos16build.sh), tested on
 // FreeDOS in QEMU (testing/dostest.py); and the legacy Windows zip, cross-
 // built with MinGW (winbuild.sh) and tested under Wine (testing/wintest.py);
@@ -58,11 +59,30 @@ pipeline {
                                     libc6-dev-hppa-cross >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh linuxbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
-                            # and run each: the whole suite, under qemu-user
+                            # and run each: the whole suite, under qemu-user, with
+                            # a gork-relay in front of every fake API
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends python3 qemu-user-static >/dev/null
-                                cd /src && sh testing/linuxtest.sh /out'
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends python3 qemu-user-static ca-certificates curl gcc libc6-dev make libssl-dev >/dev/null
+                                cd /src && GORK_RELAY=$(sh testing/getrelay.sh) sh testing/linuxtest.sh /out'
+                        '''
+                    }
+                }
+                // The build options that leave things out: looptest.py
+                // skips the checks of what is missing and runs the rest
+                stage('options') {
+                    steps {
+                        sh '''
+                            docker run --rm -v "$PWD":/src:ro debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends build-essential autoconf automake libncurses-dev python3 ca-certificates curl libssl-dev >/dev/null
+                                cp -r /src /tmp/src && cd /tmp/src && autoreconf -i
+                                export GORK_RELAY=$(sh testing/getrelay.sh)
+                                for o in --without-tui --without-mcp; do
+                                    echo "== $o"
+                                    mkdir /tmp/b$o && cd /tmp/b$o && /tmp/src/configure $o >/dev/null && make
+                                    cd /tmp/src && python3 testing/looptest.py /tmp/b$o/gork
+                                done'
                         '''
                     }
                 }
@@ -110,13 +130,15 @@ pipeline {
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends gcc-mingw-w64-i686 curl ca-certificates zip make >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh winbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
-                            # and run it: one gork.exe for 9x and NT, here under Wine
+                            # and run it: one gork.exe for 9x and NT, here under Wine,
+                            # with a gork-relay in front of every fake API
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
                                 dpkg --add-architecture i386
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends wine wine32:i386 unzip python3 >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends wine wine32:i386 unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev >/dev/null
                                 mkdir /tmp/w && cd /tmp/w && unzip -q /out/gork-*-win32-legacy.zip
-                                cd /src && python3 testing/wintest.py wine /tmp/w/gork.exe &&
+                                cd /src && export GORK_RELAY=$(sh testing/getrelay.sh) &&
+                                    python3 testing/wintest.py wine /tmp/w/gork.exe &&
                                     python3 testing/wintest.py wine /tmp/w/gorknt3.exe'
                         '''
                     }
