@@ -15,16 +15,18 @@
  *                                 input has several lines)
  */
 
-#include "port.h"
-#ifdef GORK_NO_TUI
-#include "notui.c"
-#else
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
+/* port.h after the system headers: it uses size_t, and on Windows its
+   mkdir() macro would break the declaration in <io.h>. */
+#include "port.h"
+#ifdef GORK_NO_TUI
+#include "notui.c"
+#else
 #ifdef GORK_UNICODE
 #include <locale.h>
 #endif
