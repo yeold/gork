@@ -33,13 +33,14 @@ for a in $ARCHS; do
     for f in main relay notui cJSON/cJSON; do
         $CC $CFLAGS -std=gnu89 -pedantic -c $f.c -o "$WORK/$a/$(basename $f).o"
     done
-    for f in uefi/libc uefi/net uefi/card ip; do
+    for f in uefi/libc fwlibc uefi/net uefi/card ip; do
         $CC $CFLAGS -std=gnu99 -c $f.c -o "$WORK/$a/$(basename $f).o"
     done
     $LD -flavor link -machine:$machine -subsystem:efi_application \
         -entry:efi_main -nodefaultlib -out:"$WORK/pack/gork$a.efi" \
         "$WORK/$a"/main.o "$WORK/$a"/relay.o "$WORK/$a"/notui.o \
-        "$WORK/$a"/cJSON.o "$WORK/$a"/libc.o "$WORK/$a"/net.o "$WORK/$a"/card.o \
+        "$WORK/$a"/cJSON.o "$WORK/$a"/libc.o "$WORK/$a"/fwlibc.o "$WORK/$a"/net.o \
+        "$WORK/$a"/card.o \
         "$WORK/$a"/ip.o
 done
 
