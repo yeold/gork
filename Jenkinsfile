@@ -149,8 +149,8 @@ pipeline {
                 // of their own beside the others filled the agent's disk
                 stage('bsd') {
                     steps {
-                        // the release sets, the sysroots and the VM images,
-                        // kept between builds (about 15 GB), outside the
+                        // the sysroots and the VM disks (compressed),
+                        // kept between builds (about 6 GB), outside the
                         // workspace: every stage copies that
                         sh '''
                             BW="$HOME/.cache/gork-bsd" && mkdir -p "$BW"
@@ -216,5 +216,8 @@ pipeline {
     }
     post {
         success { archiveArtifacts artifacts: 'out/*', fingerprint: true }
+        // the images left behind when debian:stable and fedora:latest
+        // move on: the agent's disk is small
+        cleanup { sh 'docker image prune -f >/dev/null || true' }
     }
 }

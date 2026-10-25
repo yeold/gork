@@ -5,11 +5,13 @@ Usage:  python3 testing/bsdtest.py TARGET PACKAGE FAKEAPI [IMAGE]
 
 TARGET is a bsdbuild.sh target (freebsd-amd64, ...), PACKAGE its
 gork-<version>-TARGET.tar.gz, FAKEAPI the fake API built beside it.
-IMAGE is the system's own VM image; without it, it is fetched into
-$GORK_VM (default /tmp/gork-vm) and its checksum checked.  The image is
-booted with -snapshot, so it is never changed.  gork, the fake API,
+IMAGE is the system's own VM image (for OpenBSD, its install image);
+without it, it is fetched and its checksum checked, and kept in $GORK_VM
+(default /tmp/gork-vm) as a compressed qcow2, a third of the size or less;
+the download is dropped.  An OpenBSD install is kept there the same way.
+The disk is booted with -snapshot, so it is never changed.  gork, the fake API,
 testing/vmcheck.sh and testing/mcp.sh go in on a CD; the checks run as root
-on the serial console.  Needs qemu-system-x86_64 with OVMF (and -aarch64 with
+on the serial console.  Needs qemu-system-x86_64 and qemu-img with OVMF (and -aarch64 with
 its UEFI firmware for arm64), xorriso or genisoimage, curl, xz and gzip.
 """
 import hashlib, os, shutil, subprocess, sys, tarfile, tempfile, time, select
@@ -19,24 +21,24 @@ FB = "https://download.freebsd.org/releases/VM-IMAGES/15.1-RELEASE"
 NB = "https://cdn.netbsd.org/pub/NetBSD"
 OB = "https://cdn.openbsd.org/pub/OpenBSD/7.9"
 
-# image: (url, sha256 of the download, how it is packed, disk format)
+# image: (url, sha256 of the download, how it is packed)
 IMAGES = {
     "freebsd-amd64": (FB + "/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-ufs.qcow2.xz",
-                      "25ad16e9d0c037f40a43c6f3c474b5c1ba62eaf9204dbd7f034fdbffe2c3dae5", "xz", "qcow2"),
+                      "25ad16e9d0c037f40a43c6f3c474b5c1ba62eaf9204dbd7f034fdbffe2c3dae5", "xz"),
     "freebsd-arm64": (FB + "/aarch64/Latest/FreeBSD-15.1-RELEASE-arm64-aarch64-ufs.qcow2.xz",
-                      "b61e4f47886332aaff9eb88cfd40c4202132a5c7bf8b56d5b4221f29b683eac2", "xz", "qcow2"),
+                      "b61e4f47886332aaff9eb88cfd40c4202132a5c7bf8b56d5b4221f29b683eac2", "xz"),
     "netbsd-amd64": (NB + "/images/11.0/NetBSD-11.0-amd64-live.img.gz",
-                     "70df2336baea29348243b793f25481ea6e8445e1a8b783d657488e2f391b887a", "gzip", "raw"),
+                     "70df2336baea29348243b793f25481ea6e8445e1a8b783d657488e2f391b887a", "gzip"),
     # NetBSD lists only the unpacked image's SHA512 (ce7f9521...); this is
     # the download's, taken after that matched
     "netbsd-arm64": (NB + "/NetBSD-11.0/evbarm-aarch64/binary/gzimg/arm64mbr.img.gz",
-                     "5b6ed67e84548d8eb270da5f89c772a622b8803981afc06b6cfa880a80fdb02c", "gzip", "raw"),
-    # OpenBSD has no ready image: its installer, which openbsd_disk() runs
-    # once, unattended, into a disk kept beside it
+                     "5b6ed67e84548d8eb270da5f89c772a622b8803981afc06b6cfa880a80fdb02c", "gzip"),
+    # OpenBSD has no ready image: its installer, which openbsd_install() runs
+    # once, unattended, into the disk that is kept
     "openbsd-amd64": (OB + "/amd64/install79.img",
-                      "210b4a4ef8966960b0dc2a08eb3c7d1fc20088902968d3e9b5fe7d17a18634f5", None, "qcow2"),
+                      "210b4a4ef8966960b0dc2a08eb3c7d1fc20088902968d3e9b5fe7d17a18634f5", None),
     "openbsd-arm64": (OB + "/arm64/install79.img",
-                      "551e411e46739a244376592568b3e131f029aebdce63030a7a42901dac292b8c", None, "qcow2"),
+                      "551e411e46739a244376592568b3e131f029aebdce63030a7a42901dac292b8c", None),
 }
 PASSWORD = "gork123"            # root's, on the OpenBSD the test installs
 # the answers to OpenBSD's installer (autoinstall(8)); the sets come from
@@ -84,15 +86,20 @@ BOOT = {
 }
 
 
-def fetch(target):
-    url, sha, pack, _ = IMAGES[target]
+def vmdir():
     d = os.environ.get("GORK_VM", "/tmp/gork-vm")
     os.makedirs(d, exist_ok=True)
-    raw = os.path.join(d, target + "-" + os.path.basename(url))
+    return d
+
+
+def fetch(target):
+    """The system's image, downloaded into GORK_VM and unpacked."""
+    url, sha, pack = IMAGES[target]
+    raw = os.path.join(vmdir(), target + "-" + os.path.basename(url))
     img = raw.rsplit(".", 1)[0] if pack else raw
     ok = img + ".ok"                # written once the image is whole
     if os.path.exists(ok) and os.path.exists(img):
-        return img
+        return img                  # (from a cache older than system())
     # into a .part first: an interrupted download must not pass for one
     part = raw + ".part"
     subprocess.run(["curl", "-fsSL", "-o", part, url], check=True)
@@ -108,6 +115,66 @@ def fetch(target):
         subprocess.run([pack, "-df", raw], check=True)
     open(ok, "w").close()
     return img
+
+
+def compact(src, disk):
+    """SRC, made the compressed qcow2 DISK; SRC is removed."""
+    tmp = "%s.part.%d" % (disk, os.getpid())
+    subprocess.run(["qemu-img", "convert", "-c", "-O", "qcow2", src, tmp], check=True)
+    os.rename(tmp, disk)
+    open(disk + ".ok", "w").close()
+    os.remove(src)
+
+
+def system(target, media=None):
+    """The disk the test boots: MEDIA itself, or one kept in GORK_VM, named
+    after the image it came from (so a new release is fetched afresh):
+    the system's, fetched, or OpenBSD installed from MEDIA or its own."""
+    import fcntl
+    osname = target.split("-")[0]
+    if media and osname != "openbsd":
+        return media
+    url, pack = IMAGES[target][0], IMAGES[target][2]
+    name = os.path.basename(media or url)
+    name = name.rsplit(".", 1)[0] if pack and not media else name
+    disk = os.path.join(vmdir(), "%s-%s.qcow2c" % (target, name.rsplit(".", 1)[0]))
+    if os.path.exists(disk + ".ok"):
+        return disk
+    # one at a time in a cache that builds share; then look again,
+    # another may have made the disk meanwhile
+    lock = open(os.path.join(vmdir(), ".lock"), "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    if os.path.exists(disk + ".ok"):
+        lock.close()
+        return disk
+    ours = media is None
+    if osname != "openbsd":
+        media = fetch(target)
+        compact(media, disk)
+        os.remove(media + ".ok")
+        lock.close()
+        return disk
+    old = os.path.join(vmdir(), target + ".qcow2")     # an older cache's
+    if ours and os.path.exists(old):
+        compact(old, disk)
+        if os.path.exists(old + ".install.log"):
+            os.rename(old + ".install.log", disk + ".install.log")
+        for f in (".ok", ""):       # and the installer it was made from
+            f = os.path.join(vmdir(), target + "-" + os.path.basename(url)) + f
+            if os.path.exists(f):
+                os.remove(f)
+    else:
+        if ours:
+            media = fetch(target)
+        new, log = openbsd_install(target, media)
+        compact(new, disk)
+        shutil.copy(log, disk + ".install.log")
+        shutil.rmtree(os.path.dirname(log))
+        if ours:                    # the installer is not needed again
+            os.remove(media)
+            os.remove(media + ".ok")
+    lock.close()
+    return disk
 
 
 def machine(arch, w, disks):
@@ -138,25 +205,17 @@ def qemu(target, img, iso, w):
         cd = ["-drive", "file=%s,media=cdrom,if=none,id=cd,readonly=on" % iso]
         cd += ["-device", "ide-cd,drive=cd"] if arch == "amd64" else \
               ["-device", "virtio-scsi-pci", "-device", "scsi-cd,drive=cd"]
+    with open(img, "rb") as f:
+        fmt = "qcow2" if f.read(4) == b"QFI\xfb" else "raw"
     return machine(arch, w, ["-snapshot", "-drive", "file=%s,if=virtio,format=%s"
-                             % (img, IMAGES[target][3])] + cd)
+                             % (img, fmt)] + cd)
 
 
-def openbsd_disk(target, media):
-    """The OpenBSD system the test runs on: installed from MEDIA once, with
-    INSTALL_CONF, then kept as GORK_VM/TARGET.qcow2."""
-    import fcntl, http.server, threading
+def openbsd_install(target, media):
+    """The OpenBSD system the test runs on, installed from MEDIA with
+    INSTALL_CONF into a new qcow2: its path, and the install's log."""
+    import http.server, threading
     arch = target.split("-")[1]
-    disk = os.path.join(os.path.dirname(media), target + ".qcow2")
-    if os.path.exists(disk):
-        return disk
-    # one install at a time in a cache that builds share; then look again,
-    # another may have made the disk meanwhile
-    lock = open(os.path.join(os.path.dirname(media), ".install.lock"), "w")
-    fcntl.flock(lock, fcntl.LOCK_EX)
-    if os.path.exists(disk):
-        lock.close()
-        return disk
     w = tempfile.mkdtemp(prefix="bsdinstall.")
     with open(os.path.join(w, "install.conf"), "w") as f:
         f.write(INSTALL_CONF % (PASSWORD, arch))
@@ -171,7 +230,7 @@ def openbsd_disk(target, media):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     # a name of its own: a disk some earlier, killed, run left (and a QEMU
     # it left that may still hold it) must not get in the way
-    new = "%s.new.%d" % (disk, os.getpid())
+    new = os.path.join(vmdir(), "%s.new.%d" % (target, os.getpid()))
     subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", new, "6G"], check=True)
     log = open(os.path.join(w, "install.log"), "wb")
     c = Console(machine(arch, w, ["-drive", "file=%s,if=virtio,format=qcow2" % new,
@@ -199,11 +258,7 @@ def openbsd_disk(target, media):
             c.p.kill()
         srv.shutdown()
         log.close()
-    os.rename(new, disk)
-    shutil.copy(log.name, disk + ".install.log")
-    shutil.rmtree(w)
-    lock.close()
-    return disk
+    return new, log.name
 
 
 class Console:
@@ -241,10 +296,8 @@ def main():
     if len(sys.argv) < 4:
         sys.exit(__doc__)
     target, package, fake = sys.argv[1:4]
-    img = sys.argv[4] if len(sys.argv) > 4 else fetch(target)
+    img = system(target, sys.argv[4] if len(sys.argv) > 4 else None)
     osname = target.split("-")[0]
-    if osname == "openbsd":
-        img = openbsd_disk(target, img)
     w = tempfile.mkdtemp(prefix="bsdtest.")
     cd = os.path.join(w, "cd")
     os.makedirs(cd)

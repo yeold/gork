@@ -30,16 +30,24 @@ fetch() {
     echo "$3  $f" | sha256sum -c - >/dev/null
 }
 
-# sysroot NAME FILE...: the headers and libraries out of the sets
+# sysroot NAME FILE URL SHA256 [FILE URL SHA256]: the headers and libraries
+# out of the sets.  Kept between builds with the list of sets it came from
+# (so a new release unpacks afresh); the sets are fetched only to unpack,
+# then dropped: they are as big again
 sysroot() {
     s=$WORK/sys/$1
     shift
-    [ -d "$s/usr/include" ] && return 0
-    mkdir -p "$s"
-    for f in "$@"; do
-        tar xf "$WORK/dl/$f" -C "$s" ./usr/include ./usr/lib ./lib 2>/dev/null ||
+    [ "$(cat "$s/.sets" 2>/dev/null)" = "$*" ] && return 0
+    sets=$*
+    rm -rf "$s" && mkdir -p "$s"
+    while [ $# -gt 0 ]; do
+        fetch "$1" "$2" "$3"
+        tar xf "$WORK/dl/$1" -C "$s" ./usr/include ./usr/lib ./lib 2>/dev/null ||
             [ -d "$s/usr/include" ]
+        rm -f "$WORK/dl/$1"
+        shift 3
     done
+    echo "$sets" >"$s/.sets"
 }
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
@@ -53,43 +61,43 @@ for t in $TARGETS; do
     extra= rt=
     case $t in
     freebsd-amd64)
-        fetch freebsd-15.1-amd64-base.txz $FB/amd64/15.1-RELEASE/base.txz \
+        sysroot $t \
+            freebsd-15.1-amd64-base.txz $FB/amd64/15.1-RELEASE/base.txz \
             3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f
-        sysroot $t freebsd-15.1-amd64-base.txz
         triple=x86_64-unknown-freebsd15.1 libs=-lncursesw ;;
     freebsd-arm64)
-        fetch freebsd-15.1-arm64-base.txz $FB/arm64/aarch64/15.1-RELEASE/base.txz \
+        sysroot $t \
+            freebsd-15.1-arm64-base.txz $FB/arm64/aarch64/15.1-RELEASE/base.txz \
             5b7a46a0abfbe23a1d4454b5600e2efcfce16b705bc7e9c851c37470c035ef98
-        sysroot $t freebsd-15.1-arm64-base.txz
         triple=aarch64-unknown-freebsd15.1 libs=-lncursesw ;;
     netbsd-amd64)
-        fetch netbsd-11.0-amd64-base.tar.xz $NB/amd64/binary/sets/base.tar.xz \
-            06bc97d2ea7cbb7fea55e8b5fff17e26b642ebe3ca6475202954658e229e303c
-        fetch netbsd-11.0-amd64-comp.tar.xz $NB/amd64/binary/sets/comp.tar.xz \
+        sysroot $t \
+            netbsd-11.0-amd64-base.tar.xz $NB/amd64/binary/sets/base.tar.xz \
+            06bc97d2ea7cbb7fea55e8b5fff17e26b642ebe3ca6475202954658e229e303c \
+            netbsd-11.0-amd64-comp.tar.xz $NB/amd64/binary/sets/comp.tar.xz \
             e14cf9f6ea080d90a148918a4f73a3696c473c60a435985f4316a9033abc0b3e
-        sysroot $t netbsd-11.0-amd64-base.tar.xz netbsd-11.0-amd64-comp.tar.xz
         triple=x86_64-unknown-netbsd11.0 libs="-lcurses -lterminfo" ;;
     netbsd-arm64)
-        fetch netbsd-11.0-arm64-base.tar.xz $NB/evbarm-aarch64/binary/sets/base.tar.xz \
-            28759aadf02f2a597d0c9686f7cac70d4c48a4d6f6a4cd2e3839c13fc8fc19c8
-        fetch netbsd-11.0-arm64-comp.tar.xz $NB/evbarm-aarch64/binary/sets/comp.tar.xz \
+        sysroot $t \
+            netbsd-11.0-arm64-base.tar.xz $NB/evbarm-aarch64/binary/sets/base.tar.xz \
+            28759aadf02f2a597d0c9686f7cac70d4c48a4d6f6a4cd2e3839c13fc8fc19c8 \
+            netbsd-11.0-arm64-comp.tar.xz $NB/evbarm-aarch64/binary/sets/comp.tar.xz \
             43ff8ea12ea32cab362af8e0b298f8c83ce6efddc29888dc4f50249a5bc379bd
-        sysroot $t netbsd-11.0-arm64-base.tar.xz netbsd-11.0-arm64-comp.tar.xz
         # libc's malloc wants the arm64 atomics helpers from libgcc
         triple=aarch64-unknown-netbsd11.0 libs="-lcurses -lterminfo" rt=-lgcc ;;
     openbsd-amd64)
-        fetch openbsd-7.9-amd64-base79.tgz $OB/amd64/base79.tgz \
-            923d2e03f06408d50d4848334398c6d04b5514dcac7917badfc178a0eef248de
-        fetch openbsd-7.9-amd64-comp79.tgz $OB/amd64/comp79.tgz \
+        sysroot $t \
+            openbsd-7.9-amd64-base79.tgz $OB/amd64/base79.tgz \
+            923d2e03f06408d50d4848334398c6d04b5514dcac7917badfc178a0eef248de \
+            openbsd-7.9-amd64-comp79.tgz $OB/amd64/comp79.tgz \
             21a67af20aebcabf85b09f4206fc95b4cae0a35d42b154b976f0159f457724f9
-        sysroot $t openbsd-7.9-amd64-base79.tgz openbsd-7.9-amd64-comp79.tgz
         triple=x86_64-unknown-openbsd7.9 libs=-lcurses ;;
     openbsd-arm64)
-        fetch openbsd-7.9-arm64-base79.tgz $OB/arm64/base79.tgz \
-            9a4b16701ec11103847ca314527de5caf5f811c1dbc0e348d56ed8e9d9f16cb1
-        fetch openbsd-7.9-arm64-comp79.tgz $OB/arm64/comp79.tgz \
+        sysroot $t \
+            openbsd-7.9-arm64-base79.tgz $OB/arm64/base79.tgz \
+            9a4b16701ec11103847ca314527de5caf5f811c1dbc0e348d56ed8e9d9f16cb1 \
+            openbsd-7.9-arm64-comp79.tgz $OB/arm64/comp79.tgz \
             87d257a0e191a32fdebe9c2755e7245c81472f41456ea2fd1ca9832ed55fc417
-        sysroot $t openbsd-7.9-arm64-base79.tgz openbsd-7.9-arm64-comp79.tgz
         # clang 19 crashes on main.c for this target with the stack
         # protector on
         triple=aarch64-unknown-openbsd7.9 libs=-lcurses extra=-fno-stack-protector ;;

@@ -148,4 +148,6 @@ release's base sets, and the fake API beside each. `testing/bsdtest.py
 TARGET PACKAGE FAKEAPI` boots the release's own VM image in QEMU
 (OpenBSD's is installed once, unattended, from its install image), puts
 the package on a CD and runs `vmcheck.sh` there on the serial console.
-Images go to `$GORK_VM`; everything is checksum-pinned.
+The disks are kept in `$GORK_VM` as compressed qcow2 and the downloads
+dropped, as `bsdbuild.sh` drops the sets once unpacked; everything is
+checksum-pinned.
