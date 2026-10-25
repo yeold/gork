@@ -1,3 +1,32 @@
+gork (1.3) unstable; urgency=medium
+
+  * New: gork for UEFI, x86-64 and arm64 (gork-<version>-uefi.zip):
+    gorkx64.efi and gorkaa64.efi run from the UEFI shell with no operating
+    system, in batch mode, on the firmware's TCP/IP, or on a TCP/IP stack
+    of gork's own where the firmware has none (U-Boot, or a PC with its
+    network stack turned off).
+  * New: /save and /load in the TUI keep a conversation in
+    _gork/session.jsn and bring it back.
+  * New: configure --without-tui and --without-mcp, for systems that lack
+    curses or fork; --with-max-file-size=BYTES sets the size the file
+    tools take (it replaces --with-max-read); and Unicode is on by default
+    where ncursesw and locale.h are found.
+  * The tool lines show the path of the file a file tool works on.
+  * --version names the build: v<version>-beta-<commits> from git, with
+    -dirty for changed files, and the version alone for a release.
+  * When a task stops at max_turns, the TUI keeps the work it did in the
+    conversation instead of dropping it.  The scrollback is capped, and
+    the TUI redraws faster.  A retried request waits as long as the
+    server's Retry-After asks.  Host names are looked up once, and the
+    tool list is built once, not for every request.
+  * Windows: the replies of /new and /effort (and the new /save and
+    /load) reach the TUI's chat pane; stderr was buffered.
+  * Minix scrolls the TUI correctly.
+  * The tests run through gork-relay 0.2, and the --without-tui and
+    --without-mcp builds go through the suite too.
+
+ -- Yeold <isac.selea@gmail.com>  Sun, 25 Oct 2026 18:31:06 +0100
+
 gork (1.2) unstable; urgency=medium
 
   * New: packages for FreeBSD 15.1, NetBSD 11.0 and OpenBSD 7.9, on amd64

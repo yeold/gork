@@ -42,8 +42,8 @@ release_id() {
     printf '%s\n' "$r" | jq -r .id   # dash's echo would expand the \n in notes
 }
 
-# The tag lives on GitHub, which Jenkins builds from.  Forgejo's release
-# tags the head of master, which is the same commit.
+# The tag is pushed to both; Jenkins builds it from Forgejo.  Should
+# Forgejo lack it, its release tags the head of master, the same commit.
 id=$(release_id gh "$GH" "$(create '')")
 for f in "$DIR"/*; do
     echo "github: $(basename "$f")"

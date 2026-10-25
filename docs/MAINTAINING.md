@@ -40,12 +40,14 @@ the system's libc all the same (tried on Alpine, which has none).
 1. Set the version in the four places, with a `debian/changelog` entry:
    its text becomes the release notes.
 2. Push `dev` to `master` and `main`, and wait for both builds to pass.
-3. Tag `vX.Y` on GitHub's `main`. Jenkins builds the tag, creates the
-   release on GitHub and on Forgejo and uploads its packages
-   (`release.sh`); the debs, RPMs and tarballs also go to Forgejo's
-   package registry. GitHub Actions builds the same tag, waits for the
-   release to exist and adds the macOS and Cygwin packages, so those two
-   are on GitHub only.
+3. Tag `vX.Y` (annotated, "gork X.Y") and push it to GitHub first, then
+   to Forgejo. Jenkins builds from Forgejo, started by its webhook: it
+   builds the tag, creates the release on GitHub and on Forgejo and
+   uploads its packages (`release.sh`); the debs, RPMs and tarballs also
+   go to Forgejo's package registry. GitHub Actions builds the same tag,
+   waits for the release to exist and adds the macOS and Cygwin packages,
+   so those two are on GitHub only. The tag must be on GitHub before
+   Jenkins reaches `release.sh`, or GitHub makes its own from `main`.
 4. If the Cygwin job of the tag run fails, the release lacks
    `gork-<v>-win32.zip`. Fix the job on `main`: its next build adds the
    package to the release of the version in the tree, when that release
