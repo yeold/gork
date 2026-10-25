@@ -105,7 +105,7 @@ unconnected; gork connects them itself when it finds no TCP.
 
 **Without the firmware's TCP/IP** -- U-Boot, or a PC with its network
 stack turned off but a driver for its card -- gork uses a TCP/IP stack of
-its own (`uefi/ip.c`) on the card itself: IPv4, DHCP, DNS and one TCP
+its own (`ip.c`) on the card itself: IPv4, DHCP, DNS and one TCP
 connection at a time, enough for the relay. It answers ARP and ping for
 its address. For a static address, without DHCP, set a shell variable:
 

@@ -31,7 +31,7 @@ NIC = ["-nic", "user,model=virtio-net-pci"]
 # virtio one on x86-64; on arm64 the RNDR instruction of `-cpu max`, as a
 # virtio one comes too late there.  Without one, OVMF has the network card
 # but no TCP/IP, as a PC with its network stack turned off: gork's own
-# stack (uefi/ip.c) is what runs then, and under U-Boot.
+# stack (ip.c) is what runs then, and under U-Boot.
 MACHINES = {
     "x64": ("x64", OVMF % "CODE", OVMF % "VARS",
             ["qemu-system-x86_64", "-machine", "q35", "-m", "512",

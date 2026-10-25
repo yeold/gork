@@ -17,7 +17,7 @@ are made.
 | [cygpack.sh](../cygpack.sh) | Packs the Cygwin build as the `win32` zip |
 | [dos16build.sh](../dos16build.sh), [dos16/](../dos16/) | The 16-bit DOS build (Open Watcom), and two generated files Watt-32 needs for it |
 | [dosspx.c](../dosspx.c) | SPX on DOS, through the IPX driver |
-| [uefibuild.sh](../uefibuild.sh), [uefi/](../uefi/) | The UEFI build: `gorkx64.efi` and `gorkaa64.efi`, with a C library of its own (`libc.c`), sockets on the firmware's TCP4 (`net.c`) or on a TCP/IP stack of its own for firmware without (`ip.c`), and the standard headers |
+| [uefibuild.sh](../uefibuild.sh), [uefi/](../uefi/) | The UEFI build: `gorkx64.efi` and `gorkaa64.efi`, with a C library of its own (`libc.c`), sockets on the firmware's TCP4 (`net.c`) or on gork's own TCP/IP for firmware without (`../ip.c`, on the card through `card.c`), and the standard headers |
 | [nt3crt.c](../nt3crt.c) | What `gorknt3.exe` needs to use `crtdll.dll` |
 | [configure.ac](../configure.ac), [Makefile.am](../Makefile.am) | Build: curses detection, compiler flags, sources |
 | [cJSON/](../cJSON/) | Vendored JSON parser |

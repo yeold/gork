@@ -509,15 +509,8 @@ int     efi_sock_close(int fd);
 /* Let the network stack run (net.c), from anywhere that waits. */
 void    efi_net_poll(void);
 
-/* ip.c: gork's own TCP/IP on the network card, for firmware without TCP4.
-   One TCP connection at a time; -1 with errno on failure. */
-int  ip_start(void);
-void ip_poll(void);
-int  ip_resolve(const char *name, uint8_t *addr);
-int  ip_tcp_connect(const uint8_t *addr, unsigned port);
-int  ip_tcp_write(const void *p, size_t n);
-int  ip_tcp_read(void *p, size_t n);
-int  ip_tcp_ready(void);
-void ip_tcp_close(void);
+/* ../ip.c: gork's own TCP/IP on the network card, for firmware without
+   TCP4; card.c is its card. */
+#include "../ip.h"
 
 #endif /* GORK_EFI_H */

@@ -1,8 +1,9 @@
 /*
  * ip.c -- a small TCP/IP stack of gork's own, on the network card itself
- * (SimpleNetwork: whole Ethernet frames), for firmware that offers the
- * card but no TCP: U-Boot's UEFI, or a PC with its network stack turned
- * off.  net.c uses it when it finds no TCP4.
+ * (whole Ethernet frames), for firmware that offers the card but no TCP:
+ * U-Boot's UEFI, or a PC with its network stack turned off (uefi/net.c
+ * uses it when it finds no TCP4), and barebox.  The card is reached
+ * through the card_* calls of ip.h: uefi/card.c is SimpleNetwork's.
  *
  * Enough for what relay.c does, and no more: IPv4 over Ethernet, ARP,
  * DHCP (or GORK_IP), DNS over UDP, and one TCP connection at a time, as a
@@ -11,21 +12,20 @@
  * receive buffer has free; no window scaling, no fragments.  Answers ARP
  * and ping for its address, so the network can find it.
  *
- * Everything is polled, from ip_poll(): libc.c's waits call it through
- * efi_net_poll().
+ * Everything is polled, from ip_poll(), which whatever waits calls (on
+ * UEFI, libc.c's waits, through efi_net_poll()).
  */
 
-#include "efi.h"
+#include <stdint.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "ip.h"
 
-void efi_check_break(void);
-
-static EFI_GUID snp_guid = EFI_SIMPLE_NETWORK_PROTOCOL_GUID;
-static EFI_SIMPLE_NETWORK_PROTOCOL *snp;
+static int up;                  /* the card is open (and, once ip_start() is
+                                   done, we have an address) */
 
 static uint8_t mac[6];
 static uint8_t my_ip[4], mask[4], gw[4], dns_ip[4];
@@ -102,10 +102,6 @@ static int same_net(const uint8_t *a)
 /* The frame in tx: its header filled in here, then the card. */
 static int eth_send(const uint8_t *dst, unsigned type, size_t len)
 {
-    clock_t end = clock() + CLOCKS_PER_SEC;
-    EFI_STATUS s;
-    void      *done;
-
     memcpy(tx, dst, 6);
     memcpy(tx + 6, mac, 6);
     put16(tx + 12, type);
@@ -114,16 +110,7 @@ static int eth_send(const uint8_t *dst, unsigned type, size_t len)
         memset(tx + len, 0, 60 - len);
         len = 60;
     }
-    while ((s = snp->Transmit(snp, 0, len, tx, NULL, NULL, NULL))
-               == EFI_NOT_READY && clock() < end)
-        snp->GetStatus(snp, NULL, &done);
-    if (s != EFI_SUCCESS) return -1;
-    /* tx is used again at once: wait until the card hands it back */
-    do {
-        done = NULL;
-        snp->GetStatus(snp, NULL, &done);
-    } while (done == NULL && clock() < end);
-    return 0;
+    return card_send(tx, len);          /* tx may be used again at once */
 }
 
 /* ------------------------------------------------------------------ */
@@ -199,10 +186,9 @@ static void ip_in(const uint8_t *p, size_t n, const uint8_t *src_mac);
 static void poll_card(int max)
 {
     while (max-- > 0) {
-        UINTN size = sizeof rx;
+        int size = card_recv(rx, sizeof rx);
 
-        if (snp->Receive(snp, NULL, &size, rx, NULL, NULL, NULL) != EFI_SUCCESS)
-            return;
+        if (size <= 0) return;
         if (size < 14) continue;
         if (get16(rx + 12) == 0x0806) arp_in(rx + 14, size - 14);
         else if (get16(rx + 12) == 0x0800 && !arp_only)
@@ -214,7 +200,7 @@ static void tcp_timers(void);
 
 void ip_poll(void)
 {
-    if (snp == NULL) return;
+    if (!up) return;
     poll_card(32);
     if (!arp_only) tcp_timers();
 }
@@ -227,8 +213,8 @@ static int wait_until(volatile int *done, long ms)
     while (!*done) {
         if (clock() >= end) return -1;
         ip_poll();
-        efi_check_break();
-        efi_bs->Stall(500);
+        card_break();
+        card_pause();
     }
     return 0;
 }
@@ -252,8 +238,8 @@ static int arp_resolve(const uint8_t *ip, uint8_t *hw)
             while (clock() < end) {
                 ip_poll();
                 if (arp_find(hop, hw) == 0) return 0;
-                efi_check_break();
-                efi_bs->Stall(500);
+                card_break();
+                card_pause();
             }
         }
     }
@@ -533,57 +519,20 @@ static int static_ip(const char *s)
    too soon is refused by the other end. */
 static unsigned seed(void)
 {
-    EFI_TIME t;
-    uint64_t c = 0;
-
-    memset(&t, 0, sizeof t);
-    efi_st->RuntimeServices->GetTime(&t, NULL);
-#if defined(__x86_64__)
-    c = __builtin_ia32_rdtsc();
-#elif defined(__aarch64__)
-    __asm__ volatile ("mrs %0, cntvct_el0" : "=r" (c));
-#endif
-    return (unsigned) (c ^ c >> 32) ^ t.Nanosecond ^
-           (unsigned) time(NULL) * 2654435761u ^ get32(mac + 2);
+    return card_seed() ^ (unsigned) time(NULL) * 2654435761u ^ get32(mac + 2);
 }
 
 /* A network card that is up, and an address: 0, or -1 with a message. */
 int ip_start(void)
 {
     static int  tried;
-    EFI_HANDLE *h = NULL;
-    UINTN       n = 0, i;
     const char *conf = getenv("GORK_IP");
 
-    if (snp != NULL) return 0;
+    if (up) return 0;
     if (tried) return -1;
     tried = 1;
-    if (efi_bs->LocateHandleBuffer(ByProtocol, &snp_guid, NULL, &n, &h)
-            != EFI_SUCCESS || n == 0) {
-        fprintf(stderr, "gork: no network card: the firmware has no driver "
-                        "for it\n");
-        return -1;
-    }
-    for (i = 0; i < n && snp == NULL; i++) {
-        EFI_SIMPLE_NETWORK_PROTOCOL *s;
-
-        if (efi_bs->HandleProtocol(h[i], &snp_guid, (void **) &s) != EFI_SUCCESS)
-            continue;
-        if (s->Mode->State == EfiSimpleNetworkStopped) s->Start(s);
-        if (s->Mode->State == EfiSimpleNetworkStarted) s->Initialize(s, 0, 0);
-        if (s->Mode->State != EfiSimpleNetworkInitialized) continue;
-        if (s->Mode->MediaPresentSupported && !s->Mode->MediaPresent) continue;
-        if (s->Mode->HwAddressSize != 6) continue;      /* Ethernet only */
-        snp = s;
-    }
-    efi_bs->FreePool(h);
-    if (snp == NULL) {
-        fprintf(stderr, "gork: no network card is up (is a cable in?)\n");
-        return -1;
-    }
-    snp->ReceiveFilters(snp, EFI_SIMPLE_NETWORK_RECEIVE_UNICAST |
-                             EFI_SIMPLE_NETWORK_RECEIVE_BROADCAST, 0, 0, 0, NULL);
-    memcpy(mac, snp->Mode->CurrentAddress.Addr, 6);
+    if (card_open(mac) != 0) return -1;
+    up = 1;                     /* DHCP needs ip_poll() to run */
     srand(seed());
     ip_id = (unsigned) rand();
 
@@ -591,7 +540,7 @@ int ip_start(void)
         if (static_ip(conf) != 0) {
             fprintf(stderr, "gork: GORK_IP: want ADDRESS/BITS GATEWAY [DNS], "
                             "e.g. 192.168.1.50/24 192.168.1.1 192.168.1.1\n");
-            snp = NULL;
+            up = 0;
             return -1;
         }
         return 0;
@@ -599,8 +548,8 @@ int ip_start(void)
     fprintf(stderr, "gork: waiting for an address (DHCP, gork's own)...\n");
     if (dhcp() != 0) {
         fprintf(stderr, "gork: no answer from DHCP; set an address with "
-                        "`set GORK_IP 192.168.1.50/24 192.168.1.1`\n");
-        snp = NULL;
+                        "`%s`\n", card_ip_hint());
+        up = 0;
         return -1;
     }
     return 0;
@@ -918,7 +867,7 @@ int ip_tcp_connect(const uint8_t *ip, unsigned port)
 {
     clock_t end;
 
-    if (snp == NULL && ip_start() != 0) {
+    if (!up && ip_start() != 0) {
         errno = ENETDOWN;
         return -1;
     }
@@ -938,8 +887,8 @@ int ip_tcp_connect(const uint8_t *ip, unsigned port)
     end = clock() + 30 * CLOCKS_PER_SEC;
     while (tc.state == SYN_SENT && clock() < end) {
         ip_poll();
-        efi_check_break();
-        efi_bs->Stall(500);
+        card_break();
+        card_pause();
     }
     if (tc.state == OPEN) return 0;
     errno = tc.error != 0 ? tc.error : ETIMEDOUT;
@@ -953,8 +902,8 @@ int ip_tcp_write(const void *p, size_t n)
 
     while (tc.state == OPEN && tc.slen == SBUF) {   /* wait for room */
         ip_poll();
-        efi_check_break();
-        efi_bs->Stall(500);
+        card_break();
+        card_pause();
     }
     if (tc.state != OPEN) {
         errno = tc.error != 0 ? tc.error : EPIPE;
@@ -978,8 +927,8 @@ int ip_tcp_read(void *p, size_t n)
 {
     while (tc.rat == tc.rlen && !tc.fin_in && tc.state == OPEN) {
         ip_poll();
-        efi_check_break();
-        efi_bs->Stall(500);
+        card_break();
+        card_pause();
     }
     if (tc.rat < tc.rlen) {
         int window_was_shut = RBUF - (tc.rlen - tc.rat) < tc.mss;
@@ -1010,7 +959,7 @@ void ip_tcp_close(void)
             tcp_output();
             while (tc.state == OPEN && !tc.fin_acked && clock() < end) {
                 ip_poll();
-                efi_bs->Stall(500);
+                card_pause();
             }
         }
     } else if (tc.state == SYN_SENT) {
