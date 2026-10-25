@@ -28,17 +28,19 @@ back; for arm64 the target is `aarch64-unknown-windows`, without
 CFLAGS="--target=x86_64-unknown-windows -ffreestanding -nostdlibinc
     -fno-builtin -fshort-wchar -mno-red-zone -mno-stack-arg-probe
     -fno-stack-protector -U_WIN32 -U_WIN64 -U_MSC_VER -DGORK_EFI
-    -Iuefi/include -Os"
-for f in main relay notui cJSON/cJSON uefi/libc uefi/net; do
+    -Ifwinclude -Os"
+for f in main relay notui cJSON/cJSON uefi/libc fwlibc uefi/net uefi/card ip; do
     clang $CFLAGS -c $f.c -o $(basename $f).o
 done
 ld.lld -flavor link -subsystem:efi_application -entry:efi_main \
-    -nodefaultlib -out:gork.efi main.o relay.o notui.o cJSON.o libc.o net.o
+    -nodefaultlib -out:gork.efi main.o relay.o notui.o cJSON.o libc.o \
+    fwlibc.o net.o card.o ip.o
 ```
 
 `uefi/libc.c` is the C library: files through the shell's own file
-calls, the console, the environment (the shell's variables), time,
-`printf` and the rest of what main.c, relay.c and cJSON call.
+calls, the console, the environment (the shell's variables) and time;
+strings, numbers, `printf` and stdio are in `fwlibc.c`, and the standard
+headers in `fwinclude/`, both meant for the other firmware ports too.
 `uefi/net.c` gives BSD sockets on the firmware's TCP4 and DNS4
 protocols, so relay.c takes the same path as on Unix.
 

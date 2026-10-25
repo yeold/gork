@@ -5,17 +5,17 @@ EXTRA_DIST = README.md LICENSE CONTRIBUTING.md docs/BUILD.md docs/build/aix.md d
              dos16build.sh dos16/watcom.err dos16/syserr.c \
              Makefile.w32 winbuild.sh nt3crt.c aixps2.c minix2.c minix2.h nextstep.c sunos4.c beos.c svr40.c plan9.c notui.c cygpack.sh linuxbuild.sh bsdbuild.sh version.sh \
              uefibuild.sh uefi/efi.h uefi/libc.c uefi/net.c uefi/card.c ip.c ip.h fwlibc.c fwlibc.h \
-             uefi/include/arpa/inet.h uefi/include/assert.h \
-             uefi/include/ctype.h uefi/include/dirent.h \
-             uefi/include/errno.h uefi/include/fcntl.h \
-             uefi/include/locale.h uefi/include/math.h \
-             uefi/include/netdb.h uefi/include/netinet/in.h \
-             uefi/include/signal.h uefi/include/stdio.h \
-             uefi/include/stdlib.h uefi/include/string.h \
-             uefi/include/sys/select.h uefi/include/sys/socket.h \
-             uefi/include/sys/stat.h uefi/include/sys/time.h \
-             uefi/include/sys/types.h uefi/include/sys/wait.h \
-             uefi/include/time.h uefi/include/unistd.h \
+             fwinclude/arpa/inet.h fwinclude/assert.h \
+             fwinclude/ctype.h fwinclude/dirent.h \
+             fwinclude/errno.h fwinclude/fcntl.h \
+             fwinclude/locale.h fwinclude/math.h \
+             fwinclude/netdb.h fwinclude/netinet/in.h \
+             fwinclude/signal.h fwinclude/stdio.h \
+             fwinclude/stdlib.h fwinclude/string.h \
+             fwinclude/sys/select.h fwinclude/sys/socket.h \
+             fwinclude/sys/stat.h fwinclude/sys/time.h \
+             fwinclude/sys/types.h fwinclude/sys/wait.h \
+             fwinclude/time.h fwinclude/unistd.h \
              gork.spec debian/changelog debian/control \
              debian/rules debian/copyright debian/source/format
 
