@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <sys/stat.h>
 #include "fwlibc.h"
 
@@ -1321,6 +1322,101 @@ void perror(const char *s)
     fprintf(stderr, "%s\n", strerror(errno));
 }
 
+
+/* ------------------------------------------------------------------ */
+/* dates: the port's time() gives the seconds                         */
+/* ------------------------------------------------------------------ */
+
+/* days since 1970-01-01 of a civil date */
+long long fw_days_from_civil(int y, int m, int d)
+{
+    long long era;
+    unsigned  yoe, doy, doe;
+
+    y -= m <= 2;
+    era = (y >= 0 ? y : y - 399) / 400;
+    yoe = (unsigned) (y - era * 400);
+    doy = (unsigned) ((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1);
+    doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + (long long) doe - 719468;
+}
+
+double difftime(time_t a, time_t b) { return (double) (a - b); }
+
+struct tm *gmtime(const time_t *t)
+{
+    static struct tm tm;
+    long long        z = *t / 86400, s = *t % 86400, era;
+    unsigned         doe, yoe, doy, mp;
+
+    if (s < 0) {
+        s += 86400;
+        z--;
+    }
+    tm.tm_hour = (int) (s / 3600);
+    tm.tm_min = (int) (s / 60 % 60);
+    tm.tm_sec = (int) (s % 60);
+    tm.tm_wday = (int) ((z + 4) % 7 + 7) % 7;
+    z += 719468;
+    era = (z >= 0 ? z : z - 146096) / 146097;
+    doe = (unsigned) (z - era * 146097);
+    yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    mp = (5 * doy + 2) / 153;
+    tm.tm_mday = (int) (doy - (153 * mp + 2) / 5 + 1);
+    tm.tm_mon = (int) (mp < 10 ? mp + 2 : mp - 10);
+    tm.tm_year = (int) (yoe + era * 400 + (tm.tm_mon < 2)) - 1900;
+    tm.tm_yday = (int) (fw_days_from_civil(tm.tm_year + 1900, tm.tm_mon + 1,
+                                        tm.tm_mday) -
+                        fw_days_from_civil(tm.tm_year + 1900, 1, 1));
+    tm.tm_isdst = 0;
+    return &tm;
+}
+
+struct tm *localtime(const time_t *t) { return gmtime(t); }
+
+time_t mktime(struct tm *tm)
+{
+    int y = tm->tm_year + 1900 + tm->tm_mon / 12, m = tm->tm_mon % 12;
+
+    if (m < 0) {
+        m += 12;
+        y--;
+    }
+    return (time_t) fw_days_from_civil(y, m + 1, 1) * 86400 +
+           (long long) (tm->tm_mday - 1) * 86400 + tm->tm_hour * 3600 +
+           tm->tm_min * 60 + tm->tm_sec;
+}
+
+size_t strftime(char *s, size_t n, const char *fmt, const struct tm *tm)
+{
+    /* only what an ISO date needs: %Y %m %d %H %M %S */
+    size_t k = 0;
+
+    for (; *fmt != '\0' && k + 1 < n; fmt++) {
+        char part[16];
+        int  v;
+
+        if (*fmt != '%' || fmt[1] == '\0') {
+            s[k++] = *fmt;
+            continue;
+        }
+        switch (*++fmt) {
+        case 'Y': v = tm->tm_year + 1900; sprintf(part, "%04d", v); break;
+        case 'm': sprintf(part, "%02d", tm->tm_mon + 1); break;
+        case 'd': sprintf(part, "%02d", tm->tm_mday); break;
+        case 'H': sprintf(part, "%02d", tm->tm_hour); break;
+        case 'M': sprintf(part, "%02d", tm->tm_min); break;
+        case 'S': sprintf(part, "%02d", tm->tm_sec); break;
+        default:  part[0] = *fmt; part[1] = '\0'; break;
+        }
+        if (k + strlen(part) + 1 > n) break;
+        strcpy(s + k, part);
+        k += strlen(part);
+    }
+    s[k] = '\0';
+    return k;
+}
 
 /* The standard streams, on descriptors 0, 1 and 2: before anything else. */
 void fw_stdio_init(void)

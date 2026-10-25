@@ -10,6 +10,7 @@
 
 /* From fwlibc.c. */
 void fw_stdio_init(void);       /* stdin, stdout, stderr on 0, 1, 2 */
+long long fw_days_from_civil(int y, int m, int d);  /* since 1970-01-01 */
 
 /* From the port. */
 int fw_fd_valid(int fd);        /* an open descriptor? */
