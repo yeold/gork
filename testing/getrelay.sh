@@ -5,11 +5,11 @@
 #     GORK_RELAY=$(sh testing/getrelay.sh [DIR])
 set -eu
 DIR=${1:-/tmp/gork-relay}
-V=0.2
+V=0.3
 mkdir -p "$DIR"
 f=$DIR/gork-relay-$V.tar.gz
 [ -f "$f" ] || curl -fsSL -o "$f" "https://github.com/yeold/gork-relay/archive/refs/tags/v$V.tar.gz"
-echo "f08731e4316ed727653b774b3bc34ad7979f9459d5dfac449586d816d1c7312d  $f" | sha256sum -c - >/dev/null
+echo "ee92d0574f1753d009c491d4956bdae8a2a144152fa8135dd6d81c62dd15331d  $f" | sha256sum -c - >/dev/null
 [ -d "$DIR/gork-relay-$V" ] || tar xzf "$f" -C "$DIR"
 make -s -C "$DIR/gork-relay-$V" gork-relay >&2
 echo "$DIR/gork-relay-$V/gork-relay"
