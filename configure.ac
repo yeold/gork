@@ -61,13 +61,13 @@ if test "$GCC" = yes; then
   AM_CFLAGS="-std=gnu89 -pedantic -Wall -W"
 fi
 AC_SUBST([AM_CFLAGS])
-# In a git checkout, stamp the build with v<version>-beta-<commits> and
-# -dirty when tracked files are modified.  Evaluated by make's shell so
-# edits after ./configure still flip -dirty; dist tarballs have no .git
-# and keep the release VERSION from AC_INIT.
+# In a git checkout, name the build as version.sh does: v<version>-beta-
+# <commits>, -dirty with tracked files modified, and the version alone at
+# its release tag.  Evaluated by make's shell so edits after ./configure
+# still flip -dirty; dist tarballs have no .git and keep the release
+# VERSION from AC_INIT.
 if (cd "$srcdir" && test -e .git && git rev-parse --verify HEAD) >/dev/null 2>&1; then
-  gork_base=`echo "$PACKAGE_VERSION" | sed 's/[~-].*//'`
-  AM_CPPFLAGS='-DGORK_VERSION=\"v'"$gork_base"'-beta-`cd $(srcdir) && git rev-list HEAD 2>/dev/null | wc -l | tr -d " 	"``cd $(srcdir) && git diff HEAD --quiet 2>/dev/null || echo -dirty`\"'
+  AM_CPPFLAGS='-DGORK_VERSION=\"`cd $(srcdir) && sh version.sh`\"'
 fi
 AC_SUBST([AM_CPPFLAGS])
 # Run the checks as C89 too: new autoconf puts -std=gnu23 in CC, and the

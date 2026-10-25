@@ -28,7 +28,8 @@ unzip -qo "$WORK/wat3211b.zip" -d "$WORK/watt"
 unzip -qoj "$WORK/csdpmi7b.zip" bin/CWSDPMI.EXE bin/cwsdpmi.doc -d "$WORK/pack"
 
 make -f Makefile.dj CC="$WORK/djgpp/bin/i586-pc-msdosdjgpp-gcc" \
-    PDCURSES="$WORK/pdcurses" WATT="$WORK/watt/net/watt"
+    PDCURSES="$WORK/pdcurses" WATT="$WORK/watt/net/watt" \
+    DEFS="-DGORK_VERSION=\\\"$(sh version.sh)\\\""
 "$WORK/djgpp/bin/i586-pc-msdosdjgpp-strip" gork.exe
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)

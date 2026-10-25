@@ -51,12 +51,7 @@ sysroot() {
 }
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
-gver=$ver
-if [ -e .git ] && git rev-parse --verify HEAD >/dev/null 2>&1; then
-    dirty=
-    git diff HEAD --quiet 2>/dev/null || dirty=-dirty
-    gver="v${ver%%[~-]*}-beta-$(git rev-list HEAD | wc -l | tr -d ' 	')$dirty"
-fi
+gver=$(sh version.sh)          # what --version says
 for t in $TARGETS; do
     extra= rt=
     case $t in

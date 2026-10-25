@@ -21,9 +21,9 @@ pipeline {
                     # bsdwork/ was the bsd stage's cache in the workspace
                     # once; every stage copies the workspace, so not there
                     rm -rf out bsdwork && mkdir out
-                    docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                    docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
                         apt-get -qq update
-                        DEBIAN_FRONTEND=noninteractive apt-get -qq install -y build-essential autoconf automake libncurses-dev >/dev/null
+                        DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git build-essential autoconf automake libncurses-dev >/dev/null
                         cp -r /src /tmp/src && cd /tmp/src
                         autoreconf -i && ./configure && make dist
                         cp gork-*.tar.gz /out/ && chown -R '"$(id -u):$(id -g)"' /out'
@@ -36,9 +36,9 @@ pipeline {
         stage('options') {
             steps {
                 sh '''
-                    docker run --rm -v "$PWD":/src:ro debian:stable sh -ec '
+                    docker run --rm -e TAG_NAME -v "$PWD":/src:ro debian:stable sh -ec '
                         apt-get -qq update
-                        DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends build-essential autoconf automake libncurses-dev python3 ca-certificates curl libssl-dev >/dev/null
+                        DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git build-essential autoconf automake libncurses-dev python3 ca-certificates curl libssl-dev >/dev/null
                         cp -r /src /tmp/src && cd /tmp/src && autoreconf -i
                         export GORK_RELAY=$(sh testing/getrelay.sh)
                         for o in --without-tui --without-mcp; do
@@ -65,9 +65,9 @@ pipeline {
                 stage('linux') {
                     steps {
                         sh '''
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends \
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git \
                                     gcc libc6-dev make curl ca-certificates ncurses-bin \
                                     gcc-x86-64-linux-gnu gcc-i686-linux-gnu gcc-aarch64-linux-gnu \
                                     gcc-arm-linux-gnueabihf gcc-riscv64-linux-gnu gcc-s390x-linux-gnu \
@@ -90,9 +90,9 @@ pipeline {
                 stage('dos') {
                     steps {
                         sh '''
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl ca-certificates bzip2 unzip zip make >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git curl ca-certificates bzip2 unzip zip make >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh dosbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
                             # and run it: FreeDOS in QEMU against a fake API, with
@@ -107,9 +107,9 @@ pipeline {
                 stage('dos16') {
                     steps {
                         sh '''
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl ca-certificates xz-utils zip >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git curl ca-certificates xz-utils zip >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh dos16build.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
                             # the same checks as for the 32-bit one, with the
@@ -126,9 +126,9 @@ pipeline {
                 stage('windows') {
                     steps {
                         sh '''
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends gcc-mingw-w64-i686 curl ca-certificates zip make >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc-mingw-w64-i686 curl ca-certificates zip make >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh winbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
                             # and run it: one gork.exe for 9x and NT, here under Wine,
@@ -154,9 +154,9 @@ pipeline {
                         // workspace: every stage copies that
                         sh '''
                             BW="$HOME/.cache/gork-bsd" && mkdir -p "$BW"
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out -v "$BW":/work debian:stable sh -ec '
+                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$BW":/work debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends clang lld llvm curl ca-certificates xz-utils zip >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git clang lld llvm curl ca-certificates xz-utils zip >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh bsdbuild.sh /out /work && sh uefibuild.sh /out /tmp/uefi &&
                                     chown -R '"$(id -u):$(id -g)"' /out /work'

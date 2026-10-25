@@ -15,8 +15,10 @@ CFLAGS   = -std=gnu89 -O2 -march=i486 -mtune=generic -Wall -W \
 # (wsock32) and a static libgcc, so that it needs no DLL but the system's.
 # No runtime pseudo-relocations: win.c replaces the code that applies them.
 LDFLAGS  = -Wl,--disable-runtime-pseudo-reloc
+# winbuild.sh names the build: -DGORK_VERSION=\"...\" (version.sh)
+DEFS     =
 gork.exe: main.c relay.c tui.c win.c port.h cJSON/cJSON.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -I$(PDCURSES) -o $@ \
+	$(CC) $(CFLAGS) $(DEFS) $(LDFLAGS) -I$(PDCURSES) -o $@ \
 	    main.c relay.c tui.c win.c cJSON/cJSON.c \
 	    $(PDCURSES)/wincon/pdcurses.a -static-libgcc -lwsock32 -lm
 
@@ -28,6 +30,6 @@ NT3      = -mcrtdll=crtdll -Wl,--major-subsystem-version,3 \
            -Wl,--minor-subsystem-version,10 -Wl,--major-os-version,3 \
            -Wl,--minor-os-version,10
 gorknt3.exe: main.c relay.c tui.c win.c nt3crt.c port.h cJSON/cJSON.c
-	$(CC) $(NT3) $(CFLAGS) $(LDFLAGS) -I$(PDCURSES_NT3) -o $@ \
+	$(CC) $(NT3) $(CFLAGS) $(DEFS) $(LDFLAGS) -I$(PDCURSES_NT3) -o $@ \
 	    main.c relay.c tui.c win.c nt3crt.c cJSON/cJSON.c \
 	    $(PDCURSES_NT3)/wincon/pdcurses.a -static-libgcc -lwsock32 -lm

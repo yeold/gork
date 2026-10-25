@@ -27,12 +27,7 @@ echo "136d91bc269a9a5785e5f9e980bc76ab57428f604ce3e5a5a90cebc767971cc6  $f" | sh
 [ -d "$WORK/ncurses-6.5" ] || tar xzf "$f" -C "$WORK"
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
-gver=$ver
-if [ -e .git ] && git rev-parse --verify HEAD >/dev/null 2>&1; then
-    dirty=
-    git diff HEAD --quiet 2>/dev/null || dirty=-dirty
-    gver="v${ver%%[~-]*}-beta-$(git rev-list HEAD | wc -l | tr -d ' 	')$dirty"
-fi
+gver=$(sh version.sh)          # what --version says
 for a in $ARCHES; do
     arch=${a%%:*}
     host=${a#*:}

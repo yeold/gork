@@ -162,9 +162,9 @@ char *os2_realpath(const char *path, char *out)
 }
 #endif
 
-/* configure passes VERSION (and GORK_VERSION from a git checkout);
-   this is for builds by hand and Makefile.dj.  Bumped with configure.ac
-   at each release. */
+/* configure passes VERSION, and in a git checkout GORK_VERSION, the
+   build's name from version.sh, as the build scripts do; this is for
+   builds by hand.  Bumped with configure.ac at each release. */
 #ifdef GORK_VERSION
 #undef VERSION
 #define VERSION GORK_VERSION

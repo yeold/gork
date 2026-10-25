@@ -27,7 +27,8 @@ for a in $ARCHS; do
     esac
     CFLAGS="--target=$triple $extra -ffreestanding -nostdlibinc -fno-builtin
         -fshort-wchar -mno-stack-arg-probe -fno-stack-protector
-        -U_WIN32 -U_WIN64 -U_MSC_VER -DGORK_EFI -Iuefi/include -Os -Wall -W"
+        -U_WIN32 -U_WIN64 -U_MSC_VER -DGORK_EFI -Iuefi/include -Os -Wall -W
+        -DGORK_VERSION=\"$(sh version.sh)\""
     mkdir -p "$WORK/$a"
     for f in main relay notui cJSON/cJSON; do
         $CC $CFLAGS -std=gnu89 -pedantic -c $f.c -o "$WORK/$a/$(basename $f).o"

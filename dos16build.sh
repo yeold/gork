@@ -72,10 +72,11 @@ fi
 # overfills the C library's code segment.
 obj=$WORK/obj
 rm -rf "$obj" && mkdir "$obj"
+gver=$(sh version.sh)          # what --version says
 for f in main.c relay.c tui.c dosspx.c cJSON/cJSON.c; do
     n=$(basename "$f" .c)
     wcc -q -ml -bt=dos -os -fpc -w3 -wcd=200 -wcd=201 -zq -zc -zm -zt64 -nt="${n}_T" \
-        -DCJSON_NESTING_LIMIT=40 -I"$WORK/pdcurses" -I"$WORK/watt/inc" \
+        -DGORK_VERSION="\"$gver\"" -DCJSON_NESTING_LIMIT=40 -I"$WORK/pdcurses" -I"$WORK/watt/inc" \
         -fo="$obj/$n.obj" "$f"
 done
 # packcode=1: the linker must not gather code segments into groups, or
