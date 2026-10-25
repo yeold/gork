@@ -1,6 +1,6 @@
 #ifndef _SIGNAL_H
 #define _SIGNAL_H
-/* No signals on UEFI: these keep the code that sets them compiling. */
+/* No signals on UEFI or barebox: these keep the code that sets them compiling. */
 typedef int sig_atomic_t;
 typedef unsigned long sigset_t;
 typedef void (*sighandler_t)(int);

@@ -5,6 +5,8 @@ EXTRA_DIST = README.md LICENSE CONTRIBUTING.md docs/BUILD.md docs/build/aix.md d
              dos16build.sh dos16/watcom.err dos16/syserr.c \
              Makefile.w32 winbuild.sh nt3crt.c aixps2.c minix2.c minix2.h nextstep.c sunos4.c beos.c svr40.c plan9.c notui.c cygpack.sh linuxbuild.sh bsdbuild.sh version.sh \
              uefibuild.sh uefi/efi.h uefi/libc.c uefi/net.c uefi/card.c ip.c ip.h fwlibc.c fwlibc.h \
+             bareboxbuild.sh barebox/bb.h barebox/glue.c barebox/libc.c barebox/gork.lds barebox/rename.py \
+             docs/build/barebox.md fwinclude/limits.h \
              fwinclude/arpa/inet.h fwinclude/assert.h \
              fwinclude/ctype.h fwinclude/dirent.h \
              fwinclude/errno.h fwinclude/fcntl.h \

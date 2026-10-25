@@ -5,7 +5,7 @@
 # WORK, checksum pinned.  Needs the aarch64-linux-gnu gcc and binutils,
 # make, bison, flex, libssl-dev, pkg-config, python3, lz4, lzop and zip;
 # run from the source tree:
-#     sh bareboxbuild.sh [OUT] [WORK]
+#     sh bareboxbuild.sh [OUT] [WORK]        (KEEP=1: keep the build tree)
 #
 # gork's half (main.c, relay.c, notui.c, cJSON, ip.c, fwlibc.c and
 # barebox/libc.c) is built here against fwinclude/, with the C library's
@@ -69,4 +69,6 @@ cp "$src/images/barebox-dt-2nd.img" README.md LICENSE "$d/"
 cp docs/build/barebox.md "$d/BUILD.md"
 rm -f "$OUT/gork-$ver-barebox-arm64.zip"
 (cd "$d" && zip -q "$OUT/gork-$ver-barebox-arm64.zip" *)
+# the build tree is a few hundred MB: only the download stays in WORK
+[ -n "${KEEP:-}" ] || rm -rf "$src" "$WORK/gork" "$d"
 echo "$OUT/gork-$ver-barebox-arm64.zip"

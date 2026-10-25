@@ -1,4 +1,4 @@
-/* gork's C library for UEFI (uefi/libc.c): see docs/build/uefi.md. */
+/* The C library of gork's firmware ports (fwlibc.c, and uefi/ or barebox/libc.c). */
 #ifndef _SYS_TYPES_H
 #define _SYS_TYPES_H
 #include <stddef.h>

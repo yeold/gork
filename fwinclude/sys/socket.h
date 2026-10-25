@@ -1,7 +1,7 @@
 #ifndef _SYS_SOCKET_H
 #define _SYS_SOCKET_H
 #include <sys/types.h>
-/* TCP over IPv4 only, through the firmware's TCP4 protocol (uefi/net.c). */
+/* TCP over IPv4 only: the firmware's TCP4 (uefi/net.c) or gork's own (ip.c). */
 typedef unsigned int socklen_t;
 typedef unsigned short sa_family_t;
 struct sockaddr {

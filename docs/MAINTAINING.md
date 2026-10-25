@@ -26,6 +26,7 @@ building on each system.
 | `gork-<v>-linux-<arch>.tar.gz`, ten CPUs, static | Jenkins, `linuxbuild.sh` | `testing/linuxtest.sh`: the suite under qemu-user |
 | `gork-<v>-{freebsd,netbsd,openbsd}-{amd64,arm64}.tar.gz`, static | Jenkins, `bsdbuild.sh` (clang against each release's base sets) | `testing/bsdtest.py`: `vmcheck.sh` on the release's own image in QEMU |
 | `gork-<v>-uefi.zip` (`gorkx64.efi`, `gorkaa64.efi`) | Jenkins, `uefibuild.sh` (clang) | `testing/uefitest.py`: the UEFI shell under OVMF and AAVMF, and on gork's own TCP/IP under OVMF and U-Boot, in QEMU |
+| `gork-<v>-barebox-arm64.zip` (barebox with a `gork` command) | Jenkins, `bareboxbuild.sh` (barebox 2026.09, aarch64 gcc) | `testing/bareboxtest.py`: at barebox's prompt in QEMU's arm64 `virt` machine, on gork's own TCP/IP |
 | `gork-<v>-dos.zip` (386, DJGPP) | Jenkins, `dosbuild.sh` | `testing/dostest.py` on FreeDOS in QEMU |
 | `gork-<v>-dos16.zip` (8086, Open Watcom) | Jenkins, `dos16build.sh` | the same, and `testing/dosboxtest.py` on an 8086 and a 286 in DOSBox-X |
 | `gork-<v>-win32-legacy.zip` (`gork.exe`, `gorknt3.exe`) | Jenkins, `winbuild.sh` | `testing/wintest.py` under Wine; again on Windows by GitHub Actions |
@@ -67,6 +68,7 @@ the system's libc all the same (tried on Alpine, which has none).
 | `sh testing/linuxtest.sh OUT` | Every Linux binary, under qemu-user |
 | `sh testing/vmcheck.sh GORK FAKEAPI [MCPSH]` | Batch checks with only a Bourne shell: on any system, inside a VM |
 | `python3 testing/uefitest.py ZIP FAKEAPI [MACHINE]` | gork from the UEFI shell in QEMU: under OVMF (`x64`), AAVMF (`aa64`), OVMF without its network stack (`x64-own`) or U-Boot (`uboot`); twelve checks |
+| `python3 testing/bareboxtest.py ZIP FAKEAPI` | The `gork` command at barebox's prompt in QEMU (arm64 `virt`), typed on the serial console; twelve checks |
 | `python3 testing/bsdtest.py TARGET PACKAGE FAKEAPI` | A BSD package on its own system in QEMU, through `vmcheck.sh`; OpenBSD is installed once, unattended |
 | `python testing\cygpacktest.py DIR` | The Cygwin package, without Cygwin; the TUI in a console, with pywinpty |
 | `python3 testing/winspxtest.py ZIP` | SPX from Windows: `gork.exe` on a Windows 95 to Me disk image in QEMU, through gork-relay. By hand: it needs an installed Windows |

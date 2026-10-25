@@ -17,6 +17,8 @@ are made.
 | [cygpack.sh](../cygpack.sh) | Packs the Cygwin build as the `win32` zip |
 | [dos16build.sh](../dos16build.sh), [dos16/](../dos16/) | The 16-bit DOS build (Open Watcom), and two generated files Watt-32 needs for it |
 | [dosspx.c](../dosspx.c) | SPX on DOS, through the IPX driver |
+| [bareboxbuild.sh](../bareboxbuild.sh), [barebox/](../barebox/) | The barebox build: barebox with a `gork` command, gork's half built against `fwinclude/` with its C library's names made `gork_*` (`rename.py`, `gork.lds`), barebox's half the command (`glue.c`), the two meeting in `bb.h`; `libc.c` is gork's half of the C library |
+| [fwlibc.c](../fwlibc.c), [fwinclude/](../fwinclude/), [ip.c](../ip.c) | Shared by the firmware ports: strings, numbers, `printf`, stdio and dates; the standard headers; gork's own TCP/IP, on a network card the port gives it (`ip.h`) |
 | [uefibuild.sh](../uefibuild.sh), [uefi/](../uefi/) | The UEFI build: `gorkx64.efi` and `gorkaa64.efi`, with a C library of its own (`libc.c`), sockets on the firmware's TCP4 (`net.c`) or on gork's own TCP/IP for firmware without (`../ip.c`, on the card through `card.c`), and the standard headers |
 | [nt3crt.c](../nt3crt.c) | What `gorknt3.exe` needs to use `crtdll.dll` |
 | [configure.ac](../configure.ac), [Makefile.am](../Makefile.am) | Build: curses detection, compiler flags, sources |
@@ -141,6 +143,11 @@ through `testing/mcp.sh`, an MCP server in sh). It works under `/tmp` with
 and lld, and `testing/uefitest.py ZIP FAKEAPI [MACHINE]` runs it from the
 UEFI shell in QEMU (OVMF, AAVMF, OVMF without its network stack, U-Boot), its checks in a `startup.nsh` on a FAT image, against
 `fakeapi.c` on the host.
+
+`bareboxbuild.sh [OUT] [WORK]` builds barebox for QEMU's arm64 `virt`
+machine with a `gork` command in it, and `testing/bareboxtest.py ZIP
+FAKEAPI` boots it in QEMU and types its checks at barebox's prompt
+(docs/build/barebox.md).
 
 `bsdbuild.sh [OUT] [WORK]` cross-builds the FreeBSD, NetBSD and OpenBSD
 packages on Linux with clang, against sysroots unpacked from each

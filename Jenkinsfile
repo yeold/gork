@@ -6,8 +6,10 @@
 // built with MinGW (winbuild.sh) and tested under Wine (testing/wintest.py);
 // static FreeBSD, NetBSD and OpenBSD binaries cross-built with clang
 // (bsdbuild.sh), each run on its own system in QEMU (testing/bsdtest.py);
-// and gork for x86-64 and arm64 UEFI (uefibuild.sh), run in the UEFI
-// shell under OVMF, AAVMF and U-Boot (testing/uefitest.py).  Each in a throwaway
+// gork for x86-64 and arm64 UEFI (uefibuild.sh), run in the UEFI
+// shell under OVMF, AAVMF and U-Boot (testing/uefitest.py); and barebox
+// with a gork command (bareboxbuild.sh), at its prompt in QEMU
+// (testing/bareboxtest.py).  Each in a throwaway
 // container via plain `docker run` (no Docker Pipeline plugin needed).
 // Containers build as root in their own /tmp and only copy finished
 // packages into out/, chowned back to the Jenkins user.
@@ -141,6 +143,26 @@ pipeline {
                                 cd /src && export GORK_RELAY=$(sh testing/getrelay.sh) &&
                                     python3 testing/wintest.py wine /tmp/w/gork.exe &&
                                     python3 testing/wintest.py wine /tmp/w/gorknt3.exe'
+                        '''
+                    }
+                }
+                // barebox with the gork command in it, built with the
+                // aarch64 gcc, and its checks typed at the barebox prompt
+                stage('barebox') {
+                    steps {
+                        sh '''
+                            BB="$HOME/.cache/gork-barebox" && mkdir -p "$BB"
+                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$BB":/work debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu gcc libc6-dev make bison flex libssl-dev bc lzop lz4 zstd python3 xz-utils file pkg-config zip curl ca-certificates >/dev/null
+                                cp -r /src /tmp/src && cd /tmp/src
+                                sh bareboxbuild.sh /out /work && chown -R '"$(id -u):$(id -g)"' /out /work'
+                            # and boot it in QEMU against the fake API
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-arm python3 gcc libc6-dev >/dev/null
+                                gcc -o /tmp/fakeapi /src/testing/fakeapi.c
+                                cd /src && python3 testing/bareboxtest.py /out/gork-*-barebox-arm64.zip /tmp/fakeapi'
                         '''
                     }
                 }

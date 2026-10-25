@@ -482,10 +482,14 @@ clock_t clock(void)
    started: time moves either way, which is what the timeouts need. */
 time_t time(time_t *t)
 {
-    static long long base = -1;
+    static long long base;
+    static int       have_base;
     time_t v;
 
-    if (base < 0) base = bb_epoch() - (long long) (bb_ms() / 1000);
+    if (!have_base) {           /* negative, with no clock: still the base */
+        base = bb_epoch() - (long long) (bb_ms() / 1000);
+        have_base = 1;
+    }
     v = (time_t) (base + (long long) (bb_ms() / 1000));
     if (t != NULL) *t = v;
     return v;
