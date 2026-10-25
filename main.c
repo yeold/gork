@@ -1554,6 +1554,9 @@ static const struct tool TOOLS[] = {
 #elif defined(GORK_EFI)
                       "\"description\":\"Command line for the UEFI "
                       "shell.\"}},"
+#elif defined(GORK_BAREBOX)
+                      "\"description\":\"Command line for the barebox "
+                      "shell (hush): its commands, no redirection.\"}},"
 #elif defined(_WIN32)
                       "\"description\":\"Command line for Windows "
                       "(cmd.exe; COMMAND.COM on Windows 9x).\"}},"

@@ -29,6 +29,15 @@
 #define GORK_NO_TUI
 #endif
 
+/* barebox (the `gork` command, built into a barebox image): the build
+   passes -DGORK_BAREBOX, its C library is barebox/libc.c with fwlibc.c,
+   and the network gork's own TCP/IP (ip.c).  As on UEFI, one program at a
+   time and batch mode only.  Paths are barebox's, /dir/file. */
+#ifdef GORK_BAREBOX
+#define GORK_NO_FORK
+#define GORK_NO_TUI
+#endif
+
 #if defined(__MSDOS__) || defined(_WIN32)
 #define GORK_NO_FORK
 #endif
