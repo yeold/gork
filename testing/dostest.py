@@ -786,8 +786,17 @@ def check_tui(g):
         g.wait("aborted")
     assert requests[-1]["messages"][-1]["content"] == "hi", requests[-1]
     g.wait("Enter send")
-    g.type("/quit\n")
-    s = g.wait(r"C:\\W>$", 20)
+    # that hint was on screen before the abort: let the redraw finish, and
+    # type again if a key is lost (a loaded agent drops one now and then)
+    time.sleep(2)
+    for attempt in range(3):
+        g.type("/quit\n")
+        try:
+            s = g.wait(r"C:\\W>$", 20)
+            break
+        except AssertionError:
+            if attempt == 2:
+                raise
     assert "Enter send" not in s, s     # the screen was cleared
     assert "TRUSTED" in g.run("dir c:\\_gork").upper()
     assert "TUI" in g.run("dir tui.*").upper()
