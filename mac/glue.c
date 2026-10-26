@@ -6,7 +6,7 @@
  * made gork_NAME, as for barebox and GRUB (barebox/bb.h).  This half is
  * built with Retro68's headers and C library, and gives gork's the calls
  * of barebox/bb.h on the Toolbox: the File Manager, the clock, the console
- * window (Retro68's), and in place of gork's own TCP/IP (ip.c) the calls
+ * window (console.c), and in place of gork's own TCP/IP (ip.c) the calls
  * of ip.h on MacTCP, which Open Transport also answers.
  *
  * The program is a console window with a prompt: each line is a gork
@@ -23,6 +23,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "console.h"
+#include "roman.h"
 
 /* gork's errno values (Linux's, as fwinclude/ has them) */
 #define E_NOENT 2
@@ -137,7 +140,7 @@ long bb_write(int fd, const void *p, size_t n);
 
 static void out(const char *p, size_t n)
 {
-  fwrite(p, 1, n, stdout);
+  con_write(p, n);
   if (transcript_fd >= 0) bb_write(transcript_fd, p, n);
 }
 
@@ -146,7 +149,6 @@ static void outs(const char *s) { out(s, strlen(s)); }
 void bb_console_write(const char *p, size_t n)
 {
   out(p, n);
-  fflush(stdout);
 }
 
 /* ------------------------------------------------------------------ */
@@ -315,7 +317,102 @@ static void dir_path(short vref, long dir, char *buf)
 static struct {
   short ref;                    /* the File Manager's, 0 if free */
   int append;
+  int text;                     /* a TEXT file: Mac Roman and CR */
+  char pend[3];                 /* read: UTF-8 not yet given */
+  int npend;
+  unsigned long wc;             /* write: a UTF-8 character so far */
+  int wneed;                    /* its bytes still to come */
 } files[NFILE];
+
+/* A Mac text file is in Mac Roman, its lines ending in CR; gork's text is
+   UTF-8, its lines ending in LF.  A TEXT file is turned from the one to
+   the other as it is read and written.  CR and LF change places, so a
+   file with both comes back as it was; and each of Mac Roman's 256
+   characters is one in UTF-8, so a file read and written again is the
+   same.  What Mac Roman has no character for is written as `?`.  Sizes
+   and offsets are the Mac's, in bytes of Mac Roman. */
+static char swap_crlf(char c)
+{
+  return c == '\r' ? '\n' : c == '\n' ? '\r' : c;
+}
+
+static void text_reset(int fd)
+{
+  files[fd].npend = 0;
+  files[fd].wneed = 0;
+}
+
+static long text_read(int fd, char *p, size_t n)
+{
+  char src[256], u[3];
+  long k;
+  size_t out = 0;
+  int i, j, m;
+  OSErr e;
+
+  while (out < n && files[fd].npend > 0) {      /* what was left over */
+    p[out++] = files[fd].pend[0];
+    memmove(files[fd].pend, files[fd].pend + 1, (size_t) --files[fd].npend);
+  }
+  if (out > 0) return (long) out;
+  /* as many bytes as surely fit, three of UTF-8 each; one at least */
+  k = (long) (n / 3 < sizeof src ? n / 3 : sizeof src);
+  if (k == 0) k = 1;
+  e = FSRead(files[fd].ref, &k, src);
+  if (e != noErr && e != eofErr) return mac_err(e);
+  for (i = 0; i < k; i++) {
+    m = roman_to_utf8((unsigned char) swap_crlf(src[i]), u);
+    for (j = 0; j < m; j++)
+      if (out < n) p[out++] = u[j];
+      else files[fd].pend[files[fd].npend++] = u[j];
+  }
+  return (long) out;
+}
+
+static OSErr put_bytes(int fd, const char *b, long m)
+{
+  if (files[fd].append) SetFPos(files[fd].ref, fsFromLEOF, 0);
+  return FSWrite(files[fd].ref, &m, b);
+}
+
+static long text_write(int fd, const char *p, size_t n)
+{
+  char buf[256];
+  unsigned char c;
+  long m = 0;
+  size_t i;
+  OSErr e;
+
+#define EMIT(ch) do { \
+    buf[m++] = swap_crlf(ch); \
+    if (m == (long) sizeof buf) { \
+      if ((e = put_bytes(fd, buf, m)) != noErr) return mac_err(e); \
+      m = 0; \
+    } \
+  } while (0)
+  for (i = 0; i < n; i++) {
+    c = (unsigned char) p[i];
+    if (files[fd].wneed > 0) {
+      if ((c & 0xC0) == 0x80) {
+        files[fd].wc = files[fd].wc << 6 | (c & 0x3F);
+        if (--files[fd].wneed == 0) EMIT(roman_from_unicode(files[fd].wc));
+        continue;
+      }
+      files[fd].wneed = 0;      /* one cut short */
+      EMIT('?');
+    }
+    if (c < 0x80)
+      EMIT((char) c);
+    else if (c >= 0xC0 && c < 0xF8) {
+      files[fd].wneed = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : 1;
+      files[fd].wc = c & (0x3F >> files[fd].wneed);
+    } else
+      EMIT('?');                /* not UTF-8 */
+  }
+  if (m > 0 && (e = put_bytes(fd, buf, m)) != noErr) return mac_err(e);
+#undef EMIT
+  return (long) n;
+}
 
 int bb_open(const char *path, int flags, unsigned mode)
 {
@@ -337,8 +434,13 @@ int bb_open(const char *path, int flags, unsigned mode)
     /* a text file, as SimpleText makes them */
     e = HCreate(0, 0, name, 'ttxt', 'TEXT');
     if (e != noErr) return mac_err(e);
+    files[i].text = 1;
+    text_reset(i);
   } else if (r < 0)
     return r;
+  else
+    files[i].text = pb.hFileInfo.ioFlFndrInfo.fdType == 'TEXT';
+  text_reset(i);
   perm = (flags & O_ACC) == O_RW ? fsRdWrPerm :
          (flags & O_ACC) == O_WR ? fsWrPerm : fsRdPerm;
   e = HOpenDF(0, 0, name, perm, &ref);
@@ -361,6 +463,7 @@ long bb_read(int fd, void *p, size_t n)
   OSErr e;
 
   if (ref == 0) return -E_BADF;
+  if (files[fd].text) return text_read(fd, p, n);
   e = FSRead(ref, &k, p);
   if (e != noErr && e != eofErr) return mac_err(e);
   return k;
@@ -374,6 +477,7 @@ long bb_write(int fd, const void *p, size_t n)
 
   if (ref == 0) return -E_BADF;
   if (files[fd].append) SetFPos(ref, fsFromLEOF, 0);
+  if (files[fd].text) return text_write(fd, p, n);
   e = FSWrite(ref, &k, p);
   if (e != noErr) return mac_err(e);
   return k;
@@ -384,6 +488,10 @@ int bb_close(int fd)
   short ref = file_ref(fd), vref = 0;
 
   if (ref == 0) return -E_BADF;
+  if (files[fd].text && files[fd].wneed > 0) {  /* one cut short */
+    files[fd].wneed = 0;
+    put_bytes(fd, "?", 1);
+  }
   files[fd].ref = 0;
   GetVRefNum(ref, &vref);
   FSClose(ref);
@@ -402,6 +510,7 @@ long long bb_lseek(int fd, long long off, int whence)
   if (whence == 2 && GetEOF(ref, &base) != noErr) return -E_IO;
   pos = base + (long) off;
   if (pos < 0) return -E_INVAL;
+  if (!(whence == 1 && off == 0)) text_reset(fd);   /* not just asked */
   if (GetEOF(ref, &eof) == noErr && pos > eof) SetEOF(ref, pos);
   e = SetFPos(ref, fsFromStart, pos);
   return e == noErr ? pos : mac_err(e);
@@ -700,7 +809,11 @@ int bb_run(const char *line, char **o, size_t *len)
   return -1;
 }
 
-void card_pause(void) { SystemTask(); }
+void card_pause(void)
+{
+  SystemTask();
+  con_idle();
+}
 
 void card_break(void)
 {
@@ -1135,7 +1248,7 @@ static int next_line(char **script, char *line, size_t size)
   size_t n;
 
   if (*script == NULL)
-    return fgets(line, (int) size, stdin) != NULL;
+    return con_readline(line, size) >= 0;
   if (**script == '\0') return 0;
   n = strcspn(*script, "\r\n");
   if (n >= size) n = size - 1;
@@ -1156,6 +1269,7 @@ int main(void)
      a program 24K or so */
   SetApplLimit(LMGetApplLimit() - 512 * 1024);
   MaxApplZone();
+  if (con_init() != 0) return 1;
   find_app_dir();
 
   at = script = read_script();
@@ -1168,7 +1282,6 @@ int main(void)
        "the options), set NAME=value, unset NAME, or quit.\n");
   for (;;) {
     outs("gork> ");
-    fflush(stdout);
     if (!next_line(&at, line, sizeof line)) break;
     line[strcspn(line, "\r\n")] = '\0';
     if (script) {

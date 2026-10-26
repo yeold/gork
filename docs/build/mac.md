@@ -29,7 +29,10 @@ gork> quit
 
 `set NAME=value` and `unset NAME` set what gork would take from the
 environment (`GORK_DIR`, `GORK_CONFIG`, ...). gork works in `GORK_DIR`,
-or the program's folder. Command-period interrupts.
+or the program's folder. Command-period interrupts; the close box and
+Command-Q quit. The window is in Mac Roman, and gork in UTF-8: what gork
+prints is shown in Mac Roman (a `?` where it has no such character), and
+what is typed reaches gork as UTF-8.
 
 A file `gork.in` beside the program is read in place of the keyboard,
 and what the window shows goes to `gork.out` too. A line `shutdown` at
@@ -42,6 +45,15 @@ gork writes paths as `/Volume/Folder/file`; the Mac's
 gork. `/` alone lists the volumes. Full paths stop at the File Manager's
 255 characters. Files gork makes are SimpleText's (`TEXT`, `ttxt`).
 
+A text file (`TEXT`) is in Mac Roman on the Mac, its lines ending in CR;
+gork's text is UTF-8, its lines ending in LF. gork reads and writes a
+text file in the one and sees it in the other, so SimpleText shows what
+gork wrote and gork reads what SimpleText wrote. A file read and written
+again is as it was, but what Mac Roman has no character for (most of
+Unicode: emoji, Greek, Cyrillic, CJK) is written as `?`. Sizes are the
+Mac's, in bytes of Mac Roman. Other files are read and written as they
+are.
+
 ## The network
 
 MacTCP, set up in its control panel (or the TCP/IP control panel of Open
@@ -52,12 +64,16 @@ everywhere (README).
 ## Build
 
 ```sh
-RETRO68=/path/to/Retro68-build/toolchain sh macbuild.sh [OUT]
+sh macbuild.sh [OUT] [WORK]
 ```
 
-Needs [Retro68](https://github.com/autc04/Retro68) built for 68k
-(`build-toolchain.bash --no-ppc --no-carbon`), with its Multiversal
-Interfaces; python3 and zip.
+The first run builds [Retro68](https://github.com/autc04/Retro68), the
+cross toolchain, for 68k into `WORK` from a pinned commit, with its
+Multiversal Interfaces: about 40 minutes, and 9 GB while it builds; the
+toolchain kept is about 450 MB. Later runs use it. `RETRO68=dir` uses a
+Retro68 toolchain built already instead. Needs git, gcc and g++, make,
+cmake, bison, flex, texinfo, ruby, the GMP, MPFR, MPC, Boost and zlib
+headers (for Retro68), python3 and zip.
 
 ## How it works
 
@@ -66,11 +82,11 @@ As for barebox and GRUB: gork's half is `main.c`, `relay.c`, cJSON,
 `mac/include/` for `stdint.h`) with every C library name made `gork_NAME`
 (`barebox/rename.py`) and joined into one object (`barebox/gork.lds`).
 `mac/glue.c`, built with Retro68's headers and C library, gives the calls
-of `barebox/bb.h` on the File Manager, the clock and Retro68's console
-window, and those of `ip.h` on MacTCP in place of gork's own TCP/IP.
+of `barebox/bb.h` on the File Manager, the clock and its console window
+(`mac/console.c`, a QuickDraw window of Monaco 9), and those of `ip.h`
+on MacTCP in place of gork's own TCP/IP.
 Before each command line it puts gork's variables back as they were at
 the start, and comes back from `exit()` by `longjmp`. It moves the stack
 limit down 512K first, as a 68k Mac gives a program about 24K of stack.
-
-Retro68's console window is C++, and brings most of libstdc++ with it:
-the program is about 1 MB, of which gork is about 64K.
+The program is about 190K: Retro68's own console window, in C++, would
+bring most of libstdc++ with it, a megabyte.
