@@ -38,6 +38,15 @@
 #define GORK_NO_TUI
 #endif
 
+/* GRUB (the `gork` command, a module of GRUB's): the build passes
+   -DGORK_GRUB, and the C library is barebox's (barebox/libc.c), on
+   grub/glue.c instead of barebox's.  Paths are GRUB's, (hd0,gpt1)/dir/file;
+   GRUB writes no file system, so gork writes in (gork), in RAM. */
+#ifdef GORK_GRUB
+#define GORK_NO_FORK
+#define GORK_NO_TUI
+#endif
+
 #if defined(__MSDOS__) || defined(_WIN32)
 #define GORK_NO_FORK
 #endif

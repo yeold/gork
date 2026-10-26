@@ -11,7 +11,7 @@ in, repeat -- on vintage and modern systems from 1984 to today:
 MS-DOS 2.11 and Windows 1.04, Linux 1.0, the first BSDs, Solaris 2.5.1,
 SunOS 4, AIX, HP-UX, SVR4, NeXTSTEP, OS/2 Warp, BeOS, QNX, Plan 9,
 Windows 95 and NT 3.1, Minix, GNU/Hurd, Haiku, bare-metal UEFI and the
-barebox boot loader, and just
+barebox and GRUB boot loaders, and just
 as well on a current Linux, macOS or Windows 11. One codebase for all of
 them, with a batch CLI mode and a full-screen interactive curses TUI. The
 [table below](#tested-systems) says what it has been run on.
@@ -33,7 +33,7 @@ not gork's.
 ## Features at a glance
 
 - **Strict ANSI C89 / ISO C90**: ~5,000 lines of portable C, ~100 KB stripped binary, no C99, no threads, no OpenSSL/TLS library required on the target machine.
-- **Runs across four decades of hardware and OSes**: 16-bit real-mode MS-DOS (8086, 640 KB RAM) and 32-bit DOS (DJGPP), Windows 1.0 to 11 and NT 3.1+, early Linux (kernel 1.0, Slackware, Debian), FreeBSD/NetBSD/OpenBSD/DragonFly/MidnightBSD, commercial Unix (SunOS 4, Solaris, illumos, AIX, HP-UX, SVR4), NeXTSTEP/OPENSTEP, OS/2 Warp, BeOS, Haiku, QNX, Minix 2 & 3, Plan 9 (9front), GNU/Hurd, macOS (PowerPC Tiger to Apple silicon), bare-metal UEFI (`x86-64` and `arm64`, with its own built-in TCP/IP stack when firmware lacks one), and the barebox boot loader (`arm64`, as a command, on that stack).
+- **Runs across four decades of hardware and OSes**: 16-bit real-mode MS-DOS (8086, 640 KB RAM) and 32-bit DOS (DJGPP), Windows 1.0 to 11 and NT 3.1+, early Linux (kernel 1.0, Slackware, Debian), FreeBSD/NetBSD/OpenBSD/DragonFly/MidnightBSD, commercial Unix (SunOS 4, Solaris, illumos, AIX, HP-UX, SVR4), NeXTSTEP/OPENSTEP, OS/2 Warp, BeOS, Haiku, QNX, Minix 2 & 3, Plan 9 (9front), GNU/Hurd, macOS (PowerPC Tiger to Apple silicon), bare-metal UEFI (`x86-64` and `arm64`, with its own built-in TCP/IP stack when firmware lacks one), and the barebox and GRUB boot loaders (as a command, on that stack).
 - **Full agentic coding workflow**: local tools for reading, creating and editing files (`read_file`, `write_file`, `edit_file`), directory listing (`list_dir`), shell command execution (`run_command`), project rules (`GORK.md`), `SKILL.md` skills (compatible with Claude Code and Cline), and **Model Context Protocol (MCP)** servers over stdio and streamable HTTP.
 - **Interactive curses TUI & batch CLI**: full-screen terminal chat interface with tool approval prompts, directory trust, context window tracking and auto-compaction (`/compact`), or scriptable one-shot batch mode.
 - **Anthropic, OpenAI & local LLMs**: native `/v1/messages` and `/v1/chat/completions` (`protocol = openai`) support for Claude, OpenAI, Ollama, llama.cpp, LM Studio and vLLM over TCP/IP or IPX/SPX.
@@ -95,6 +95,7 @@ of `testing/looptest.py`.
 | DOS, 32-bit (experimental; the `dos` package) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | MS-DOS 2 and Windows/386 2.11: use the 16-bit build (DJGPP needs DOS 3) |
 | UEFI (experimental; the `uefi` package) | UEFI 2.70 on x86-64, no operating system: `gorkx64.efi` from the UEFI shell, on the firmware's TCP/IP; EDK2's OVMF 2025.02, in QEMU. Batch mode only | arm64 (`gorkaa64.efi`), on EDK2's AAVMF in QEMU; U-Boot 2025.01 (arm64, in QEMU) and firmware with no TCP/IP of its own, on gork's own | Real PC firmware: untested |
 | barebox (experimental; the `barebox-arm64` package) | barebox 2026.09 on arm64, as a `gork` command built in, on gork's own TCP/IP: QEMU's `virt` machine. Batch mode only | | Real boards: untested |
+| GRUB (experimental; the `grub-x64` package) | GRUB 2.14 on x86-64 UEFI, as a `gork` command (a module), on gork's own TCP/IP; files written in RAM: OVMF 2025.02, in QEMU. Batch mode only | | Real PCs, and distributions' own GRUBs: untested |
 | DOS, 16-bit (experimental; the `dos16` package) | MS-DOS 2.11 (1984, Compaq's), real mode, built with Open Watcom for the 8086 | MS-DOS 3.30, 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04, 2.11/386, 3.0 and 3.1, also in standard mode | An emulated 8086 and 286 (DOSBox-X), no real one. Small limits (below) |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64
@@ -125,7 +126,9 @@ binaries for FreeBSD 15.1, NetBSD 11.0 and OpenBSD 7.9 on amd64 and arm64
 release), a macOS installer, `gork-<version>-uefi.zip` with `gorkx64.efi`
 and `gorkaa64.efi` for the UEFI shell ([docs/build/uefi.md](docs/build/uefi.md)),
 `gork-<version>-barebox-arm64.zip`, barebox for QEMU's arm64 `virt` machine
-with gork in it ([docs/build/barebox.md](docs/build/barebox.md)), and the DOS and
+with gork in it ([docs/build/barebox.md](docs/build/barebox.md)),
+`gork-<version>-grub-x64.zip`, GRUB for x86-64 UEFI with gork in it and
+the module alone ([docs/build/grub.md](docs/build/grub.md)), and the DOS and
 Windows zips below.
 Everything else builds from the source tarball.
 
@@ -368,7 +371,7 @@ gork reads `~/.gork.conf`, or the file `GORK_CONFIG` names. One
 or a malformed line stops gork with the line number rather than being
 skipped. Sample files are in [docs/examples](docs/examples/).
 
-The DOS, Windows, UEFI and barebox builds use other names, as a name with a
+The DOS, Windows, UEFI, barebox and GRUB builds use other names, as a name with a
 leading dot is awkward or impossible to create there. Wherever this README
 says `~/.gork.conf`, `~/.gork` or `.gork`, read:
 
@@ -378,7 +381,8 @@ says `~/.gork.conf`, `~/.gork` or `.gork`, read:
 | gork's directory (`trusted`, `skills`) | `~/.gork` | `_gork` beside `gork.exe` (`gork.efi`) | `%USERPROFILE%\_gork` (Windows 9x: beside `gork.exe`) |
 | Project skills, in the working directory | `.gork/skills` | `_gork\skills` | `_gork\skills` |
 
-On barebox they are `gork.cnf` and `_gork` in `/env` (or `$HOME`).
+On barebox they are `gork.cnf` and `_gork` in `/env` (or `$HOME`), on GRUB
+in `$prefix`, beside `grub.cfg` (or `$HOME`).
 
 If `HOME` is set, DOS, UEFI and Windows look there instead (it is, for
 one, in Git Bash; on UEFI it is a shell variable). gork's own messages name
