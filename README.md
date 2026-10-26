@@ -335,8 +335,14 @@ same: tools, skills, MCP servers and compacting. What differs:
   that know fewer levels may refuse `xhigh` or `max`.
 - Replies are not streamed, and reasoning text a server returns beside the
   answer is dropped.
+- `path` is the whole request path, not a base URL: where another client
+  is given `https://server/v1` and adds `/chat/completions` itself, gork
+  takes `path = /v1/chat/completions`, which is the default. `path = /v1`
+  gets a 404.
 - A hosted service is HTTPS, so it needs a relay that forwards to it, as
-  for Anthropic.
+  for Anthropic. The relay passes `Host` on as gork wrote it, so `host`
+  must name that service, not the relay; left out, it is
+  `api.anthropic.com`, and the service most likely answers 404.
 
 <a id="without-tcpip-spx"></a>
 ### Without TCP/IP: IPX/SPX
