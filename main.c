@@ -1593,6 +1593,9 @@ static const struct tool TOOLS[] = {
 static int tool_enabled(const struct tool *t)
 {
     if (t->fn == tool_skill) return nskills > 0;
+#ifdef GORK_NO_RUN
+    if (t->fn == tool_run_command) return 0;
+#endif
     return t->fn != tool_run_command || interactive_mode ||
            getenv("GORK_ALLOW_RUN") != NULL;
 }

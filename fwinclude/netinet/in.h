@@ -14,8 +14,13 @@ struct sockaddr_in {
 #define INADDR_ANY  ((in_addr_t) 0)
 #define INADDR_NONE ((in_addr_t) 0xffffffff)
 #define IPPROTO_TCP 6
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__   /* the 68k Mac: as is */
+#define htons(x) ((uint16_t) (x))
+#define htonl(x) ((uint32_t) (x))
+#else
 #define htons(x) ((uint16_t) ((((x) & 0xff) << 8) | (((x) >> 8) & 0xff)))
-#define ntohs(x) htons(x)
 #define htonl(x) __builtin_bswap32(x)
-#define ntohl(x) __builtin_bswap32(x)
+#endif
+#define ntohs(x) htons(x)
+#define ntohl(x) htonl(x)
 #endif

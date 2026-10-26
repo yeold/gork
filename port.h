@@ -47,6 +47,17 @@
 #define GORK_NO_TUI
 #endif
 
+/* The classic Mac OS (System 7, on a 68k Mac): the build passes
+   -DGORK_MAC, the C library is barebox's (barebox/libc.c), on mac/glue.c,
+   and the network MacTCP's.  One program at a time and batch mode only,
+   typed in a console window; and no shell, so no run_command.  Paths are
+   given as /Volume/Folder/file, Volume:Folder:file to the Mac. */
+#ifdef GORK_MAC
+#define GORK_NO_FORK
+#define GORK_NO_TUI
+#define GORK_NO_RUN
+#endif
+
 #if defined(__MSDOS__) || defined(_WIN32)
 #define GORK_NO_FORK
 #endif
