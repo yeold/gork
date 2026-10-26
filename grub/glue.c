@@ -1232,7 +1232,15 @@ card_seed (void)
 {
   grub_uint32_t lo, hi;
 
+#ifdef __aarch64__
+  grub_uint64_t t;
+
+  asm volatile ("mrs %0, cntvct_el0" : "=r" (t));
+  lo = t;
+  hi = t >> 32;
+#else
   asm volatile ("rdtsc" : "=a" (lo), "=d" (hi));
+#endif
   return lo ^ hi ^ (unsigned) grub_get_time_ms ();
 }
 
@@ -1265,6 +1273,26 @@ static int status;
 #define GORK_STACK (1024 * 1024)
 static char *gork_stack;
 
+#ifdef __aarch64__
+static int __attribute__ ((noinline))
+run_on_own_stack (int argc, char **argv)
+{
+  register long r asm ("x0") = argc;
+  register char **v asm ("x1") = argv;
+  register char *top asm ("x2") = gork_stack + GORK_STACK;
+
+  asm volatile ("mov x19, sp\n\t"	/* callee-saved: GRUB's stack */
+		"mov sp, x2\n\t"
+		"bl gork_start\n\t"
+		"mov sp, x19"
+		: "+r" (r), "+r" (v), "+r" (top)
+		:
+		: "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11",
+		  "x12", "x13", "x14", "x15", "x16", "x17", "x18", "x19",
+		  "x30", "memory", "cc");
+  return r;
+}
+#else
 static int __attribute__ ((noinline))
 run_on_own_stack (int argc, char **argv)
 {
@@ -1283,6 +1311,7 @@ run_on_own_stack (int argc, char **argv)
 		: "rbx", "rcx", "rdx", "r8", "r9", "r10", "r11", "memory", "cc");
   return r;
 }
+#endif
 
 void
 bb_exit (int s)

@@ -3,22 +3,39 @@
 
 Usage:  python3 testing/grubtest.py PACKAGE FAKEAPI
 
-PACKAGE is gork-<version>-grub-x64.zip, FAKEAPI testing/fakeapi.c built
-for this machine.  GRUB (EFI/BOOT/BOOTX64.EFI, with gork in it) boots from
-a FAT disk under OVMF in a q35 machine, with a virtio network card on
-QEMU's user network, which takes it to the fake API on 10.0.2.2.  OVMF
-runs without its own network stack (no random number generator), so the
-card is GRUB's and gork's alone.  The checks are typed at GRUB's prompt
+PACKAGE is gork-<version>-grub-x64.zip or -grub-aa64.zip, FAKEAPI
+testing/fakeapi.c built for this machine.  GRUB (EFI/BOOT/BOOTX64.EFI or
+BOOTAA64.EFI, with gork in it) boots from a FAT disk under OVMF in a q35
+machine, or AAVMF in a virt one, with a virtio network card on QEMU's user
+network, which takes it to the fake API on 10.0.2.2.  The firmware runs
+without its own network stack (no random number generator: no virtio one,
+and an arm64 processor from before RNDR), so the card is GRUB's and
+gork's alone.  The checks are typed at GRUB's prompt
 on the serial console; the files they leave are in (gork), in RAM, and
 looked at with GRUB's own `cat`.  Prints "ok:" or "FAIL:" per check and
-exits 1 if any failed.  Needs qemu-system-x86_64, OVMF, mtools and
-dosfstools.
+exits 1 if any failed.  Needs qemu-system-x86_64 and OVMF, or
+qemu-system-aarch64 and qemu-efi-aarch64, mtools and dosfstools.
 """
 import json, os, re, select, shutil, subprocess, sys, tempfile, time, zipfile
 
 PORT = 8099
 PROMPT = b"grub> "
-OVMF = "/usr/share/OVMF/OVMF_%s_4M.fd"
+NOPXE = ["-fw_cfg", "name=opt/org.tianocore/IPv4PXESupport,string=n",
+         "-fw_cfg", "name=opt/org.tianocore/IPv6PXESupport,string=n"]
+# the boot file, the firmware's code and variables, and the machine; on
+# arm64 the card without iPXE's ROM (x86's), as AAVMF has a driver for it
+MACHINES = {
+    "BOOTX64.EFI": ("/usr/share/OVMF/OVMF_%s_4M.fd",
+                    ["qemu-system-x86_64", "-machine", "q35", "-m", "512",
+                     "-device", "ide-hd,drive=esp,bus=ide.0,bootindex=0",
+                     "-nic", "user,model=virtio-net-pci"]),
+    "BOOTAA64.EFI": ("/usr/share/AAVMF/AAVMF_%s.fd",
+                     ["qemu-system-aarch64", "-M", "virt", "-cpu", "cortex-a72",
+                      "-m", "1024",
+                      "-device", "virtio-blk-pci,drive=esp,bootindex=0",
+                      "-netdev", "user,id=n",
+                      "-device", "virtio-net-pci,netdev=n,romfile="]),
+}
 
 
 class Console:
@@ -68,7 +85,9 @@ def main():
     esp, fdir = os.path.join(t, "esp"), os.path.join(t, "f")
     os.makedirs(fdir)
     with zipfile.ZipFile(pkg) as z:
-        z.extract("EFI/BOOT/BOOTX64.EFI", esp)
+        boot = [n for n in z.namelist() if n.startswith("EFI/BOOT/BOOT")][0]
+        z.extract(boot, esp)
+    fw, machine = MACHINES[os.path.basename(boot)]
     # the settings beside grub.cfg, in $prefix; and a file to read
     with open(os.path.join(esp, "EFI", "BOOT", "gork.cnf"), "w") as f:
         f.write("relay = 10.0.2.2:%d\napi_key = sk-fake\ntimeout = 20\n"
@@ -78,19 +97,16 @@ def main():
        stdout=subprocess.DEVNULL)
     sh("mcopy", "-i", img, "-s", "-Q", os.path.join(esp, "EFI"), "::/")
     vars_fd = os.path.join(t, "vars.fd")
-    shutil.copy(OVMF % "VARS", vars_fd)
+    shutil.copy(fw % "VARS", vars_fd)
 
     fp = subprocess.Popen([fake, str(PORT)], cwd=fdir, stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL)
-    c = Console(["qemu-system-x86_64", "-machine", "q35", "-m", "512",
+    c = Console(machine + [
                  "-display", "none", "-serial", "stdio", "-monitor", "none",
-                 "-drive", "if=pflash,format=raw,readonly=on,file=" + OVMF % "CODE",
+                 "-drive", "if=pflash,format=raw,readonly=on,file=" + fw % "CODE",
                  "-drive", "if=pflash,format=raw,file=" + vars_fd,
-                 "-drive", "if=none,id=esp,format=raw,file=" + img,
-                 "-device", "ide-hd,drive=esp,bus=ide.0,bootindex=0",
-                 "-fw_cfg", "name=opt/org.tianocore/IPv4PXESupport,string=n",
-                 "-fw_cfg", "name=opt/org.tianocore/IPv6PXESupport,string=n",
-                 "-nic", "user,model=virtio-net-pci"])
+                 "-drive", "if=none,id=esp,format=raw,file=" + img]
+                + NOPXE)
     part = {}
     try:
         c.expect(PROMPT, 180)

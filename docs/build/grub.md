@@ -4,8 +4,10 @@
 file systems it reads but does not write, and a network stack of its own.
 gork runs in it as a command, `gork`, a module of GRUB's, in batch mode,
 on gork's own TCP/IP (`ip.c`, the one the UEFI and barebox ports use) over
-GRUB's network card drivers. The release has GRUB 2.14 for x86-64 UEFI
-with `gork` built in, and the module alone: `gork-<version>-grub-x64.zip`.
+GRUB's network card drivers. The release has GRUB 2.14 for UEFI with
+`gork` built in, and the module alone: `gork-<version>-grub-x64.zip` for
+x86-64 PCs (`BOOTX64.EFI`) and `gork-<version>-grub-aa64.zip` for arm64
+(`BOOTAA64.EFI`).
 
 ## Run, in QEMU
 
@@ -23,6 +25,19 @@ qemu-system-x86_64 -machine q35 -m 512 -display none -serial stdio \
     -drive if=none,id=esp,format=raw,file=esp.img \
     -device ide-hd,drive=esp,bus=ide.0,bootindex=0 \
     -nic user,model=virtio-net-pci
+```
+
+On arm64, the same disk with the `aa64` package, in QEMU's `virt` machine
+under AAVMF:
+
+```sh
+cp /usr/share/AAVMF/AAVMF_VARS.fd vars.fd
+qemu-system-aarch64 -M virt -cpu cortex-a72 -m 1024 -display none -serial stdio \
+    -drive if=pflash,format=raw,readonly=on,file=/usr/share/AAVMF/AAVMF_CODE.fd \
+    -drive if=pflash,format=raw,file=vars.fd \
+    -drive if=none,id=esp,format=raw,file=esp.img \
+    -device virtio-blk-pci,drive=esp,bootindex=0 \
+    -netdev user,id=n -device virtio-net-pci,netdev=n,romfile=
 ```
 
 With no `grub.cfg`, GRUB stops at its prompt:
@@ -75,27 +90,29 @@ No TUI and no MCP: one program at a time, as on DOS, UEFI and barebox.
 
 ## In a GRUB of one's own
 
-`gork.mod` is for GRUB 2.14 on x86-64 UEFI (`x86_64-efi`), as GNU
-releases it. Put it with GRUB's other modules (`$prefix/x86_64-efi/`) and
+`gork.mod` is for GRUB 2.14 on UEFI (`x86_64-efi`, or `arm64-efi` in the
+`aa64` package), as GNU releases it. Put it with GRUB's other modules
+(`$prefix/x86_64-efi/` or `$prefix/arm64-efi/`) and
 `insmod gork`; GRUB loads `net`, `normal`, `datetime` and `setjmp` with
 it. It needs a network card driver (`efinet`) loaded too. Distributions
 patch their GRUB, and under Secure Boot their GRUB loads no module
 that is not signed into it, so it may refuse gork.mod: the
-`BOOTX64.EFI` of the package is the sure route.
+`BOOTX64.EFI` or `BOOTAA64.EFI` of the package is the sure route.
 
 ## Build
 
 ```sh
-sh grubbuild.sh [OUT] [WORK]
+sh grubbuild.sh [OUT] [WORK] [x64|aa64]
 ```
 
-On x86-64. Needs gcc and binutils, make, bison, flex, gawk, autoconf,
+On x86-64; `aa64` with the `aarch64-linux-gnu-` gcc and binutils too
+(`CROSS` names another prefix). Needs gcc and binutils, make, bison, flex, gawk, autoconf,
 autoconf-archive, automake, autopoint (gettext), python3, xz and zip. It
 fetches GRUB's source (checksum pinned), builds gork's half, adds the
 module to GRUB's `grub-core/Makefile.core.def`, builds GRUB for
-`x86_64-efi` and makes `BOOTX64.EFI` with `grub-mkimage`.
-`testing/grubtest.py` boots it in QEMU under OVMF and runs the checks
-against `testing/fakeapi.c`.
+`x86_64-efi` or `arm64-efi` and makes `BOOTX64.EFI` or `BOOTAA64.EFI`
+with `grub-mkimage`. `testing/grubtest.py` boots it in QEMU under OVMF or
+AAVMF and runs the checks against `testing/fakeapi.c`.
 
 ## How it works
 

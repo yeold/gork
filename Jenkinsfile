@@ -9,8 +9,9 @@
 // gork for x86-64 and arm64 UEFI (uefibuild.sh), run in the UEFI
 // shell under OVMF, AAVMF and U-Boot (testing/uefitest.py); barebox
 // with a gork command (bareboxbuild.sh), at its prompt in QEMU
-// (testing/bareboxtest.py); and GRUB with a gork module (grubbuild.sh),
-// at its prompt under OVMF (testing/grubtest.py).  Each in a throwaway
+// (testing/bareboxtest.py); and GRUB for x86-64 and arm64 UEFI with a
+// gork module (grubbuild.sh), at its prompt under OVMF and AAVMF
+// (testing/grubtest.py).  Each in a throwaway
 // container via plain `docker run` (no Docker Pipeline plugin needed).
 // Containers build as root in their own /tmp and only copy finished
 // packages into out/, chowned back to the Jenkins user.
@@ -167,23 +168,25 @@ pipeline {
                         '''
                     }
                 }
-                // GRUB for x86-64 UEFI with the gork module in it, built
-                // from GRUB's source, and its checks typed at GRUB's prompt
+                // GRUB for x86-64 and arm64 UEFI with the gork module in it,
+                // built from GRUB's source, and its checks typed at GRUB's
+                // prompt
                 stage('grub') {
                     steps {
                         sh '''
                             GR="$HOME/.cache/gork-grub" && mkdir -p "$GR"
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$GR":/work debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc libc6-dev binutils make bison flex gawk autoconf autoconf-archive automake autopoint gettext python3 pkg-config xz-utils patch zip curl ca-certificates >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc libc6-dev binutils make bison flex gawk autoconf autoconf-archive automake autopoint gettext python3 pkg-config xz-utils patch zip curl ca-certificates gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh grubbuild.sh /out /work && chown -R '"$(id -u):$(id -g)"' /out /work'
-                            # and boot it under OVMF in QEMU against the fake API
+                                sh grubbuild.sh /out /work x64 && sh grubbuild.sh /out /work aa64 && chown -R '"$(id -u):$(id -g)"' /out /work'
+                            # and boot them under OVMF and AAVMF in QEMU against the fake API
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 ovmf mtools dosfstools python3 gcc libc6-dev >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 ovmf qemu-system-arm qemu-efi-aarch64 mtools dosfstools python3 gcc libc6-dev >/dev/null
                                 gcc -o /tmp/fakeapi /src/testing/fakeapi.c
-                                cd /src && python3 testing/grubtest.py /out/gork-*-grub-x64.zip /tmp/fakeapi'
+                                cd /src && python3 testing/grubtest.py /out/gork-*-grub-x64.zip /tmp/fakeapi
+                                python3 testing/grubtest.py /out/gork-*-grub-aa64.zip /tmp/fakeapi'
                         '''
                     }
                 }

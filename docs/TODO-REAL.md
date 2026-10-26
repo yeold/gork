@@ -74,7 +74,7 @@ the LAN, reached through the emulator's NAT.
 |---|---|---|
 | `gorkx64.efi`, batch mode | OVMF 2025.02 in QEMU, virtio network card, EDK2's UEFI shell 2.2; fake API across QEMU's user network | A PC's own firmware: its network stack and card driver, its shell or one booted from a USB stick, its clock |
 | `gorkaa64.efi`, batch mode | AAVMF 2025.02 in QEMU's `virt` machine (`-cpu max`), the same otherwise | An arm64 machine with UEFI (a server, an Ampere or Snapdragon laptop, a Raspberry Pi with its UEFI firmware) |
-| GRUB 2.14 with `gork` (`BOOTX64.EFI`, `gork.mod`) | OVMF 2025.02 in QEMU, virtio network card, efinet; fake API across QEMU's user network | A PC's firmware and card; a distribution's GRUB, with `insmod gork` |
+| GRUB 2.14 with `gork` (`BOOTX64.EFI`, `BOOTAA64.EFI`, `gork.mod`) | OVMF and AAVMF 2025.02 in QEMU, virtio network card, efinet; fake API across QEMU's user network | A PC's or arm64 board's firmware and card; a distribution's GRUB, with `insmod gork` |
 | gork's own TCP/IP (`ip.c`), both | U-Boot 2025.01 (`qemu_arm64`) and OVMF without its network stack, in QEMU; QEMU's user network, so no loss, no delay and a DHCP server of QEMU's | A board booting U-Boot (a Raspberry Pi, a RISC-V or Rockchip board) on a real network: other DHCP servers, lost packets, a relay a few hops away |
 
 ## gork-relay
