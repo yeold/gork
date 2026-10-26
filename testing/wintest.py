@@ -413,7 +413,7 @@ def check_tui_save_load():
             if pid == 0:
                 os.chdir(tmp)
                 os.execvpe(CMD[0], CMD, env)
-            out, i, mark = b"", 0, 0
+            out, i, mark, sent_at, again = b"", 0, 0, 0.0, 0
             end = time.time() + 120
             while time.time() < end and i < len(steps):
                 if select.select([fd], [], [], 0.5)[0]:
@@ -427,8 +427,16 @@ def check_tui_save_load():
                 if steps[i][0] in plain(out[mark:]):
                     time.sleep(0.5)
                     os.write(fd, steps[i][1])
-                    mark = len(out)
+                    mark, sent_at, again = len(out), time.time(), 0
                     i += 1
+                elif (i > 0 and again < 3 and time.time() - sent_at > 5 and
+                      (lambda s: s == b"" or s.endswith(steps[i - 1][1].strip()))(
+                          re.sub(rb"\s|\^J|\^M", b"", plain(out[mark:])))):
+                    # Nothing came of the keys but the terminal's echo, if
+                    # that: typed before Wine read the console, which
+                    # drops them.  Type them again.
+                    os.write(fd, steps[i - 1][1])
+                    mark, sent_at, again = len(out), time.time(), again + 1
             if i < len(steps):
                 os.kill(pid, 9)
             os.waitpid(pid, 0)

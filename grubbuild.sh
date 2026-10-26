@@ -23,12 +23,15 @@ WORK=$(cd "$WORK" && pwd)
 [ "$(uname -m)" = x86_64 ] || { echo "grubbuild.sh: builds on x86-64 only" >&2; exit 2; }
 
 f=$WORK/grub-$GV.tar.xz
-[ -f "$f" ] || curl -fsSL -o "$f" "https://ftp.gnu.org/gnu/grub/grub-$GV.tar.xz"
+[ -f "$f" ] || { curl -fsSL -o "$f.$$" "https://ftp.gnu.org/gnu/grub/grub-$GV.tar.xz" && mv "$f.$$" "$f"; }
 echo "bc8d3c73535b8838d8c8e2654d73edc4e6ae8c8acdb45d5df5dc9a1547446d43  $f" | sha256sum -c - >/dev/null
-src=$WORK/grub-$GV
-rm -rf "$src" "$WORK/gork" "$WORK/build"
-tar xJf "$f" -C "$WORK"
-mkdir -p "$WORK/gork" "$WORK/build"
+# the build in a directory of its own: two builds may share WORK
+B=$(mktemp -d "$WORK/build.XXXXXX")
+# a few hundred MB: gone at the end, failed or not; the download stays
+[ -n "${KEEP:-}" ] || trap 'rm -rf "$B"' EXIT
+src=$B/grub-$GV
+tar xJf "$f" -C "$B"
+mkdir -p "$B/gork" "$B/build"
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
 gver=$(sh version.sh)          # what --version says
@@ -37,29 +40,29 @@ gver=$(sh version.sh)          # what --version says
 # be loaded anywhere) and no red zone (the firmware's interrupts use the
 # same stack), but SSE allowed (cJSON's numbers are doubles; UEFI turns
 # it on), and fwinclude/ for headers.
-python3 barebox/rename.py "gcc -E" "$WORK/gork/rename.h"
+python3 barebox/rename.py "gcc -E" "$B/gork/rename.h"
 CFLAGS="-ffreestanding -fno-builtin -nostdinc -isystem $(gcc -print-file-name=include)
-    -Ifwinclude -include $WORK/gork/rename.h -DGORK_GRUB
+    -Ifwinclude -include $B/gork/rename.h -DGORK_GRUB
     -DGORK_VERSION=\"$gver\" -m64 -mcmodel=large -mno-red-zone -fno-pic
     -fno-PIE -fno-stack-protector -fno-common -fno-strict-aliasing
     -fno-asynchronous-unwind-tables -fno-unwind-tables -fcf-protection=none
     -fno-delete-null-pointer-checks -fno-math-errno -Os -Wall -W"
 for f in main relay notui cJSON/cJSON; do
-    gcc $CFLAGS -std=gnu89 -pedantic -c $f.c -o "$WORK/gork/$(basename $f).o"
+    gcc $CFLAGS -std=gnu89 -pedantic -c $f.c -o "$B/gork/$(basename $f).o"
 done
 for f in ip fwlibc barebox/libc; do
-    gcc $CFLAGS -std=gnu99 -c $f.c -o "$WORK/gork/$(basename $f).o"
+    gcc $CFLAGS -std=gnu99 -c $f.c -o "$B/gork/$(basename $f).o"
 done
 # one object, its variables together
-ld -r -T barebox/gork.lds -o "$WORK/gork/gork.o" \
-    "$WORK/gork"/main.o "$WORK/gork"/relay.o "$WORK/gork"/notui.o \
-    "$WORK/gork"/cJSON.o "$WORK/gork"/ip.o "$WORK/gork"/fwlibc.o \
-    "$WORK/gork"/libc.o
+ld -r -T barebox/gork.lds -o "$B/gork/gork.o" \
+    "$B/gork"/main.o "$B/gork"/relay.o "$B/gork"/notui.o \
+    "$B/gork"/cJSON.o "$B/gork"/ip.o "$B/gork"/fwlibc.o \
+    "$B/gork"/libc.o
 
 # GRUB's half: the command as a module of GRUB's, with gork.o linked in
 mkdir -p "$src/grub-core/commands/gork"
 cp grub/glue.c "$src/grub-core/commands/gork/"
-cp "$WORK/gork/gork.o" "$src/grub-core/commands/gork/"
+cp "$B/gork/gork.o" "$src/grub-core/commands/gork/"
 cat >>"$src/grub-core/Makefile.core.def" <<EOF
 
 module = {
@@ -70,14 +73,14 @@ module = {
 };
 EOF
 (cd "$src" && ./autogen.sh >/dev/null)
-(cd "$WORK/build" && "$src/configure" -q --target=x86_64 --with-platform=efi \
+(cd "$B/build" && "$src/configure" -q --target=x86_64 --with-platform=efi \
     --disable-werror >/dev/null && make -s -j"$(nproc)" >/dev/null)
 
 # BOOTX64.EFI: GRUB with gork, the network and the usual file systems in it
-d=$WORK/pack
-rm -rf "$d" && mkdir -p "$d/EFI/BOOT"
-g=$WORK/build/grub-core
-"$WORK/build/grub-mkimage" -d "$g" -O x86_64-efi -p /EFI/BOOT \
+d=$B/pack
+mkdir -p "$d/EFI/BOOT"
+g=$B/build/grub-core
+"$B/build/grub-mkimage" -d "$g" -O x86_64-efi -p /EFI/BOOT \
     -o "$d/EFI/BOOT/BOOTX64.EFI" \
     gork normal configfile echo cat ls test true sleep reboot halt \
     part_gpt part_msdos fat ext2 iso9660 search search_fs_file \
@@ -86,6 +89,4 @@ cp "$g/gork.mod" README.md LICENSE "$d/"
 cp docs/build/grub.md "$d/BUILD.md"
 rm -f "$OUT/gork-$ver-grub-x64.zip"
 (cd "$d" && zip -qr "$OUT/gork-$ver-grub-x64.zip" .)
-# the build tree is a few hundred MB: only the download stays in WORK
-[ -n "${KEEP:-}" ] || rm -rf "$src" "$WORK/gork" "$WORK/build" "$d"
 echo "$OUT/gork-$ver-grub-x64.zip"
