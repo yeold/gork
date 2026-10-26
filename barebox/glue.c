@@ -38,6 +38,7 @@ int card_recv(void *buf, size_t size);
 void card_pause(void);
 void card_break(void);
 unsigned card_seed(void);
+unsigned card_mtu(void);
 const char *card_ip_hint(void);
 
 int  gork_start(int argc, char **argv);    /* libc.c: then main() */
@@ -135,6 +136,8 @@ void bb_closedir(void *d) { closedir(d); }
 
 const char *bb_getenv(const char *name) { return getenv(name); }
 int bb_setenv(const char *name, const char *value) { return err(setenv(name, value)); }
+const char *bb_home(void) { return "/env"; }
+const char *bb_tmpdir(void) { return "/tmp"; }
 
 /* ------------------------------------------------------------------ */
 /* the console, time, the shell                                       */
@@ -323,6 +326,7 @@ void card_break(void)
 }
 
 unsigned card_seed(void) { return random32() ^ (unsigned)get_time_ns(); }
+unsigned card_mtu(void) { return 1500; }
 
 const char *card_ip_hint(void)
 {

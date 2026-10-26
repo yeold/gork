@@ -80,6 +80,8 @@ void card_break(void) { efi_check_break(); }
 
 /* Each run of gork begins with clock() at 0, and a port used again too
    soon is refused by the other end: the time of day and the CPU's counter. */
+unsigned card_mtu(void) { return 1500; }
+
 unsigned card_seed(void)
 {
     EFI_TIME t;

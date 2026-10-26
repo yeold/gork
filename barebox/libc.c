@@ -579,25 +579,41 @@ int chdir(const char *path)
     return r < 0 ? (int) fail(r) : 0;
 }
 
+/* the device of a path, as GRUB names one: "(hd0,gpt1)" in front, or
+   nothing (barebox's paths have none): its length */
+static size_t device_len(const char *p)
+{
+    const char *e;
+
+    if (p[0] != '(' || (e = strchr(p, ')')) == NULL) return 0;
+    return (size_t) (e + 1 - p);
+}
+
 /* path made absolute against the current directory, with "." and ".."
-   taken out, into out[PATH_MAX]: 0, or -1 with errno */
+   taken out, into out[PATH_MAX]: 0, or -1 with errno.  A path that starts
+   with a device is absolute; one that starts with "/" is on the current
+   directory's device. */
 static int full_path(const char *path, char *out)
 {
     char   tmp[PATH_MAX];
     char  *seg[PATH_MAX / 2];
-    size_t n = 0, k;
+    size_t n = 0, k, dev;
     char  *p, *s;
 
-    if (path[0] == '/') {
+    if (device_len(path) > 0) {
         if (strlen(path) >= sizeof tmp) goto toolong;
         strcpy(tmp, path);
     } else {
         if (getcwd(tmp, sizeof tmp) == NULL) return -1;
+        if (path[0] == '/') tmp[device_len(tmp)] = '\0';
         if (strlen(tmp) + 1 + strlen(path) >= sizeof tmp) goto toolong;
-        strcat(tmp, "/");
+        if (path[0] != '/') strcat(tmp, "/");
         strcat(tmp, path);
     }
-    for (p = tmp; (s = strtok(p, "/")) != NULL; p = NULL) {
+    dev = device_len(tmp);
+    memcpy(out, tmp, dev);
+    out[dev] = '\0';
+    for (p = tmp + dev; (s = strtok(p, "/")) != NULL; p = NULL) {
         if (strcmp(s, ".") == 0) continue;
         if (strcmp(s, "..") == 0) {
             if (n > 0) n--;
@@ -605,12 +621,11 @@ static int full_path(const char *path, char *out)
         }
         seg[n++] = s;
     }
-    out[0] = '\0';
     for (k = 0; k < n; k++) {
         strcat(out, "/");
         strcat(out, seg[k]);
     }
-    if (n == 0) strcpy(out, "/");
+    if (n == 0) strcat(out, "/");
     return 0;
 toolong:
     errno = ENAMETOOLONG;
@@ -737,7 +752,7 @@ int rename(const char *from, const char *to)
     return r < 0 ? (int) fail(r) : 0;
 }
 
-/* In /tmp, barebox's RAM file system. */
+/* In a directory in RAM: barebox's /tmp, GRUB's (gork)/. */
 char *tmpnam(char *s)
 {
     static char  name[L_tmpnam];
@@ -746,7 +761,7 @@ char *tmpnam(char *s)
 
     if (s == NULL) s = name;
     do {
-        sprintf(s, "/tmp/gork%u.tmp", n++);
+        sprintf(s, "%s/gork%u.tmp", bb_tmpdir(), n++);
     } while (stat(s, &st) == 0 && n < 10000);
     return s;
 }
@@ -794,13 +809,13 @@ int closedir(DIR *d)
 /* the environment: barebox's variables                               */
 /* ------------------------------------------------------------------ */
 
-/* HOME is /env unless set: barebox's environment, which `saveenv` keeps,
-   so ~/.gork.conf is /env/.gork.conf. */
+/* HOME is the glue's unless set: barebox's /env, which `saveenv` keeps,
+   or GRUB's $prefix, where grub.cfg is. */
 char *getenv(const char *name)
 {
     const char *v = bb_getenv(name);
 
-    if ((v == NULL || *v == '\0') && strcmp(name, "HOME") == 0) v = "/env";
+    if ((v == NULL || *v == '\0') && strcmp(name, "HOME") == 0) v = bb_home();
     return v != NULL && *v != '\0' ? (char *) v : NULL;
 }
 

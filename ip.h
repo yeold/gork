@@ -26,6 +26,9 @@ int  card_recv(void *buf, size_t size);         /* a frame's length, or 0 */
 void card_pause(void);          /* about half a millisecond, between polls */
 void card_break(void);          /* the user's interrupt, if they asked */
 unsigned card_seed(void);       /* something different at each start */
+unsigned card_mtu(void);        /* the largest IP packet the card sends
+                                   whole: 1500 on Ethernet, less where the
+                                   driver cuts frames shorter */
 const char *card_ip_hint(void); /* how to set GORK_IP, as a command */
 
 #endif

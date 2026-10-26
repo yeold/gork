@@ -41,6 +41,8 @@ void      bb_closedir(void *d);
 /* the environment: barebox's variables */
 const char *bb_getenv(const char *name);
 int       bb_setenv(const char *name, const char *value);
+const char *bb_home(void);              /* HOME, when it is not set */
+const char *bb_tmpdir(void);            /* a directory in RAM, for tmpnam */
 
 /* the console */
 void      bb_console_write(const char *p, size_t n);

@@ -696,7 +696,7 @@ static void tcp_send(uint32_t seq, unsigned flags, size_t off, size_t len)
     if (flags & T_SYN) {                /* our MSS */
         t[20] = 2;
         t[21] = 4;
-        put16(t + 22, 1460);
+        put16(t + 22, card_mtu() - 40);
     }
     if (len > 0) memcpy(t + hl, tc.sbuf + off, len);
     put16(t + 16, l4_sum(my_ip, tc.rip, 6, t, hl + len));
@@ -807,7 +807,7 @@ static void tcp_in(const uint8_t *ip, const uint8_t *t, size_t n)
             if (t[i + 1] < 2) break;
             i += t[i + 1];
         }
-        if (tc.mss > 1460) tc.mss = 1460;
+        if (tc.mss > card_mtu() - 40) tc.mss = card_mtu() - 40;
         if (tc.mss < 64) tc.mss = 64;
         tc.state = OPEN;
         tc.rto_at = 0;
