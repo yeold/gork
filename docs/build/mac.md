@@ -75,6 +75,8 @@ Retro68 toolchain built already instead. Needs git, gcc and g++, make,
 cmake, bison, flex, texinfo, ruby, the GMP, MPFR, MPC, Boost and zlib
 headers (for Retro68), python3 and zip.
 
+Jenkins builds it, but does not release it until it has run on a Mac.
+
 ## How it works
 
 As for barebox and GRUB: gork's half is `main.c`, `relay.c`, cJSON,

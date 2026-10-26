@@ -9,12 +9,13 @@
 // gork for x86-64 and arm64 UEFI (uefibuild.sh), run in the UEFI
 // shell under OVMF, AAVMF and U-Boot (testing/uefitest.py); barebox
 // with a gork command (bareboxbuild.sh), at its prompt in QEMU
-// (testing/bareboxtest.py); and GRUB for x86-64 and arm64 UEFI with a
-// gork module (grubbuild.sh), at its prompt under OVMF and AAVMF
-// (testing/grubtest.py).  Each in a throwaway
-// container via plain `docker run` (no Docker Pipeline plugin needed).
-// Containers build as root in their own /tmp and only copy finished
-// packages into out/, chowned back to the Jenkins user.
+// (testing/bareboxtest.py); GRUB for x86-64 and arm64 UEFI with a gork
+// module (grubbuild.sh), at its prompt under OVMF and AAVMF
+// (testing/grubtest.py); and gork for the 68k Mac (macbuild.sh), built
+// but not run.  Each in a throwaway container via plain `docker run` (no
+// Docker Pipeline plugin needed).  Containers build as root in their own
+// /tmp and only copy finished packages into out/, chowned back to the
+// Jenkins user.
 pipeline {
     agent { label 'docker' }
     options { buildDiscarder(logRotator(numToKeepStr: '20')) }
@@ -187,6 +188,23 @@ pipeline {
                                 gcc -o /tmp/fakeapi /src/testing/fakeapi.c
                                 cd /src && python3 testing/grubtest.py /out/gork-*-grub-x64.zip /tmp/fakeapi
                                 python3 testing/grubtest.py /out/gork-*-grub-aa64.zip /tmp/fakeapi'
+                        '''
+                    }
+                }
+                // gork for System 7 on a 68k Mac, with Retro68: built from a
+                // pinned commit the first time (about 40 minutes, 9 GB while
+                // it builds) and kept, stripped, in the cache.  Not run: that
+                // needs a Mac ROM; and not released until it has, so the
+                // package stays out of out/
+                stage('mac') {
+                    steps {
+                        sh '''
+                            MC="$HOME/.cache/gork-mac" && mkdir -p "$MC"
+                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$MC":/work debian:stable sh -ec '
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git ca-certificates build-essential cmake bison flex texinfo ruby libgmp-dev libmpfr-dev libmpc-dev libboost-all-dev zlib1g-dev python3 zip >/dev/null
+                                cp -r /src /tmp/src && cd /tmp/src
+                                sh macbuild.sh /tmp/out /work && chown -R '"$(id -u):$(id -g)"' /work'
                         '''
                     }
                 }
