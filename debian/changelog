@@ -5,6 +5,9 @@ gork (1.3) unstable; urgency=medium
     system, in batch mode, on the firmware's TCP/IP, or on a TCP/IP stack
     of gork's own where the firmware has none (U-Boot, or a PC with its
     network stack turned off).
+  * New: gork as a barebox command, on arm64
+    (gork-<version>-barebox-arm64.zip): a barebox with `gork` built in,
+    on gork's own TCP/IP.
   * New: /save and /load in the TUI keep a conversation in
     _gork/session.jsn and bring it back.
   * New: configure --without-tui and --without-mcp, for systems that lack
@@ -22,10 +25,10 @@ gork (1.3) unstable; urgency=medium
   * Windows: the replies of /new and /effort (and the new /save and
     /load) reach the TUI's chat pane; stderr was buffered.
   * Minix scrolls the TUI correctly.
-  * The tests run through gork-relay 0.2, and the --without-tui and
+  * The tests run through gork-relay 0.3, and the --without-tui and
     --without-mcp builds go through the suite too.
 
- -- Yeold <isac.selea@gmail.com>  Sun, 25 Oct 2026 18:31:06 +0100
+ -- Yeold <isac.selea@gmail.com>  Mon, 26 Oct 2026 08:55:08 +0100
 
 gork (1.2) unstable; urgency=medium
 
