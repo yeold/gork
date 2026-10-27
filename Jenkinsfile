@@ -101,11 +101,18 @@ pipeline {
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh dosbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
                             # and run it: FreeDOS in QEMU against a fake API, with
-                            # a gork-relay for the SPX check
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                            # a gork-relay for the SPX check.  FreeDOS's zips are
+                            # kept in DL, as ibiblio is down now and then.
+                            DL="$HOME/.cache/gork-dos" && mkdir -p "$DL"
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$DL":/dl debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev >/dev/null
-                                cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos.zip'
+                                mkdir -p /tmp/vm/dostest && cp /dl/*.zip /tmp/vm/dostest/ 2>/dev/null || :
+                                rc=0
+                                cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos.zip || rc=$?
+                                cp /tmp/vm/dostest/*.zip /dl/ 2>/dev/null || :
+                                chown -R '"$(id -u):$(id -g)"' /dl
+                                exit $rc'
                         '''
                     }
                 }
@@ -119,12 +126,18 @@ pipeline {
                                 sh dos16build.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
                             # the same checks as for the 32-bit one, with the
                             # address from DHCP here; then on an 8086 and a 286
-                            # in DOSBox-X
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                            # in DOSBox-X.  FreeDOS's zips kept in DL, as for dos.
+                            DL="$HOME/.cache/gork-dos16" && mkdir -p "$DL"
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$DL":/dl debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev dosbox-x >/dev/null
+                                mkdir -p /tmp/vm/dostest && cp /dl/*.zip /tmp/vm/dostest/ 2>/dev/null || :
+                                rc=0
                                 cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_DOS_DHCP=1 GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16.zip &&
-                                    GORK_VM=/tmp/vm python3 testing/dosboxtest.py /out/gork-*-dos16.zip'
+                                    GORK_VM=/tmp/vm python3 testing/dosboxtest.py /out/gork-*-dos16.zip || rc=$?
+                                cp /tmp/vm/dostest/*.zip /dl/ 2>/dev/null || :
+                                chown -R '"$(id -u):$(id -g)"' /dl
+                                exit $rc'
                         '''
                     }
                 }
