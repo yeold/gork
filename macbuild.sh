@@ -32,6 +32,7 @@ if [ -z "${RETRO68:-}" ]; then
     RETRO68=$WORK/retro68-$(echo $R68 | cut -c1-10)
     if [ ! -f "$RETRO68/.done" ] ||
        ! "$RETRO68/bin/m68k-apple-macos-gcc" --version >/dev/null 2>&1 ||
+       ! "$RETRO68/bin/m68k-apple-macos-ld" --version >/dev/null 2>&1 ||
        ! "$RETRO68/bin/Rez" -h >/dev/null 2>&1; then
         echo "macbuild.sh: building Retro68 (once)" >&2
         rm -rf "$RETRO68"

@@ -42,7 +42,8 @@ its end turns the Mac off: the tests run it so.
 
 gork writes paths as `/Volume/Folder/file`; the Mac's
 `Volume:Folder:file` is the same place. A `/` in a Mac name is a `:` to
-gork. `/` alone lists the volumes. Full paths stop at the File Manager's
+gork. Names are in Mac Roman on the Mac and in UTF-8 to gork, as text is
+(below). `/` alone lists the volumes. Full paths stop at the File Manager's
 255 characters. Files gork makes are SimpleText's (`TEXT`, `ttxt`).
 
 A text file (`TEXT`) is in Mac Roman on the Mac, its lines ending in CR;

@@ -197,6 +197,39 @@ static int abs_path(const char *path, char *buf)
   return 0;
 }
 
+/* Names on the Mac are in Mac Roman, and gork's in UTF-8: a character of
+   gork's path in Mac Roman (`?` for what it lacks, or for what is not
+   UTF-8), the path's / and the Mac's : changing places; and back. */
+static char path_char(const char **ps)
+{
+  const unsigned char *s = (const unsigned char *) *ps;
+  unsigned long c = *s++;
+  int k;
+
+  if (c >= 0xC0 && c < 0xF8) {
+    k = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : 1;
+    c &= 0x3F >> k;
+    for (; k > 0 && (*s & 0xC0) == 0x80; k--) c = c << 6 | (*s++ & 0x3F);
+    if (k > 0) c = '?';
+  } else if (c >= 0x80)
+    c = '?';
+  *ps = (const char *) s;
+  return c == '/' ? ':' : c == ':' ? '/' : roman_from_unicode(c);
+}
+
+/* a Mac name (a Pascal string) as gork's, in UTF-8: its length.  out
+   takes 3 bytes for each of the name's and a '\0'. */
+static size_t gork_name(const unsigned char *pn, char *out)
+{
+  size_t n = 0;
+  int i;
+
+  for (i = 1; i <= pn[0]; i++)
+    n += roman_to_utf8(pn[i] == '/' ? ':' : pn[i], out + n);
+  out[n] = '\0';
+  return n;
+}
+
 /* gork's path as a full path name for the File Manager, a Pascal
    string: Vol:a:b, and Vol: for a volume.  -E_NOENT for "/", which is
    no place on a disk; -E_NAMETOOLONG past the File Manager's 255. */
@@ -208,9 +241,13 @@ static int mac_path(const char *path, Str255 out)
 
   if ((r = abs_path(path, full)) < 0) return r;
   if (strcmp(full, "/") == 0) return -E_NOENT;
-  for (p = full + 1; *p; p++) {
+  for (p = full + 1; *p;) {
     if (n >= 255) return -E_NAMETOOLONG;
-    out[++n] = *p == '/' ? ':' : *p == ':' ? '/' : *p;
+    if (*p == '/') {
+      out[++n] = ':';
+      p++;
+    } else
+      out[++n] = path_char(&p);
   }
   if (strchr(full + 1, '/') == NULL) {         /* a volume: Vol: */
     if (n >= 255) return -E_NAMETOOLONG;
@@ -220,13 +257,13 @@ static int mac_path(const char *path, Str255 out)
   return 0;
 }
 
-/* the last name of a path, as a Pascal string, with / for : */
+/* the last name of a path, as a Mac name */
 static void base_name(const char *full, Str255 out)
 {
   const char *b = strrchr(full, '/') + 1;
   int n = 0;
 
-  for (; *b && n < 255; b++) out[++n] = *b == ':' ? '/' : *b;
+  while (*b && n < 255) out[++n] = path_char(&b);
   out[0] = n;
 }
 
@@ -285,10 +322,9 @@ static short vol_ref(ConstStr255Param name)
 /* the full path of a folder, from its volume and ID */
 static void dir_path(short vref, long dir, char *buf)
 {
-  char tmp[PATHMAX], name[64];
+  char tmp[PATHMAX], name[3 * 63 + 1];
   CInfoPBRec pb;
   Str63 pn;
-  int i;
 
   buf[0] = '\0';
   for (;;) {
@@ -298,8 +334,7 @@ static void dir_path(short vref, long dir, char *buf)
     pb.dirInfo.ioFDirIndex = -1;
     pb.dirInfo.ioDrDirID = dir;
     if (PBGetCatInfoSync(&pb) != noErr) break;
-    for (i = 0; i < pn[0]; i++) name[i] = pn[i + 1] == '/' ? ':' : pn[i + 1];
-    name[i] = '\0';
+    gork_name(pn, name);
     if (strlen(name) + 1 + strlen(buf) >= sizeof tmp) break;
     snprintf(tmp, sizeof tmp, "/%s%s", name, buf);
     strcpy(buf, tmp);
@@ -623,13 +658,11 @@ struct dirlist {
 static int dl_add(struct dirlist *d, ConstStr255Param pn)
 {
   char *s, **nn;
-  int i;
 
   if ((nn = realloc(d->names, (d->n + 1) * sizeof *nn)) == NULL) return -1;
   d->names = nn;
-  if ((s = malloc(pn[0] + 1)) == NULL) return -1;
-  for (i = 0; i < pn[0]; i++) s[i] = pn[i + 1] == '/' ? ':' : pn[i + 1];
-  s[i] = '\0';
+  if ((s = malloc(3 * pn[0] + 1)) == NULL) return -1;
+  gork_name(pn, s);
   d->names[d->n++] = s;
   return 0;
 }
@@ -891,15 +924,23 @@ static int tcp_err(OSErr e)
   }
 }
 
+/* waited for without Command-period: it is quick, and run() calls it
+   after gork has ended, when gork_exit() must not run again */
 void ip_tcp_close(void)
 {
   TCPiopb pb;
 
   if (stream == NULL) return;
   memset(&pb, 0, sizeof pb);
-  tcp_call(&pb, TCPAbort);
+  pb.ioCRefNum = ipp;
+  pb.csCode = TCPAbort;
+  pb.tcpStream = stream;
+  PBControlSync((ParmBlkPtr) &pb);
   memset(&pb, 0, sizeof pb);
-  tcp_call(&pb, TCPRelease);
+  pb.ioCRefNum = ipp;
+  pb.csCode = TCPRelease;
+  pb.tcpStream = stream;
+  PBControlSync((ParmBlkPtr) &pb);
   stream = NULL;
 }
 
@@ -1230,15 +1271,19 @@ static int builtin(char **argv, int argc)
 static char *read_script(void)
 {
   char path[PATHMAX], *buf;
-  long n;
+  long n, k;
   int fd;
 
   snprintf(path, sizeof path, "%s/gork.in", app_dir);
   if ((fd = bb_open(path, 0, 0)) < 0) return NULL;
-  if ((buf = malloc(32768)) == NULL) return NULL;
-  n = bb_read(fd, buf, 32767);
+  if ((buf = malloc(32768)) == NULL) {
+    bb_close(fd);
+    return NULL;
+  }
+  /* a text file comes a little at a time */
+  for (n = 0; n < 32767 && (k = bb_read(fd, buf + n, 32767 - n)) > 0; n += k) {}
   bb_close(fd);
-  buf[n < 0 ? 0 : n] = '\0';
+  buf[n] = '\0';
   return buf;
 }
 
