@@ -11,8 +11,9 @@
 // with a gork command (bareboxbuild.sh), at its prompt in QEMU
 // (testing/bareboxtest.py); GRUB for x86-64 and arm64 UEFI with a gork
 // module (grubbuild.sh), at its prompt under OVMF and AAVMF
-// (testing/grubtest.py); and gork for the 68k Mac (macbuild.sh), built
-// but not run.  Each in a throwaway container via plain `docker run` (no
+// (testing/grubtest.py); and gork for the 68k Mac (macbuild.sh), on
+// System 7.5.3 in Basilisk II when the agent has a Mac ROM
+// (testing/mactest.py).  Each in a throwaway container via plain `docker run` (no
 // Docker Pipeline plugin needed).  Containers build as root in their own
 // /tmp and only copy finished packages into out/, chowned back to the
 // Jenkins user.
@@ -206,9 +207,11 @@ pipeline {
                 }
                 // gork for System 7 on a 68k Mac, with Retro68: built from a
                 // pinned commit the first time (about 40 minutes, 9 GB while
-                // it builds) and kept, stripped, in the cache.  Not run: that
-                // needs a Mac ROM; and not released until it has, so the
-                // package stays out of out/
+                // it builds) and kept, stripped, in the cache.  Run on
+                // System 7.5.3 in Basilisk II when the agent has a Quadra
+                // 800 ROM in the cache (q800.rom: Apple's, put there by
+                // hand), else not.  Not released yet, so the package stays
+                // out of out/
                 stage('mac') {
                     steps {
                         sh '''
@@ -217,7 +220,24 @@ pipeline {
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git ca-certificates build-essential cmake bison flex texinfo ruby libgmp-dev libmpfr-dev libmpc-dev libboost-all-dev zlib1g-dev python3 zip >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh macbuild.sh /tmp/out /work && chown -R '"$(id -u):$(id -g)"' /work'
+                                rm -rf /work/pkg
+                                sh macbuild.sh /work/pkg /work && chown -R '"$(id -u):$(id -g)"' /work'
+                            if [ ! -f "$MC/q800.rom" ]; then
+                                echo "mac: no ROM in $MC/q800.rom: not run"
+                                exit 0
+                            fi
+                            # System 7.5.3 from the Internet Archive, kept in
+                            # the cache; Basilisk II is in contrib
+                            docker run --rm -v "$PWD":/src:ro -v "$MC":/mc debian:stable sh -ec '
+                                sed -i "s/Components: main/Components: main contrib/" /etc/apt/sources.list.d/debian.sources
+                                apt-get -qq update
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends basilisk2 xvfb python3-pip gcc libc6-dev ca-certificates >/dev/null
+                                pip install -q --break-system-packages --root-user-action=ignore machfs==1.3 macresources==1.2
+                                gcc -o /tmp/fakeapi /src/testing/fakeapi.c
+                                rc=0
+                                cd /src && GORK_VM=/mc/vm python3 testing/mactest.py /mc/pkg/gork-*-mac68k.zip /tmp/fakeapi /mc/q800.rom || rc=$?
+                                chown -R '"$(id -u):$(id -g)"' /mc
+                                exit $rc'
                         '''
                     }
                 }
