@@ -1,7 +1,7 @@
 # gork on the classic Mac OS
 
-Work in progress: this builds, but has not yet run on a Mac or in an
-emulator. What follows is how it is meant to work.
+Work in progress, not released yet: it runs on System 7.5.3 in Basilisk
+II (Test, below), and has not yet met a real Mac.
 
 gork for System 7 on a 68k Mac (a 68020 or better) is a program with a
 console window, in batch mode, on MacTCP (or Open Transport's MacTCP).
@@ -22,13 +22,14 @@ Start it, and type gork command lines at its prompt:
 
 ```
 gork> "write hello.txt with a greeting in it"
-gork> set GORK_DIR=/Macintosh HD/Work
+gork> set "GORK_DIR=/Macintosh HD/Work"
 gork> --version
 gork> quit
 ```
 
 `set NAME=value` and `unset NAME` set what gork would take from the
-environment (`GORK_DIR`, `GORK_CONFIG`, ...). gork works in `GORK_DIR`,
+environment (`GORK_DIR`, `GORK_CONFIG`, ...); words are parted by spaces,
+so quote one that has them. gork works in `GORK_DIR`,
 or the program's folder. Command-period interrupts; the close box and
 Command-Q quit. The window is in Mac Roman, and gork in UTF-8: what gork
 prints is shown in Mac Roman (a `?` where it has no such character), and
@@ -76,7 +77,29 @@ Retro68 toolchain built already instead. Needs git, gcc and g++, make,
 cmake, bison, flex, texinfo, ruby, the GMP, MPFR, MPC, Boost and zlib
 headers (for Retro68), python3 and zip.
 
-Jenkins builds it, but does not release it until it has run on a Mac.
+Jenkins builds it, and tests it when the agent has a Mac ROM; it does not
+release it yet.
+
+## Test
+
+```sh
+python3 testing/mactest.py gork-<version>-mac68k.zip FAKEAPI ROM
+```
+
+FAKEAPI is `testing/fakeapi.c` built for this machine, ROM a Quadra 800's
+(1 MB, checksum F1ACAD13), which is Apple's: bring your own. The test
+fetches System 7.5.3 from the Internet Archive into `$GORK_VM/mactest`
+(an installed volume, and Apple's CD for MacTCP), puts MacTCP set up and
+gork with a `gork.in` in the Startup Items of that volume, and starts it in
+Basilisk II on its slirp network, where the fake API is 10.0.2.2. gork
+runs the script and turns the Mac off; its transcript and the files it
+wrote are read off the volume with machfs. Sixteen checks. Needs
+BasiliskII (Debian's `basilisk2`, in contrib), Xvfb, and Python's machfs
+and macresources.
+
+QEMU's `q800` starts System 7 from the CD, but not from a disk: a SCSI disk
+needs a driver on it, and Apple's tools will not put one on a disk they do
+not know. Basilisk II starts from an HFS volume as it is.
 
 ## How it works
 

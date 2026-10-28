@@ -2,10 +2,11 @@
  * fakeapi.c -- a fake Messages API on 127.0.0.1:PORT (default 8099), plain
  * HTTP/1.0, for testing gork where the guest cannot reach the host.
  * A user turn starting with "go" gets tool calls (list_dir, write_file,
- * read_file, run_command); "w1" a write_file, "t1" a run_command of
- * sleep 100, "m1" a call to the MCP server named fake (testing/fakemcp.py),
- * "m2" one to the MCP server named sh, "esc" two paths outside the working
- * directory, and "slow" waits 30 s.  Only the last user turn counts: one
+ * read_file, run_command); "w1" a write_file, "w2" one of a name and
+ * text beyond ASCII, "t1" a run_command of sleep 100, "m1" a call to the
+ * MCP server named fake (testing/fakemcp.py), "m2" one to the MCP server
+ * named sh, "esc" two paths outside the working directory, and "slow"
+ * waits 30 s.  Only the last user turn counts: one
  * holding tool results, or anything else, gets a short text reply.  Each
  * request body is appended to fakeapi.log.  testing/vmcheck.sh runs gork
  * against it.
@@ -26,6 +27,10 @@
 
 static const struct { const char *turn, *reply; } one_call[] = {
     { "w1",  TOOL1("t1", "write_file", "{\"path\":\"w1.txt\",\"content\":\"x\"}") },
+    /* a name and text in UTF-8 beyond ASCII: a lobster sandwich, a euro,
+       a dash and an emoji, for the Mac's Mac Roman */
+    { "w2",  TOOL1("t1", "write_file", "{\"path\":\"r\xc3\xa4ksm\xc3\xb6rg\xc3\xa5s.txt\","
+                   "\"content\":\"\xe2\x82\xac 5 \xe2\x80\x94 \xf0\x9f\x98\x80\\n\"}") },
     { "t1",  TOOL1("t1", "run_command", "{\"command\":\"sleep 100\"}") },
     { "m1",  TOOL1("t1", "mcp__fake__echo", "{\"text\":\"hello over MCP\"}") },
     { "m2",  TOOL1("t1", "mcp__sh__echo", "{\"text\":\"hi\"}") },

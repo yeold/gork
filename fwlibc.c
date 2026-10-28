@@ -256,9 +256,17 @@ char *strerror(int e)
     case EROFS:        return "read-only file system";
     case ERANGE:       return "result out of range";
     case ENAMETOOLONG: return "file name too long";
+#ifdef GORK_MAC
+    case ENOSYS:       return "not implemented on the Mac";
+#else
     case ENOSYS:       return "not implemented on UEFI";
+#endif
     case ENOTEMPTY:    return "directory not empty";
+#ifdef GORK_MAC
+    case ENETDOWN:     return "no network: MacTCP is not there, or not set up";
+#else
     case ENETDOWN:     return "no network: no address yet (DHCP)";
+#endif
     case ENETUNREACH:  return "network unreachable";
     case ECONNRESET:   return "connection reset";
     case ETIMEDOUT:    return "timed out";

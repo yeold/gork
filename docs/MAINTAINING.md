@@ -71,6 +71,7 @@ the system's libc all the same (tried on Alpine, which has none).
 | `python3 testing/uefitest.py ZIP FAKEAPI [MACHINE]` | gork from the UEFI shell in QEMU: under OVMF (`x64`), AAVMF (`aa64`), OVMF without its network stack (`x64-own`) or U-Boot (`uboot`); twelve checks |
 | `python3 testing/bareboxtest.py ZIP FAKEAPI` | The `gork` command at barebox's prompt in QEMU (arm64 `virt`), typed on the serial console; twelve checks |
 | `python3 testing/grubtest.py ZIP FAKEAPI` | The `gork` command at GRUB's prompt under OVMF in QEMU (q35) or AAVMF (virt), typed on the serial console; thirteen checks |
+| `python3 testing/mactest.py ZIP FAKEAPI ROM` | gork for the 68k Mac on System 7.5.3 in Basilisk II (ROM: a Quadra 800's), from a script in its Startup Items, over MacTCP; sixteen checks |
 | `python3 testing/bsdtest.py TARGET PACKAGE FAKEAPI` | A BSD package on its own system in QEMU, through `vmcheck.sh`; OpenBSD is installed once, unattended |
 | `python testing\cygpacktest.py DIR` | The Cygwin package, without Cygwin; the TUI in a console, with pywinpty |
 | `python3 testing/winspxtest.py ZIP` | SPX from Windows: `gork.exe` on a Windows 95 to Me disk image in QEMU, through gork-relay. By hand: it needs an installed Windows |

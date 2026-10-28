@@ -157,8 +157,9 @@ boots it under OVMF or AAVMF in QEMU and types its checks at GRUB's
 prompt (docs/build/grub.md).
 
 `macbuild.sh [OUT] [WORK]` builds gork for System 7 on a 68k Mac with
-the Retro68 toolchain, built into WORK the first time (docs/build/mac.md);
-it has not run yet, and has no test.
+the Retro68 toolchain, built into WORK the first time, and
+`testing/mactest.py ZIP FAKEAPI ROM` runs it on System 7.5.3 in Basilisk
+II, given a Mac ROM (docs/build/mac.md).
 
 `bsdbuild.sh [OUT] [WORK]` cross-builds the FreeBSD, NetBSD and OpenBSD
 packages on Linux with clang, against sysroots unpacked from each

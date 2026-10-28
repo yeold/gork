@@ -603,9 +603,11 @@ int bb_rmdir(const char *path) { return remove_at(path, 1); }
 int bb_rename(const char *from, const char *to)
 {
   char f[PATHMAX], t[PATHMAX], fdir[PATHMAX], tdir[PATHMAX];
-  Str255 fname, tname, newname, dname;
+  Str255 fname, tname, newname, oldname, dname;
   CInfoPBRec pb, tpb;
   CMovePBRec mv;
+  short vref;
+  long parid;
   int r;
 
   if ((r = abs_path(from, f)) < 0 || (r = abs_path(to, t)) < 0) return r;
@@ -623,9 +625,14 @@ int bb_rename(const char *from, const char *to)
   strcpy(tdir, t);
   *strrchr(tdir, '/') = '\0';
   base_name(t, newname);
-  if (strcmp(fdir, tdir) == 0) return mac_err(HRename(0, 0, fname, newname));
+  /* by its folder and name: HRename takes the new name in the folder it
+     is given, which a full path name does not change (0 is the program's) */
+  base_name(f, oldname);
+  vref = vol_ref(fname);
+  parid = pb.hFileInfo.ioFlParID;       /* dirInfo.ioDrParID, for a folder */
+  if (strcmp(fdir, tdir) == 0) return mac_err(HRename(vref, parid, oldname, newname));
   /* the new name first, where it is, then the move */
-  if ((r = mac_err(HRename(0, 0, fname, newname))) < 0) return r;
+  if ((r = mac_err(HRename(vref, parid, oldname, newname))) < 0) return r;
   snprintf(f, sizeof f, "%s/%s", fdir, strrchr(t, '/') + 1);
   if ((r = mac_path(f, fname)) < 0) return r;
   if ((r = mac_path(tdir[0] ? tdir : "/", dname)) < 0) return r;
