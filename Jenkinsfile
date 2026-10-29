@@ -37,20 +37,28 @@ pipeline {
             }
         }
         // The build options that leave things out: looptest.py
-        // skips the checks of what is missing and runs the rest.  On
+        // skips the checks of what is missing and runs the rest.  And
+        // the two that change the transport: --with-openssl gets
+        // tlstest.py too, --with-serial only serialtest.py.  On
         // its own, not beside the others: the agent's disk holds no more
         stage('options') {
             steps {
                 sh '''
                     docker run --rm -e TAG_NAME -v "$PWD":/src:ro debian:stable sh -ec '
                         apt-get -qq update
-                        DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git build-essential autoconf automake libncurses-dev python3 ca-certificates curl libssl-dev >/dev/null
+                        DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git build-essential autoconf automake libncurses-dev python3 ca-certificates curl libssl-dev openssl >/dev/null
                         cp -r /src /tmp/src && cd /tmp/src && autoreconf -i
                         export GORK_RELAY=$(sh testing/getrelay.sh)
-                        for o in --without-tui --without-mcp; do
+                        for o in --without-tui --without-mcp --with-openssl --with-serial; do
                             echo "== $o"
                             mkdir /tmp/b$o && cd /tmp/b$o && /tmp/src/configure $o >/dev/null && make
-                            cd /tmp/src && python3 testing/looptest.py /tmp/b$o/gork
+                            cd /tmp/src
+                            case $o in
+                            --with-serial) python3 testing/serialtest.py /tmp/b$o/gork ;;
+                            --with-openssl) python3 testing/looptest.py /tmp/b$o/gork
+                                            python3 testing/tlstest.py /tmp/b$o/gork ;;
+                            *) python3 testing/looptest.py /tmp/b$o/gork ;;
+                            esac
                         done'
                 '''
             }

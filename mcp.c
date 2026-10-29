@@ -626,8 +626,24 @@ static int http_setup(struct server *s, cJSON *cfg)
         memcpy(s->path + 1, e, strcspn(e, "#"));
         s->path[1 + strcspn(e, "#")] = '\0';
     }
+#ifdef GORK_OPENSSL
+    /* TLS of our own: "tls:host", port 443 by default */
+    if (!cJSON_IsString(relay) && tls) {
+        char *t;
+
+        if (host_port(s, s->host, 443) != 0 ||
+            (t = (char *) malloc(strlen(s->conn_host) + 5)) == NULL) {
+            fprintf(stderr, "gork: MCP server %s: bad url\n", s->name);
+            return -1;
+        }
+        sprintf(t, "tls:%s", s->conn_host);
+        free(s->conn_host);
+        s->conn_host = t;
+        tls = 2;                        /* done */
+    }
+#endif
     if (cJSON_IsString(relay) ? host_port(s, relay->valuestring, 0) != 0
-                              : tls) {
+                              : tls == 1) {
         fprintf(stderr, "gork: MCP server %s: %s\n", s->name,
                 cJSON_IsString(relay)
                 ? "want \"relay\": \"host:port\""
@@ -635,7 +651,8 @@ static int http_setup(struct server *s, cJSON *cfg)
                   "\"relay\": \"host:port\" that has");
         return -1;
     }
-    if (!cJSON_IsString(relay) && host_port(s, s->host, 80) != 0) {
+    if (!cJSON_IsString(relay) && tls != 2 &&
+        host_port(s, s->host, 80) != 0) {
         fprintf(stderr, "gork: MCP server %s: bad url\n", s->name);
         return -1;
     }

@@ -56,6 +56,25 @@ if test "$with_mcp" = no; then
   CPPFLAGS="$CPPFLAGS -DGORK_NO_MCP"
 fi
 
+AC_ARG_WITH([openssl],
+  [AS_HELP_STRING([--with-openssl@<:@=DIR@:>@],
+                  [do TLS with OpenSSL (1.0.2 or later; in DIR if given),
+                   so that no relay is needed])],
+  [with_openssl=$withval], [with_openssl=no])
+
+AC_ARG_WITH([serial],
+  [AS_HELP_STRING([--with-serial],
+                  [no network: all traffic over a serial line, to
+                   gork-relay -S])],
+  [with_serial=$withval], [with_serial=no])
+case "$with_serial" in
+  yes|no) ;;
+  *) AC_MSG_ERROR([--with-serial=$with_serial: want yes or no]) ;;
+esac
+if test "$with_serial" = yes && test "$with_openssl" != no; then
+  AC_MSG_ERROR([--with-serial and --with-openssl do not go together: over a serial line the relay does the TLS])
+fi
+
 # -W, not -Wextra: the spelling gcc 3.2 (SUSE 8.1) knows.
 if test "$GCC" = yes; then
   AM_CFLAGS="-std=gnu89 -pedantic -Wall -W"
@@ -109,9 +128,31 @@ else
   fi
 fi
 AC_SEARCH_LIBS([fabs], [m])
-# Solaris keeps sockets and the resolver out of libc, Haiku in libnetwork.
-AC_SEARCH_LIBS([gethostbyname], [nsl network])
-AC_SEARCH_LIBS([socket], [socket network])
+if test "$with_serial" = yes; then
+  # no sockets at all: a system with no network may have no netdb.h
+  AC_CHECK_HEADER([termios.h], [],
+                  [AC_MSG_ERROR([--with-serial needs termios.h])])
+  CPPFLAGS="$CPPFLAGS -DGORK_SERIAL"
+else
+  # Solaris keeps sockets and the resolver out of libc, Haiku in libnetwork.
+  AC_SEARCH_LIBS([gethostbyname], [nsl network])
+  AC_SEARCH_LIBS([socket], [socket network])
+fi
+if test "$with_openssl" != no; then
+  if test "$with_openssl" != yes; then
+    CPPFLAGS="$CPPFLAGS -I$with_openssl/include"
+    LDFLAGS="$LDFLAGS -L$with_openssl/lib"
+  fi
+  AC_CHECK_HEADER([openssl/ssl.h], [],
+                  [AC_MSG_ERROR([--with-openssl: openssl/ssl.h not found; install the OpenSSL headers (libssl-dev, openssl-devel)])])
+  AC_SEARCH_LIBS([ERR_get_error], [crypto], [],
+                 [AC_MSG_ERROR([--with-openssl: no libcrypto])])
+  AC_SEARCH_LIBS([SSL_new], [ssl], [],
+                 [AC_MSG_ERROR([--with-openssl: no libssl])])
+  AC_CHECK_FUNC([X509_VERIFY_PARAM_set1_host], [],
+                [AC_MSG_ERROR([--with-openssl needs OpenSSL 1.0.2 or later, to check the server's name])])
+  CPPFLAGS="$CPPFLAGS -DGORK_OPENSSL"
+fi
 
 CFLAGS=$save_CFLAGS
 

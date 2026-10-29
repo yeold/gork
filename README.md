@@ -26,9 +26,9 @@ and Windows), a terminal, a file system. No TLS, no threads, no C99.
 It talks to any server that speaks the Anthropic Messages API (`/v1/messages`)
 or OpenAI Chat Completions (`/v1/chat/completions`) format: Claude on
 Anthropic's API, OpenAI, or a local LLM behind Ollama, llama.cpp, vLLM or
-LM Studio (see [Local models](#local-models)). It speaks plaintext HTTP/1.0
-only; reaching an HTTPS endpoint is the job of a [relay](#why-a-relay),
-not gork's.
+LM Studio (see [Local models](#local-models)). It speaks plaintext HTTP/1.0;
+reaching an HTTPS endpoint is the job of a [relay](#why-a-relay), unless
+gork is built with OpenSSL.
 
 ## Features at a glance
 
@@ -49,6 +49,7 @@ not gork's.
   - [Interactive TUI](#interactive)
   - [Local models (LM Studio, Ollama, llama.cpp, OpenAI)](#local-models)
   - [Without TCP/IP: IPX/SPX](#without-tcpip-spx)
+  - [Without any network: a serial line](#serial)
   - [Config](#config)
   - [Rules (`GORK.md`)](#rules)
   - [Skills (`SKILL.md`)](#skills)
@@ -163,6 +164,12 @@ the relay terminates TLS on its behalf.
 **The relay sees everything in the clear, including your API key.** Run it on
 a host and network you trust; it is the security boundary this design trades
 away. That is the deal gork makes to run at all on hardware this old.
+
+Where OpenSSL does work, a build made `./configure --with-openssl` does
+TLS itself, and needs no relay: leave `relay` out and it connects to
+`host`, port 443, checking the certificate against the system's trusted
+ones (or `SSL_CERT_FILE`). An `https://` MCP server is reached the same
+way.
 
 HTTP/1.0 with `Connection: close` is deliberate: the server then replies
 unchunked and closes the socket, so "read until EOF" is complete and correct
@@ -364,6 +371,18 @@ protocol installed. Tested with PDIPX, IPXODI and a WSGEN-made `IPX.COM` on
 FreeDOS, and on Windows Me. The
 Unix builds have no SPX.
 
+<a id="serial"></a>
+### Without any network: a serial line
+
+A Unix build made `./configure --with-serial` sends everything over a
+serial port to a `gork-relay -S` at the other end of a null-modem cable:
+
+```ini
+relay = serial:/dev/ttyS0:38400
+```
+
+[docs/SERIAL.md](docs/SERIAL.md) has the setup and the protocol.
+
 ### Config
 
 gork reads `~/.gork.conf`, or the file `GORK_CONFIG` names. One
@@ -391,7 +410,7 @@ read the config file, and none has MCP servers, so there is no `mcp.json`.
 
 | Key | Env override | Default | Meaning |
 |---|---|---|---|
-| `relay` | -- | *(required)* | `host:port` gork connects to: the relay, or a local server. Or `spx:NET.NODE:SOCKET`, a gork-relay on an IPX network: see [Without TCP/IP](#without-tcpip-spx) |
+| `relay` | -- | *(required, but for a build `--with-openssl`)* | `host:port` gork connects to: the relay, or a local server. Or `spx:NET.NODE:SOCKET`, a gork-relay on an IPX network: see [Without TCP/IP](#without-tcpip-spx). Or `serial:DEVICE[:BAUD]` in a build `--with-serial`: see [a serial line](#serial). In a build `--with-openssl`, `tls:host:port` does TLS to that server, and with no `relay` at all gork does TLS to `host` |
 | `api_key` | `ANTHROPIC_API_KEY` (`OPENAI_API_KEY` with `protocol = openai`) | *(required for anthropic.com and openai.com)* | Sent as the `x-api-key` header, or as `Authorization: Bearer` with `protocol = openai` |
 | `protocol` | `AGENT_PROTOCOL` | `anthropic` | Wire format: `anthropic` (Messages API) or `openai` (chat completions); see [Local models](#local-models) |
 | `model` | `AGENT_MODEL` | `claude-opus-5` | Model id |
@@ -499,8 +518,9 @@ off. Server stderr is discarded unless
 `GORK_TRACE` is set, so its logging doesn't flood the TUI.
 
 An HTTP server has a `"url"` instead of a `"command"`, and may have
-`"headers"` (a token, say). gork has no TLS: an `https://` server is reached
-through a relay that has, named by `"relay"`, as the API is:
+`"headers"` (a token, say). Unless built `--with-openssl`, gork has no
+TLS: an `https://` server is reached through a relay that has, named by
+`"relay"`, as the API is:
 
 ```json
 "web":  { "url": "http://127.0.0.1:10530/mcp" },

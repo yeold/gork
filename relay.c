@@ -3,7 +3,10 @@
  *
  * Strict C89, for the same systems as main.c.  Four transports: BSD
  * sockets (Unix, DJGPP's Watt-32, Winsock), Watt-32's own calls (16-bit
- * DOS), Minix 2's /dev/tcp, and SPX on DOS and Windows.
+ * DOS), Minix 2's /dev/tcp, and SPX on DOS and Windows.  Built with
+ * GORK_OPENSSL, a "tls:" connection does TLS itself; built with
+ * GORK_SERIAL, there is no network at all, only a serial line to
+ * gork-relay -S (see docs/SERIAL.md).
  */
 
 #include <sys/types.h>          /* first: 4.4BSD <netinet/in.h> needs it */
@@ -30,6 +33,15 @@
 #include <net/gen/netdb.h>
 #include <net/gen/tcp.h>
 #include <net/gen/tcp_io.h>
+#elif defined(GORK_SERIAL)
+#include <fcntl.h>
+#include <signal.h>
+#include <termios.h>
+#include <time.h>
+#include <unistd.h>
+#ifndef GORK_NO_SELECT
+#include <sys/time.h>
+#endif
 #else
 #include <netdb.h>
 #include <netinet/in.h>
@@ -38,13 +50,20 @@
 #include <sys/time.h>
 #include <unistd.h>
 #endif
-#if defined(GORK_AIXPS2) || defined(__hpux) || defined(GORK_NEXT) || \
-    defined(GORK_SUNOS4) || defined(GORK_SVR40) || defined(GORK_PLAN9)
+#if (defined(GORK_AIXPS2) || defined(__hpux) || defined(GORK_NEXT) || \
+     defined(GORK_SUNOS4) || defined(GORK_SVR40) || defined(GORK_PLAN9)) && \
+    !defined(GORK_SERIAL)
 /* htons, inet_addr */
 #include <arpa/inet.h>
 #ifndef INADDR_NONE
 #define INADDR_NONE 0xffffffffUL
 #endif
+#endif
+
+#ifdef GORK_OPENSSL
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/x509v3.h>
 #endif
 
 #include "relay.h"
@@ -519,7 +538,340 @@ static int read_to_eof(int fd) {
     }
   }
 }
-#else /* not GORK_DOS16 */
+#elif defined(GORK_SERIAL)
+/* No network: a serial line to gork-relay -S.  The line carries frames
+   in SLIP's framing: END, then TYPE ID DATA SUM(2), then END, where an END
+   or ESC byte inside is sent as ESC ESC_END or ESC ESC_ESC.  TYPE is 'O'
+   (open), 'D' (data) or 'C' (close), ID the request's number, DATA at
+   most FRAME_MAX bytes, SUM a Fletcher-16 of TYPE to the end of DATA,
+   big-endian.  A request is an 'O', then the bytes of the HTTP request in
+   'D's; the reply comes back in 'D's with the same ID, and a 'C' ends it.
+   Frames of any other ID are left over from an abandoned request, and
+   ignored.  docs/SERIAL.md has the rest. */
+
+#define FRAME_MAX 1024
+#define F_END 0xc0
+#define F_ESC 0xdb
+#define F_ESC_END 0xdc
+#define F_ESC_ESC 0xdd
+
+static int ser_fd = -1;
+static char ser_spec[256];      /* what ser_fd was opened as */
+static unsigned char ser_id;
+static int ser_closed;          /* the relay sent this request's 'C' */
+static int ser_synced;          /* a frame of this request has come */
+
+static struct frame {
+  int esc, bad;
+  size_t n, len;                /* bytes so far; the DATA of a whole one */
+  unsigned char b[FRAME_MAX + 4];       /* type, id, data, sum */
+} ser_rx;
+
+static unsigned fletcher(const unsigned char *p, size_t n) {
+  unsigned a = 0, b = 0;
+
+  while (n-- > 0) {
+    a = (a + *p++) % 255;
+    b = (b + a) % 255;
+  }
+  return b << 8 | a;
+}
+
+/* One byte from the line.  1: a whole frame is in f; 0: not yet; -1: a
+   damaged frame.  Damage ends at the next END, so it never takes the
+   frames after it along. */
+static int frame_byte(struct frame *f, int c) {
+  size_t n = f->n;
+  int bad = f->bad;
+
+  if (c == F_END) {
+    f->n = 0;
+    f->esc = f->bad = 0;
+    if (n == 0 && !bad)
+      return 0;                 /* between frames */
+    if (bad || n < 4 ||
+        fletcher(f->b, n - 2) != ((unsigned)f->b[n - 2] << 8 | f->b[n - 1]))
+      return -1;
+    f->len = n - 4;
+    return 1;
+  }
+  if (bad)
+    return 0;
+  if (f->esc) {
+    f->esc = 0;
+    if (c == F_ESC_END)
+      c = F_END;
+    else if (c == F_ESC_ESC)
+      c = F_ESC;
+    else
+      f->bad = 1;
+  } else if (c == F_ESC) {
+    f->esc = 1;
+    return 0;
+  }
+  if (n == sizeof f->b)
+    f->bad = 1;
+  if (!f->bad)
+    f->b[f->n++] = (unsigned char)c;
+  return 0;
+}
+
+static int ser_write(const unsigned char *p, size_t n) {
+  while (n > 0) {
+    int w = (int)write(ser_fd, p, n);
+
+    if (w < 0) {
+      if (errno == EINTR)
+        fprintf(stderr, "gork: timeout while sending\n");
+      else
+        fprintf(stderr, "gork: serial line: %s\n", strerror(errno));
+      return -1;
+    }
+    p += w;
+    n -= (size_t)w;
+  }
+  return 0;
+}
+
+static int ser_frame(int type, const char *p, size_t n) {
+  static unsigned char raw[FRAME_MAX + 4], out[2 * (FRAME_MAX + 4) + 2];
+  unsigned sum;
+  size_t i, o = 0;
+
+  raw[0] = (unsigned char)type;
+  raw[1] = ser_id;
+  memcpy(raw + 2, p, n);
+  sum = fletcher(raw, n + 2);
+  raw[n + 2] = (unsigned char)(sum >> 8);
+  raw[n + 3] = (unsigned char)sum;
+  out[o++] = F_END;             /* ends whatever noise came before */
+  for (i = 0; i < n + 4; i++) {
+    if (raw[i] == F_END || raw[i] == F_ESC) {
+      out[o++] = F_ESC;
+      out[o++] = raw[i] == F_END ? F_ESC_END : F_ESC_ESC;
+    } else {
+      out[o++] = raw[i];
+    }
+  }
+  out[o++] = F_END;
+  return ser_write(out, o);
+}
+
+static const struct {
+  long baud;
+  speed_t code;
+} speeds[] = {
+  { 1200, B1200 }, { 2400, B2400 }, { 4800, B4800 }, { 9600, B9600 },
+  { 19200, B19200 }, { 38400, B38400 },
+#ifdef B57600
+  { 57600, B57600 },
+#endif
+#ifdef B115200
+  { 115200, B115200 },
+#endif
+#ifdef B230400
+  { 230400, B230400 },
+#endif
+  { 0, B0 }
+};
+
+/* "serial:DEVICE[:BAUD[:rtscts]]": open the line, raw, 8N1.  0 or -1. */
+static int ser_open(const char *spec) {
+  char dev[256], *p, *q;
+  long baud = 9600;
+  int i, rtscts = 0;
+  struct termios t;
+
+  if (strlen(spec) >= sizeof dev) {
+    fprintf(stderr, "gork: serial device name too long\n");
+    return -1;
+  }
+  strcpy(dev, spec + 7);
+  if ((p = strchr(dev, ':')) != NULL) {
+    *p++ = '\0';
+    if ((q = strchr(p, ':')) != NULL) {
+      *q++ = '\0';
+      if (strcmp(q, "rtscts") != 0) {
+        fprintf(stderr, "gork: serial: want rtscts after the speed, not "
+                        "'%s'\n", q);
+        return -1;
+      }
+      rtscts = 1;
+    }
+    baud = strtol(p, &q, 10);
+    if (*q != '\0')
+      baud = -1;
+  }
+  for (i = 0; speeds[i].baud != 0 && speeds[i].baud != baud; i++)
+    ;
+  if (speeds[i].baud == 0) {
+    fprintf(stderr, "gork: serial: %s is not a speed this system has\n",
+            p != NULL ? p : "?");
+    return -1;
+  }
+#ifndef CRTSCTS
+  if (rtscts) {
+    fprintf(stderr, "gork: serial: this system has no RTS/CTS flow "
+                    "control\n");
+    return -1;
+  }
+#endif
+  /* O_NONBLOCK: do not wait for a carrier the null modem may not give */
+  ser_fd = open(dev, O_RDWR | O_NOCTTY | O_NONBLOCK);
+  if (ser_fd < 0) {
+    fprintf(stderr, "gork: %s: %s\n", dev, strerror(errno));
+    return -1;
+  }
+  fcntl(ser_fd, F_SETFL, fcntl(ser_fd, F_GETFL) & ~O_NONBLOCK);
+  fcntl(ser_fd, F_SETFD, FD_CLOEXEC);   /* run_command's children */
+  if (tcgetattr(ser_fd, &t) != 0) {
+    fprintf(stderr, "gork: %s: not a serial line: %s\n", dev,
+            strerror(errno));
+    close(ser_fd);
+    ser_fd = -1;
+    return -1;
+  }
+  t.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL |
+                 IXON | IXOFF);
+  t.c_iflag |= IGNPAR;
+  t.c_oflag &= ~OPOST;
+  t.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+  t.c_cflag &= ~(CSIZE | PARENB | CSTOPB | HUPCL);
+  t.c_cflag |= CS8 | CREAD | CLOCAL;
+#ifdef CRTSCTS
+  if (rtscts)
+    t.c_cflag |= CRTSCTS;
+  else
+    t.c_cflag &= ~CRTSCTS;
+#endif
+  t.c_cc[VMIN] = 1;
+  t.c_cc[VTIME] = 0;
+  cfsetispeed(&t, speeds[i].code);
+  cfsetospeed(&t, speeds[i].code);
+  if (tcsetattr(ser_fd, TCSANOW, &t) != 0) {
+    fprintf(stderr, "gork: %s: %s\n", dev, strerror(errno));
+    close(ser_fd);
+    ser_fd = -1;
+    return -1;
+  }
+  strcpy(ser_spec, spec);
+  /* a number of its own, so that a reply to an earlier gork is not taken
+     for ours */
+  ser_id = (unsigned char)(time(NULL) ^ getpid());
+  return 0;
+}
+
+/* Start a request: the line, opened once and kept, and an 'O'. */
+static int tcp_connect(const char *host, long port) {
+  (void)port;
+  if (strncmp(host, "serial:", 7) != 0) {
+    fprintf(stderr, "gork: this gork talks over a serial line only: want "
+                    "serial:DEVICE[:BAUD] and not %s\n", host);
+    return -1;
+  }
+  if (ser_fd >= 0 && strcmp(host, ser_spec) != 0) {
+    close(ser_fd);
+    ser_fd = -1;
+  }
+  if (ser_fd < 0 && ser_open(host) != 0)
+    return -1;
+  tcflush(ser_fd, TCIFLUSH);    /* what is left of an abandoned reply */
+  ser_id++;
+  ser_closed = ser_synced = 0;
+  return ser_frame('O', NULL, 0) == 0 ? ser_fd : -1;
+}
+
+static int write_all(int fd, const char *p, size_t n) {
+  (void)fd;
+  while (n > 0) {
+    size_t part = n > FRAME_MAX ? FRAME_MAX : n;
+
+    if (ser_frame('D', p, part) != 0)
+      return -1;
+    p += part;
+    n -= part;
+  }
+  return 0;
+}
+
+/* The line stays open for the next request; the relay is told this one
+   is over, unless it said so first. */
+static void conn_close(int fd) {
+  (void)fd;
+  if (!ser_closed)
+    ser_frame('C', NULL, 0);
+}
+
+/* Returns 0 at the relay's 'C', -1 on error, -2 if relay_abort asked to
+   stop. */
+static int read_to_eof(int fd) {
+  unsigned char chunk[READ_CHUNK];
+#ifndef GORK_NO_SELECT
+  fd_set rd;
+  struct timeval tv;
+#endif
+  int r, i, rc;
+
+  for (;;) {
+#ifndef GORK_NO_SELECT
+    /* wake every 200 ms so that the user can abort */
+    FD_ZERO(&rd);
+    FD_SET(fd, &rd);
+    tv.tv_sec = 0;
+    tv.tv_usec = 200000;
+    r = select(fd + 1, &rd, NULL, NULL, &tv);
+    if (r == 0) {
+      if (relay_abort != NULL && relay_abort())
+        return -2;
+      continue;
+    }
+    if (r < 0) {
+      if (errno == EINTR)
+        fprintf(stderr, "gork: timeout on the serial line after %lu "
+                        "bytes\n", rx.total);
+      else
+        perror("select");
+      return -1;
+    }
+#endif
+    r = (int)read(fd, chunk, sizeof chunk);
+    if (r <= 0) {
+      if (r < 0 && errno == EINTR)
+        fprintf(stderr, "gork: timeout on the serial line after %lu "
+                        "bytes\n", rx.total);
+      else
+        fprintf(stderr, "gork: serial line: %s\n",
+                r == 0 ? "hung up" : strerror(errno));
+      return -1;
+    }
+    for (i = 0; i < r; i++) {
+      rc = frame_byte(&ser_rx, chunk[i]);
+      /* Before the first frame of ours, damage is the end of an
+         abandoned reply, cut short: not ours to worry about. */
+      if (rc < 0 && !ser_synced)
+        continue;
+      if (rc < 0) {
+        fprintf(stderr, "gork: a damaged frame on the serial line, after "
+                        "%lu bytes: try a lower speed, or rtscts\n",
+                rx.total);
+        return -1;
+      }
+      if (rc == 0 || ser_rx.b[1] != ser_id)
+        continue;
+      ser_synced = 1;
+      if (ser_rx.b[0] == 'C') {
+        ser_closed = 1;
+        return 0;
+      }
+      if (ser_rx.b[0] == 'D') {
+        rc = rx_take((const char *)ser_rx.b + 2, ser_rx.len);
+        if (rc != 0)
+          return rc > 0 ? 0 : -1;
+      }
+    }
+  }
+}
+#else /* not GORK_DOS16 or GORK_SERIAL */
 
 #ifdef _WIN32
 static int winsock_start(void) {
@@ -533,6 +885,106 @@ static int winsock_start(void) {
   started = 1;
   return 0;
 }
+#endif
+
+#ifdef GORK_OPENSSL
+/* TLS on the connection, for a "tls:" host: no relay needed. */
+static SSL_CTX *tls_ctx;
+static SSL *ssl;
+
+static void tls_errors(const char *what) {
+  unsigned long e = ERR_get_error();
+  char msg[256];
+
+  if (e == 0) {
+    fprintf(stderr, "gork: %s: %s\n", what,
+            errno != 0 ? strerror(errno) : "the server closed the connection");
+    return;
+  }
+  ERR_error_string_n(e, msg, sizeof msg);
+  fprintf(stderr, "gork: %s: %s\n", what, msg);
+  ERR_clear_error();
+}
+
+/* The handshake, checking the certificate against the system's trusted
+   ones (or SSL_CERT_FILE / SSL_CERT_DIR) and the name `host`.  0 or -1. */
+static int tls_start(int fd, const char *host) {
+  X509_VERIFY_PARAM *param;
+  long v;
+
+  if (tls_ctx == NULL) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    SSL_library_init();
+    SSL_load_error_strings();
+    tls_ctx = SSL_CTX_new(SSLv23_client_method());
+#else
+    tls_ctx = SSL_CTX_new(TLS_client_method());
+#endif
+    if (tls_ctx == NULL) {
+      tls_errors("TLS");
+      return -1;
+    }
+    SSL_CTX_set_options(tls_ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
+#ifdef SSL_OP_IGNORE_UNEXPECTED_EOF
+    /* servers that close without close_notify: the reply knows its end */
+    SSL_CTX_set_options(tls_ctx, SSL_OP_IGNORE_UNEXPECTED_EOF);
+#endif
+    SSL_CTX_set_mode(tls_ctx, SSL_MODE_AUTO_RETRY);
+    SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_PEER, NULL);
+    if (SSL_CTX_set_default_verify_paths(tls_ctx) != 1) {
+      tls_errors("TLS: no trusted certificates");
+      return -1;
+    }
+  }
+  ssl = SSL_new(tls_ctx);
+  if (ssl == NULL) {
+    tls_errors("TLS");
+    return -1;
+  }
+  SSL_set_fd(ssl, fd);
+  param = SSL_get0_param(ssl);
+  /* an address is checked as one, a name by name, and sent with SNI */
+  if (X509_VERIFY_PARAM_set1_ip_asc(param, host) != 1) {
+    SSL_set_tlsext_host_name(ssl, host);
+    X509_VERIFY_PARAM_set1_host(param, host, 0);
+  }
+  errno = 0;
+  if (SSL_connect(ssl) == 1)
+    return 0;
+  v = SSL_get_verify_result(ssl);
+  if (errno == EINTR)
+    fprintf(stderr, "gork: timeout in the TLS handshake with %s\n", host);
+  else if (v != X509_V_OK)
+    fprintf(stderr, "gork: TLS with %s: certificate: %s\n", host,
+            X509_verify_cert_error_string(v));
+  else
+    tls_errors("TLS handshake");
+  SSL_free(ssl);
+  ssl = NULL;
+  return -1;
+}
+
+/* SSL_write and SSL_read, as write and read: -1 with errno EINTR on the
+   timeout, -3 for any other failure, said already. */
+static int tls_io(int rd, char *p, size_t n) {
+  int r, e;
+
+  errno = 0;
+  r = rd ? SSL_read(ssl, p, (int)n) : SSL_write(ssl, p, (int)n);
+  if (r > 0)
+    return r;
+  e = SSL_get_error(ssl, r);
+  if (rd && (e == SSL_ERROR_ZERO_RETURN ||
+             (e == SSL_ERROR_SYSCALL && errno == 0 && ERR_peek_error() == 0)))
+    return 0;
+  if (e == SSL_ERROR_SYSCALL && errno == EINTR)
+    return -1;
+  tls_errors(rd ? "TLS read" : "TLS write");
+  return -3;
+}
+#define TLS_PENDING() (ssl != NULL && SSL_pending(ssl) > 0)
+#else
+#define TLS_PENDING() 0
 #endif
 
 #ifdef GORK_MINIX2
@@ -648,7 +1100,16 @@ static int write_all(int fd, const char *p, size_t n) {
 #endif
 
   while (off < n) {
-    ssize_t w = write(fd, p + off, n - off);
+    ssize_t w;
+
+#ifdef GORK_OPENSSL
+    if (ssl != NULL) {
+      w = tls_io(0, (char *)p + off, n - off);
+      if (w == -3)
+        return -1;
+    } else
+#endif
+    w = write(fd, p + off, n - off);
     if (w < 0) {
       if (errno == EINTR) {
         fprintf(stderr, "gork: timeout while sending\n");
@@ -671,6 +1132,12 @@ static void conn_close(int fd) {
   if (spx) {
     dosspx_close();
     return;
+  }
+#endif
+#ifdef GORK_OPENSSL
+  if (ssl != NULL) {
+    SSL_free(ssl);
+    ssl = NULL;
   }
 #endif
   close(fd);
@@ -766,7 +1233,9 @@ static int read_to_eof(int fd) {
        select (Minix 2) the read blocks, and only the timeout ends it. */
 #ifndef GORK_NO_SELECT
 #ifndef GORK_NO_FORK
-    if (relay_abort != NULL)
+    if (relay_abort != NULL && !TLS_PENDING())
+#else
+    if (!TLS_PENDING())   /* TLS may hold bytes it has read already */
 #endif
     {
       FD_ZERO(&rd);
@@ -795,6 +1264,13 @@ static int read_to_eof(int fd) {
         return -1;
       }
     }
+#endif
+#ifdef GORK_OPENSSL
+    if (ssl != NULL) {
+      r = tls_io(1, chunk, sizeof chunk);
+      if (r == -3)
+        return -1;
+    } else
 #endif
     r = read(fd, chunk, sizeof chunk);
     if (r > 0) {
@@ -926,7 +1402,7 @@ int relay_http(const char *method, const char *conn_host, long conn_port,
                struct buf *head_out) {
   struct buf head;
   char num[32];
-  int fd;
+  int fd, tls;
   int status, rc;
 
   if (buf_init(resp) != 0) {
@@ -965,9 +1441,24 @@ int relay_http(const char *method, const char *conn_host, long conn_port,
   }
 
   spx = strncmp(conn_host, "spx:", 4) == 0;
+  tls = strncmp(conn_host, "tls:", 4) == 0;
+#ifndef GORK_OPENSSL
+  if (tls) {
+    fprintf(stderr, "gork: %s: this gork has no TLS (configure "
+                    "--with-openssl): reach it through a relay\n",
+            conn_host + 4);
+    buf_free(&head);
+    buf_free(&rx.head);
+    return -1;
+  }
+#endif
+#ifdef GORK_SERIAL
+  alarm(relay_timeout);         /* the 'O' may wait for the line too */
+#endif
   fd = spx ? spx_connect(conn_host, (int)conn_port)
-           : tcp_connect(conn_host, conn_port);
+           : tcp_connect(conn_host + (tls ? 4 : 0), conn_port);
   if (fd < 0) {
+    alarm(0);
     buf_free(&head);
     buf_free(&rx.head);
     return fd == -2 ? -2 : -1;
@@ -976,7 +1467,11 @@ int relay_http(const char *method, const char *conn_host, long conn_port,
   alarm(relay_timeout);
 
   rc = -1;
-  if (write_all(fd, head.p, head.len) != 0 ||
+  if (
+#ifdef GORK_OPENSSL
+      (tls && tls_start(fd, conn_host + 4) != 0) ||
+#endif
+      write_all(fd, head.p, head.len) != 0 ||
       write_all(fd, body, body_len) != 0 || (rc = read_to_eof(fd)) != 0) {
     alarm(0);
     conn_close(fd);

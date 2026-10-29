@@ -85,6 +85,8 @@ Useful `configure` arguments:
 | `--enable-unicode` / `--disable-unicode` | Force UTF-8 support in the TUI on or off (by default `configure` enables it when `ncursesw` and `locale.h` are present and falls back to ASCII otherwise) |
 | `--without-tui` | Build without curses (batch mode only) |
 | `--without-mcp` | Build without the MCP client |
+| `--with-openssl[=DIR]` | Do TLS with OpenSSL (1.0.2 or later; under `DIR` if given), so that no relay is needed. Needs `libssl-dev` / `openssl-devel` |
+| `--with-serial` | No network: everything over a serial line to `gork-relay -S` ([SERIAL.md](SERIAL.md)). Needs only `termios.h` |
 | `CPPFLAGS=-I/usr/include/ncurses` | `/usr/include/curses.h` is not ncurses but ncurses is installed |
 | `CPPFLAGS=-I/path/include LDFLAGS=-L/path/lib` | curses lives outside the system directories |
 

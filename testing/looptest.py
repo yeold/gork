@@ -6,7 +6,8 @@ Exits 0 only if every check passes.  Fails loudly on anything else.
 With $GORK_RELAY naming a gork-relay binary, every fake API server sits
 behind it: the fake listens on port + 1000 and `gork-relay -p` on the
 port gork is given.  Checks that need a TUI or MCP are skipped, and say
-so, when the build has none (--without-tui, --without-mcp).
+so, when the build has none (--without-tui, --without-mcp).  A build
+--with-openssl is told by its answer to a "tls:" relay.
 """
 import atexit, http.server, json, os, pty, re, select, socket, subprocess, sys, tempfile, threading, time
 
@@ -643,7 +644,8 @@ def check_mcp():
                 "fake": {"command": sys.executable, "args": [FAKEMCP]},
                 "off": {"command": sys.executable, "args": [FAKEMCP],
                         "disabled": True},
-                "remote": {"url": "https://example.com/mcp"},
+                # nothing listens there: a TLS build fails to connect
+                "remote": {"url": "https://127.0.0.1:1/mcp"},
             }}, f)
 
         srv = serve(H, 8088)
@@ -654,7 +656,8 @@ def check_mcp():
 
     assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr}"
     assert "broken: initialize failed" in proc.stderr, proc.stderr
-    assert "remote: gork has no TLS" in proc.stderr, proc.stderr
+    assert ("remote: initialize failed" if has_tls() else
+            "remote: gork has no TLS") in proc.stderr, proc.stderr
 
     names = [t["name"] for t in turns[0]["tools"]]
     assert names[-2:] == ["mcp__fake__echo", "mcp__fake__fail"], names
@@ -883,8 +886,13 @@ def check_config():
     proc = run_gork(8092, "hi", config="relay = 127.0.0.1:8092\nrelya = x\n")
     assert proc.returncode == 2 and ":2:" in proc.stderr, proc.stderr
 
-    proc = run_gork(8092, "hi", config="model = m\n")
-    assert proc.returncode == 2 and "no relay" in proc.stderr, proc.stderr
+    proc = run_gork(8092, "hi", config="model = m\nretries = 0\n")
+    if has_tls():       # no relay: TLS straight to `host`
+        assert proc.returncode != 0 and "fake.local" in proc.stderr, \
+            proc.stderr
+    else:
+        assert proc.returncode == 2 and "no relay" in proc.stderr, \
+            proc.stderr
 
     proc = run_gork(8092, "hi", config="relay = nohost\n")
     assert proc.returncode == 2 and "bad relay" in proc.stderr, proc.stderr
@@ -1755,6 +1763,15 @@ def has_tui():
         except subprocess.TimeoutExpired:
             return True
     return b"this build has no TUI" not in p.stderr
+
+
+def has_tls():
+    """Was this build made --with-openssl?  Without, it refuses a "tls:"
+    relay before it connects."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = run_gork(1, "hi", cwd=tmp, config="relay = tls:127.0.0.1:1\n"
+                     "retries = 0\n")
+    return "has no TLS" not in p.stderr
 
 
 def has_mcp():

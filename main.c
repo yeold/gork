@@ -22,7 +22,9 @@
  * Settings come from ~/.gork.conf (or $GORK_CONFIG), `key = value`.  On
  * DOS and Windows the file is gork.cnf and the directory _gork, beside
  * gork.exe or, on Windows, in %USERPROFILE% (see DOT_GORK and port.h):
- *   relay    host:port to connect to                  (required)
+ *   relay    host:port to connect to                  (required, but
+ *            for a TLS build: then it is `host`, port 443; and a serial
+ *            build wants serial:DEVICE[:BAUD[:rtscts]])
  *   host     Host: header value     env AGENT_HOST    (api.anthropic.com)
  *   path     request path           env AGENT_PATH    (/v1/messages)
  *   model    model id               env AGENT_MODEL   (claude-opus-5)
@@ -3264,7 +3266,10 @@ int main(int argc, char **argv)
     cJSON      *messages;
     struct buf  rules;
     FILE       *f;
-    const char *relay, *colon, *home;
+    const char *relay, *home;
+#ifndef GORK_SERIAL
+    const char *colon;
+#endif
     char        relay_host[256], skills_path[PATH_MAX], mcp_path[PATH_MAX];
     char        trust_path[PATH_MAX];
     int         done, lvl;
@@ -3353,9 +3358,40 @@ int main(int argc, char **argv)
     }
 
     relay = cfg(CFG_RELAY);
+#ifdef GORK_OPENSSL
+    /* No relay: TLS straight to `host`, on port 443 unless it names one. */
+    if (relay == NULL) {
+        static char direct[256 + 8];
+        const char *h = cfg(CFG_HOST);
+
+        if (strlen(h) > 256) {
+            fprintf(stderr, "gork: host too long\n");
+            return 2;
+        }
+        sprintf(direct, strchr(h, ':') != NULL ? "tls:%s" : "tls:%s:443", h);
+        relay = direct;
+    }
+#endif
     if (relay == NULL) {
         fprintf(stderr, "gork: no relay set; put `relay = host:port` in "
                         "%s (or the file GORK_CONFIG names)\n", conf_hint);
+        return 2;
+    }
+#ifdef GORK_SERIAL
+    /* serial:DEVICE[:BAUD[:rtscts]], read by relay.c */
+    if (strncmp(relay, "serial:", 7) != 0 || relay[7] == '\0' ||
+        strlen(relay) >= sizeof relay_host) {
+        fprintf(stderr, "gork: this gork talks over a serial line only; "
+                        "want relay = serial:DEVICE[:BAUD]\n");
+        return 2;
+    }
+    strcpy(relay_host, relay);
+    c.relay_host = relay_host;
+    c.relay_port = 0;
+#else
+    if (strncmp(relay, "serial:", 7) == 0) {
+        fprintf(stderr, "gork: this gork has no serial line support "
+                        "(configure --with-serial)\n");
         return 2;
     }
     colon = strrchr(relay, ':');
@@ -3372,6 +3408,7 @@ int main(int argc, char **argv)
     memcpy(relay_host, relay, colon - relay);
     relay_host[colon - relay] = '\0';
     c.relay_host = relay_host;
+#endif
 
     c.api_host = cfg(CFG_HOST);
     c.path     = cfg(CFG_PATH);
