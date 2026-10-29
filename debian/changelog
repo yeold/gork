@@ -1,3 +1,23 @@
+gork (1.4) unstable; urgency=medium
+
+  * New: configure --with-openssl.  gork does TLS itself, with the
+    server's certificate and name checked, and needs no relay: with no
+    `relay` set it connects to `host`, port 443.  An https:// MCP server
+    needs no relay either.  Configs that set a relay work as before.
+  * New: configure --with-serial, for machines with no network at all:
+    everything goes over a serial line to gork-relay -S (0.4 or later),
+    in checksummed frames.  docs/SERIAL.md has the setup and the protocol.
+  * New: gork as a GRUB command, on x86-64 and arm64 UEFI
+    (gork-<version>-grub-x64.zip and -grub-aa64.zip): GRUB 2.14 with
+    `gork` built in, and gork.mod, on gork's own TCP/IP.
+  * gork's own TCP/IP sizes its segments by what the network card sends
+    whole.  On barebox, paths may start with a device, (hd0,gpt1)/dir.
+  * The tests run through gork-relay 0.4, and the --with-openssl and
+    --with-serial builds have checks of their own (testing/tlstest.py,
+    testing/serialtest.py).
+
+ -- Yeold <isac.selea@gmail.com>  Thu, 29 Oct 2026 10:34:17 +0100
+
 gork (1.3) unstable; urgency=medium
 
   * New: gork for UEFI, x86-64 and arm64 (gork-<version>-uefi.zip):
