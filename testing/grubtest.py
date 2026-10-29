@@ -110,6 +110,11 @@ def main():
     part = {}
     try:
         c.expect(PROMPT, 180)
+        # how GRUB's clock keeps up with real time: in the log, for when
+        # a timeout check goes wrong
+        t0 = time.time()
+        c.cmd("sleep 5")
+        print("grubtest: GRUB's sleep 5 took %.1f s" % (time.time() - t0))
         part["prefix"] = c.cmd("echo ==prefix $prefix")
         part["version"] = c.cmd("gork --version")
         part["notui"] = c.cmd("gork")

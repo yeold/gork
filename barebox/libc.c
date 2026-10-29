@@ -486,6 +486,19 @@ time_t time(time_t *t)
     static int       have_base;
     time_t v;
 
+#ifdef GORK_GRUB
+    /* GRUB's milliseconds come from a TSC it calibrated at boot, which
+       in an emulator on a busy host can be several times off; the
+       firmware's clock (EFI GetTime) keeps real seconds. */
+    {
+        long long now = bb_epoch();
+
+        if (now > 0) {
+            if (t != NULL) *t = (time_t) now;
+            return (time_t) now;
+        }
+    }
+#endif
     if (!have_base) {           /* negative, with no clock: still the base */
         base = bb_epoch() - (long long) (bb_ms() / 1000);
         have_base = 1;
