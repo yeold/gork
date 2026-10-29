@@ -125,7 +125,15 @@ def main():
         c.cmd("set GORK_DIR=$prefix")
         part["ro"] = c.cmd("gork w1", 240)
         c.cmd("set GORK_DIR=(gork)/w")
+        # The fake takes 30 s.  A timeout of 5, not the file's 20: GRUB's
+        # clock, from a TSC calibrated at boot, can run slow in an
+        # emulator on a busy host, and twice let 30 s pass as less than 20
+        # (Jenkins #17, #18).  Then wait for the fake, which serves one
+        # request at a time, in real time.
+        c.cmd("set AGENT_TIMEOUT=5")
         part["slow"] = c.cmd("gork slow; echo ==status $?", 240)
+        c.cmd("unset AGENT_TIMEOUT")
+        time.sleep(30)
         part["again"] = c.cmd("gork hello", 240)
         part["out"] = c.cmd("cat (gork)/w/out.txt")
         part["w1"] = c.cmd("cat (gork)/w/sub/w1.txt")
