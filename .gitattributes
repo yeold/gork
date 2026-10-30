@@ -1,0 +1,3 @@
+# LF everywhere, also in a Windows checkout: sh and autoreconf
+# fail on CRLF (version.sh: "unexpected end of file").
+* text=auto eol=lf

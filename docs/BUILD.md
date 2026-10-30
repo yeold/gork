@@ -330,9 +330,10 @@ which today's ssh client accepts only when told to.
 **Cygwin 3.6** (gcc 14, ncurses 6.5). Install `gcc-core`, `make` and
 `libncurses-devel` with Cygwin's setup program, plus `autoconf` and
 `automake` for a git checkout, and `python3` for the test suite. Then
-build as under [Everywhere](#everywhere), in a Cygwin shell. Check the
-source out with LF line ends (`git config core.autocrlf input`): with CRLF
-`autoreconf` fails.
+build as under [Everywhere](#everywhere), in a Cygwin shell. The
+checkout has LF line ends whatever `core.autocrlf` says (`.gitattributes`);
+an older one may still have CRLF, and then `version.sh` and
+`autoreconf` fail: `git rm -rq --cached . && git reset --hard` redoes it.
 
 **The Windows package.** `gork-<version>-win32.zip` on the releases is
 this build, packed by `cygpack.sh` to run without a Cygwin install:
