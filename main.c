@@ -337,7 +337,8 @@ static char *kstrdup(const char *s)
 /* The environment beats ~/.gork.conf, which beats the default. */
 enum { CFG_RELAY, CFG_MODEL, CFG_HOST, CFG_PATH, CFG_KEY, CFG_ALLOW,
        CFG_TURNS, CFG_RETRIES, CFG_WINDOW, CFG_COMPACT, CFG_EFFORT,
-       CFG_TIMEOUT, CFG_PROTOCOL, CFG_STREAM, NCFG };
+       CFG_TIMEOUT, CFG_PROTOCOL, CFG_STREAM, CFG_CA_FILE, CFG_TLS_VERIFY,
+       NCFG };
 
 static const struct {
     const char *name, *env, *fallback;
@@ -355,7 +356,9 @@ static const struct {
     { "default_effort", "AGENT_DEFAULT_EFFORT", ""            },
     { "timeout", "AGENT_TIMEOUT",     "120"               },
     { "protocol", "AGENT_PROTOCOL",   "anthropic"         },
-    { "stream",  "AGENT_STREAM",      "auto"              }
+    { "stream",  "AGENT_STREAM",      "auto"              },
+    { "ca_file", "AGENT_CA_FILE",     NULL                },
+    { "tls_verify", "AGENT_TLS_VERIFY", "yes"             }
 };
 
 /* `protocol = openai`: speak chat completions instead of the Messages API. */
@@ -485,7 +488,7 @@ static int load_config(void)
             fprintf(stderr, "gork: %s:%d: expected `key = value`, key one of "
                             "relay, model, host, path, api_key, allow, max_turns, retries, "
                             "context_window, auto_compact, default_effort, timeout, "
-                            "protocol, stream\n", path, n);
+                            "protocol, stream, ca_file, tls_verify\n", path, n);
             fclose(f);
             return -1;
         }
@@ -3432,6 +3435,20 @@ int main(int argc, char **argv)
         fprintf(stderr, "gork: want timeout >= 1 (seconds)\n");
         return 2;
     }
+    if (strcmp(cfg(CFG_TLS_VERIFY), "no") == 0)
+        relay_tls_verify = 0;
+    else if (strcmp(cfg(CFG_TLS_VERIFY), "yes") != 0) {
+        fprintf(stderr, "gork: want tls_verify yes or no\n");
+        return 2;
+    }
+    relay_ca_file = cfg(CFG_CA_FILE);
+#ifndef GORK_OPENSSL
+    if (relay_ca_file != NULL || !relay_tls_verify) {
+        fprintf(stderr, "gork: ca_file and tls_verify are for a gork built "
+                        "--with-openssl; this one leaves TLS to the relay\n");
+        return 2;
+    }
+#endif
     if (c.ctx_window < 1000 || c.auto_compact < 0 || c.auto_compact > 99) {
         fprintf(stderr, "gork: want context_window >= 1000 and "
                         "auto_compact 0..99\n");

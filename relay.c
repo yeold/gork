@@ -98,6 +98,8 @@ static void sock_perror(const char *what) {
 
 int (*relay_abort)(void);
 int relay_timeout = 120;
+const char *relay_ca_file;
+int relay_tls_verify = 1;
 int relay_bearer;
 int relay_retry_after;
 
@@ -907,7 +909,8 @@ static void tls_errors(const char *what) {
 }
 
 /* The handshake, checking the certificate against the system's trusted
-   ones (or SSL_CERT_FILE / SSL_CERT_DIR) and the name `host`.  0 or -1. */
+   ones (or SSL_CERT_FILE / SSL_CERT_DIR) and relay_ca_file, and the name
+   `host`; or not at all, if relay_tls_verify is 0.  0 or -1. */
 static int tls_start(int fd, const char *host) {
   X509_VERIFY_PARAM *param;
   long v;
@@ -930,9 +933,20 @@ static int tls_start(int fd, const char *host) {
     SSL_CTX_set_options(tls_ctx, SSL_OP_IGNORE_UNEXPECTED_EOF);
 #endif
     SSL_CTX_set_mode(tls_ctx, SSL_MODE_AUTO_RETRY);
-    SSL_CTX_set_verify(tls_ctx, SSL_VERIFY_PEER, NULL);
+    SSL_CTX_set_verify(tls_ctx, relay_tls_verify ? SSL_VERIFY_PEER
+                                                 : SSL_VERIFY_NONE, NULL);
     if (SSL_CTX_set_default_verify_paths(tls_ctx) != 1) {
       tls_errors("TLS: no trusted certificates");
+      SSL_CTX_free(tls_ctx);    /* so that the next connection tries again */
+      tls_ctx = NULL;
+      return -1;
+    }
+    if (relay_ca_file != NULL &&
+        SSL_CTX_load_verify_locations(tls_ctx, relay_ca_file, NULL) != 1) {
+      fprintf(stderr, "gork: ca_file %s: ", relay_ca_file);
+      tls_errors("no certificates read");
+      SSL_CTX_free(tls_ctx);
+      tls_ctx = NULL;
       return -1;
     }
   }

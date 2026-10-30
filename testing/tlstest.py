@@ -7,7 +7,9 @@ only if every check passes.
 A fake Messages API listens on TLS with that certificate.  gork reaches
 it with no relay set, trusting the certificate through SSL_CERT_FILE, in
 a reply taken whole and in a streamed one; and refuses it when it is not
-trusted, and when the name does not match.
+trusted, and when the name does not match.  ca_file trusts it beside the
+system's certificates (a self-signed server), and tls_verify = no takes
+any certificate.
 """
 import http.server, json, os, ssl, subprocess, sys, tempfile, threading
 
@@ -59,7 +61,8 @@ class H(http.server.BaseHTTPRequestHandler):
 
 def run(tmp, config, **env_extra):
     env = dict(os.environ, HOME=tmp, ANTHROPIC_API_KEY="sk-test")
-    for k in ("SSL_CERT_FILE", "SSL_CERT_DIR", "AGENT_HOST"):
+    for k in ("SSL_CERT_FILE", "SSL_CERT_DIR", "AGENT_HOST", "AGENT_CA_FILE",
+              "AGENT_TLS_VERIFY"):
         env.pop(k, None)
     env.update(env_extra)
     conf = os.path.join(tmp, "gork.conf")
@@ -108,6 +111,30 @@ def main():
             assert len(hosts) == n, "a request went to a server not trusted"
             print("ok: an untrusted certificate, and a name that does not "
                   "match, refused")
+
+            p = run(tmp, direct + "ca_file = %s\n" % cert)
+            assert p.returncode == 0 and p.stdout == "hello over TLS\n", \
+                (p.stdout, p.stderr)
+            p = run(tmp, direct, AGENT_CA_FILE=cert)
+            assert p.returncode == 0, p.stderr
+            n = len(hosts)
+            p = run(tmp, direct + "ca_file = %s\n" % os.path.join(tmp, "none"))
+            assert p.returncode != 0 and "ca_file" in p.stderr, p.stderr
+            assert len(hosts) == n, "a request went out with no ca_file read"
+            print("ok: ca_file: a self-signed certificate trusted, beside "
+                  "the system's")
+
+            p = run(tmp, direct + "tls_verify = no\n",
+                    SSL_CERT_FILE=os.path.join(tmp, "none"),
+                    SSL_CERT_DIR=os.path.join(tmp, "none"))
+            assert p.returncode == 0 and p.stdout == "hello over TLS\n", \
+                (p.stdout, p.stderr)
+            p = run(tmp, "relay = tls:127.0.0.1:%d\nhost = localhost\n"
+                    "tls_verify = no\n" % PORT)
+            assert p.returncode == 0, p.stderr
+            p = run(tmp, direct + "tls_verify = maybe\n")
+            assert p.returncode == 2 and "tls_verify" in p.stderr, p.stderr
+            print("ok: tls_verify = no: any certificate, any name")
         finally:
             srv.shutdown()
     print("all TLS checks passed")

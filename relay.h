@@ -74,6 +74,12 @@ extern int relay_bearer;
 /* Seconds one request (and one MCP tool call) may take; `timeout`. */
 extern int relay_timeout;
 
+/* TLS of gork's own (--with-openssl): a PEM file of certificates trusted
+   beside the system's, for a self-signed server (`ca_file`; NULL for
+   none), and 0 to take any certificate at all (`tls_verify = no`). */
+extern const char *relay_ca_file;
+extern int relay_tls_verify;
+
 /* Seconds the last reply's Retry-After header asked to wait, or 0. */
 extern int relay_retry_after;
 

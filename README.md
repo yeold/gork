@@ -169,7 +169,9 @@ Where OpenSSL does work, a build made `./configure --with-openssl` does
 TLS itself, and needs no relay: leave `relay` out and it connects to
 `host`, port 443, checking the certificate against the system's trusted
 ones (or `SSL_CERT_FILE`). An `https://` MCP server is reached the same
-way.
+way. For a server with a self-signed certificate, `ca_file` names that
+certificate (PEM) and gork trusts it too; `tls_verify = no` takes any
+certificate unchecked, which lets anyone in between read the API key.
 
 HTTP/1.0 with `Connection: close` is deliberate: the server then replies
 unchunked and closes the socket, so "read until EOF" is complete and correct
@@ -424,6 +426,8 @@ read the config file, and none has MCP servers, so there is no `mcp.json`.
 | `stream` | `AGENT_STREAM` | `auto` | Whether the reply is asked for as a stream and shown as it arrives: `yes`, `no`, or `auto`, which is yes in the TUI and no in batch mode. A server that answers whole all the same is fine. Not on DOS |
 | `timeout` | `AGENT_TIMEOUT` | `120` | Seconds one API request, MCP tool call or `run_command` may take before it fails |
 | `default_effort` | `AGENT_DEFAULT_EFFORT` | *(unset: model default)* | Reasoning effort at startup: `low`, `medium`, `high`, `xhigh` or `max`, sent as `output_config.effort` (`reasoning_effort` with `protocol = openai`); `/effort` changes it in the TUI |
+| `ca_file` | `AGENT_CA_FILE` | *(none)* | Build `--with-openssl`: a PEM file of certificates trusted beside the system's, for a server with a self-signed certificate. Covers the API and `https://` MCP servers |
+| `tls_verify` | `AGENT_TLS_VERIFY` | `yes` | Build `--with-openssl`: `no` takes any certificate, unchecked, for the API and MCP servers alike |
 
 A set environment variable beats the file, and gork says so at startup (e.g. `model meta/muse-glimmer from AGENT_MODEL overrides ~/.gork.conf`), since a stale `export` in an old shell is easy to forget. If the file holds `api_key` and
 anyone but you can read it, gork refuses to start: `chmod 600 ~/.gork.conf`.
