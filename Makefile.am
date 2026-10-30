@@ -1,5 +1,5 @@
 bin_PROGRAMS = gork
-gork_SOURCES = main.c relay.c relay.h tui.c tui.h mcp.c mcp.h port.h \
+gork_SOURCES = main.c relay.c relay.h serline.c serline.h tui.c tui.h mcp.c mcp.h port.h \
                 cJSON/cJSON.c cJSON/cJSON.h
 EXTRA_DIST = README.md LICENSE CONTRIBUTING.md docs/BUILD.md docs/build/aix.md docs/build/beos.md docs/build/dos.md docs/build/hpux.md docs/build/minix.md docs/build/nextstep.md docs/build/os2.md docs/build/plan9.md docs/build/qnx.md docs/build/sunos4.md docs/build/svr4.md docs/build/uefi.md docs/build/windows.md docs/HACKING.md docs/MAINTAINING.md docs/SERIAL.md Makefile.dj dosbuild.sh dosspx.c win.c \
              dos16build.sh dos16/watcom.err dos16/syserr.c \

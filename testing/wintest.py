@@ -9,12 +9,19 @@ skipped, as a CI runner has no console and a pipe is not one.
 With $GORK_RELAY naming a gork-relay binary, every fake API server sits
 behind it: the fake listens on port + 1000 and `gork-relay -p` on the
 port gork is given.
+
+With $GORK_NONET set as well, gork.exe is a -nonet build (docs/SERIAL.md),
+under Wine: each fake sits behind `gork-relay -S` on one end of a socat
+pseudo-terminal pair, Wine's COM1 is the other end, and every
+configuration's relay becomes serial:COM1:38400.  Needs socat.
 """
 import http.server, json, os, re, select, subprocess, sys, tempfile, threading, time
 
 CMD = sys.argv[1:-1] + [os.path.abspath(sys.argv[-1])]
 WINE = os.name != "nt"
 RELAY = os.environ.get("GORK_RELAY")
+NONET = bool(os.environ.get("GORK_NONET"))
+COM1 = "/tmp/gork-wintest-com1"         # Wine's COM1, made by socat
 
 
 def win(path):
@@ -25,13 +32,14 @@ def win(path):
 class Served:
     """A fake server, and the gork-relay in front of it if there is one."""
 
-    def __init__(self, srv, relay=None):
-        self.srv, self.relay = srv, relay
+    def __init__(self, srv, relay=None, line=None):
+        self.srv, self.relay, self.line = srv, relay, line
 
     def shutdown(self):
-        if self.relay is not None:
-            self.relay.kill()
-            self.relay.wait()
+        for p in (self.relay, self.line):
+            if p is not None:
+                p.kill()
+                p.wait()
         self.srv.shutdown()
         self.srv.server_close()
 
@@ -43,20 +51,39 @@ def serve(handler_cls, port):
     if not RELAY:
         return Served(srv)
     log = tempfile.TemporaryFile()
-    relay = subprocess.Popen([RELAY, "-p", "-v", "-t", "127.0.0.1:%d" % port,
-                              "127.0.0.1:%d" % (port + 1000)],
+    line = None
+    if NONET:                   # a null modem: COM1 to the relay's end
+        far = COM1 + "-relay"
+        line = subprocess.Popen(["socat", "pty,raw,echo=0,link=" + COM1,
+                                 "pty,raw,echo=0,link=" + far])
+        for _ in range(50):
+            if os.path.exists(COM1) and os.path.exists(far):
+                break
+            time.sleep(0.1)
+        listen = ["-t", "0", "-S", far + ":38400"]
+    else:
+        listen = ["-t", "127.0.0.1:%d" % port]
+    relay = subprocess.Popen([RELAY, "-p", "-v"] + listen +
+                             ["127.0.0.1:%d" % (port + 1000)],
                              stdout=subprocess.DEVNULL, stderr=log)
     end = time.time() + 10
     while True:
         log.seek(0)
-        if b"TCP on" in log.read():
-            return Served(srv, relay)
+        started = log.read()
+        if b"TCP on" in started or (NONET and b"serial" in started.lower()):
+            return Served(srv, relay, line)
         if relay.poll() is not None or time.time() > end:
             log.seek(0)
             srv.shutdown()
             raise AssertionError("gork-relay did not start on %d: %r"
                                  % (port, log.read()[-500:]))
         time.sleep(0.05)
+
+
+def to_line(config):
+    """With $GORK_NONET, a configuration's relay is the serial line."""
+    return re.sub(r"relay = 127\.0\.0\.1:\d+", "relay = serial:COM1:38400",
+                  config) if NONET else config
 
 
 def run_gork(task, cwd, config=None, **env_extra):
@@ -66,6 +93,8 @@ def run_gork(task, cwd, config=None, **env_extra):
         env.pop(k, None)
     env.update(env_extra)
     conf = None
+    if config is not None:
+        config = to_line(config)
     if config is not None:
         conf = os.path.join(cwd, "..", "gork.conf")
         with open(conf, "w") as f:
@@ -285,7 +314,7 @@ def check_home():
 
     with tempfile.TemporaryDirectory() as tmp:
         with open(os.path.join(tmp, "gork.cnf"), "w") as f:
-            f.write("relay = 127.0.0.1:8103\nmodel = from-profile\n")
+            f.write(to_line("relay = 127.0.0.1:8103\nmodel = from-profile\n"))
         srv = serve(H, 8103)
         try:
             proc = run_gork("hi", tmp, USERPROFILE=win(tmp))
@@ -321,7 +350,7 @@ def check_text():
             env.pop("HOME", None)
             conf = os.path.join(tmp, "c.conf")
             with open(conf, "w") as f:
-                f.write("relay = 127.0.0.1:8106\n")
+                f.write(to_line("relay = 127.0.0.1:8106\n"))
             env["GORK_CONFIG"] = win(conf)
             proc = subprocess.run(CMD + ["caf\u00e9?"], cwd=tmp, capture_output=True,
                                   timeout=120, env=env)
@@ -356,12 +385,17 @@ def check_timeout():
         finally:
             release.set()
             srv.shutdown()
-    assert proc.returncode == 1 and "timeout on socket" in proc.stderr, proc.stderr
+    assert proc.returncode == 1 and ("timeout on socket" in proc.stderr or
+                                     "timeout on the serial line" in proc.stderr), proc.stderr
     # well before the server lets go; a busy machine starts Wine slowly
     assert took < 20, f"took {took:.1f}s"
 
-    proc = run_gork("hi", os.getcwd(), "relay = 127.0.0.1:8105\nretries = 0\n")
-    assert proc.returncode == 1 and "Winsock error" in proc.stderr, proc.stderr
+    if NONET:                           # a port that is not there
+        proc = run_gork("hi", os.getcwd(), "relay = serial:COM7\nretries = 0\n")
+        assert proc.returncode == 1 and "COM7" in proc.stderr, proc.stderr
+    else:
+        proc = run_gork("hi", os.getcwd(), "relay = 127.0.0.1:8105\nretries = 0\n")
+        assert proc.returncode == 1 and "Winsock error" in proc.stderr, proc.stderr
 
     print("ok: timeout, refused connection")
 
@@ -401,7 +435,7 @@ def check_tui_save_load():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = os.path.realpath(tmp)
         with open(os.path.join(tmp, "gork.cnf"), "w") as f:
-            f.write("relay = 127.0.0.1:8107\r\n")
+            f.write(to_line("relay = 127.0.0.1:8107\r\n"))
         env = dict(os.environ, WINEDEBUG="-all", ANTHROPIC_API_KEY="sk-test",
                    AGENT_HOST="fake.local", TERM="xterm",
                    GORK_CONFIG=win(tmp + "/gork.cnf"), USERPROFILE=win(tmp))
@@ -453,6 +487,15 @@ def check_tui_save_load():
     print("ok: TUI, /effort, /save and /load")
 
 
+if NONET:
+    # COM1 is the socat end, by Wine's own map of ports (the prefix first)
+    subprocess.run(["wineboot", "-i"], capture_output=True,
+                   env=dict(os.environ, WINEDEBUG="-all"))
+    subprocess.run(["wine", "reg", "add", "HKLM\\Software\\Wine\\Ports",
+                    "/v", "COM1", "/t", "REG_SZ", "/d", COM1, "/f"],
+                   check=True, capture_output=True,
+                   env=dict(os.environ, WINEDEBUG="-all"))
+    subprocess.run(["wineserver", "-w"])
 out = subprocess.run(CMD + ["--version"], capture_output=True, text=True,
                      env=dict(os.environ, WINEDEBUG="-all"))
 assert out.returncode == 0 and out.stdout.startswith("gork "), out

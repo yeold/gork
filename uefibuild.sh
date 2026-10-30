@@ -1,6 +1,8 @@
 #!/bin/sh
 # Cross-build gork for UEFI, started from the UEFI shell: gorkx64.efi for
-# x86-64 and gorkaa64.efi for arm64, packed as OUT/gork-<version>-uefi.zip.
+# x86-64 and gorkaa64.efi for arm64, packed as OUT/gork-<version>-uefi.zip;
+# the same with no network, over a serial line (docs/SERIAL.md), as
+# OUT/gork-<version>-uefi-nonet.zip.
 # Built with clang and lld against gork's own C library (uefi/), so
 # nothing is fetched.  Needs clang, lld and zip; run from the source tree:
 #     sh uefibuild.sh [OUT] [WORK]
@@ -12,8 +14,8 @@ ARCHS=${ARCHS:-"x64 aa64"}
 CC=${CC:-clang}
 LD=${LD:-ld.lld}
 
-rm -rf "$WORK/pack"
-mkdir -p "$OUT" "$WORK/pack"
+rm -rf "$WORK/pack" "$WORK/nonet"
+mkdir -p "$OUT" "$WORK/pack" "$WORK/nonet"
 OUT=$(cd "$OUT" && pwd)
 WORK=$(cd "$WORK" && pwd)
 
@@ -42,6 +44,21 @@ for a in $ARCHS; do
         "$WORK/$a"/cJSON.o "$WORK/$a"/libc.o "$WORK/$a"/fwlibc.o "$WORK/$a"/net.o \
         "$WORK/$a"/card.o \
         "$WORK/$a"/ip.o
+    # with no network: a serial line to gork-relay -S (docs/SERIAL.md)
+    mkdir -p "$WORK/$a/nonet"
+    for f in main relay notui cJSON/cJSON; do
+        $CC $CFLAGS -DGORK_SERIAL -std=gnu89 -pedantic -c $f.c \
+            -o "$WORK/$a/nonet/$(basename $f).o"
+    done
+    # serline.c reads efi.h, as the C library does
+    $CC $CFLAGS -DGORK_SERIAL -std=gnu99 -c serline.c \
+        -o "$WORK/$a/nonet/serline.o"
+    $LD -flavor link -machine:$machine -subsystem:efi_application \
+        -entry:efi_main -nodefaultlib -out:"$WORK/nonet/gork$a.efi" \
+        "$WORK/$a"/nonet/main.o "$WORK/$a"/nonet/relay.o \
+        "$WORK/$a"/nonet/serline.o "$WORK/$a"/nonet/notui.o \
+        "$WORK/$a"/nonet/cJSON.o "$WORK/$a"/libc.o "$WORK/$a"/fwlibc.o \
+        "$WORK/$a"/net.o "$WORK/$a"/card.o "$WORK/$a"/ip.o
 done
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
@@ -50,4 +67,11 @@ cp docs/build/uefi.md "$WORK/pack/BUILD.md"
 rm -f "$OUT/gork-$ver-uefi.zip"
 (cd "$WORK/pack" && zip -q "$OUT/gork-$ver-uefi.zip" gork*.efi README.md \
     LICENSE BUILD.md)
+cp README.md LICENSE "$WORK/nonet/"
+cp docs/build/uefi.md "$WORK/nonet/BUILD.md"
+cp docs/SERIAL.md "$WORK/nonet/SERIAL.md"
+rm -f "$OUT/gork-$ver-uefi-nonet.zip"
+(cd "$WORK/nonet" && zip -q "$OUT/gork-$ver-uefi-nonet.zip" gork*.efi \
+    README.md LICENSE BUILD.md SERIAL.md)
 echo "$OUT/gork-$ver-uefi.zip"
+echo "$OUT/gork-$ver-uefi-nonet.zip"

@@ -14,3 +14,10 @@ gork.exe: main.c relay.c tui.c dosspx.c port.h cJSON/cJSON.c
 	$(CC) $(CFLAGS) $(DEFS) -I$(PDCURSES)/include -I$(WATT)/inc -o $@ \
 	    main.c relay.c tui.c dosspx.c cJSON/cJSON.c \
 	    -L$(PDCURSES)/lib -L$(WATT)/lib -lpdcurses -lwatt -lm
+
+# The -nonet build: no network, all traffic over a serial line to
+# gork-relay -S (docs/SERIAL.md), on the UART itself.  No Watt-32.
+gork-nonet.exe: main.c relay.c serline.c serline.h tui.c port.h cJSON/cJSON.c
+	$(CC) $(CFLAGS) $(DEFS) -DGORK_SERIAL -I$(PDCURSES)/include -o $@ \
+	    main.c relay.c serline.c tui.c cJSON/cJSON.c \
+	    -L$(PDCURSES)/lib -lpdcurses -lm

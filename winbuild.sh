@@ -1,7 +1,9 @@
 #!/bin/sh
 # Cross-build gork.exe for Windows (9x and NT, 32-bit) with MinGW and pack
 # it as OUT/gork-<version>-win32-legacy.zip ("legacy": the Cygwin build,
-# cygpack.sh, is the Windows package for current systems, and has MCP).
+# cygpack.sh, is the Windows package for current systems, and has MCP),
+# and with no network, over a serial line (docs/SERIAL.md), as
+# OUT/gork-<version>-win32-legacy-nonet.zip.
 # Fetches the PDCurses source into
 # WORK, checksum pinned.  Needs the i686 mingw-w64 gcc, curl, zip and make;
 # run from the source tree:  sh winbuild.sh [OUT] [WORK]
@@ -42,10 +44,16 @@ make -f Makefile.w32 CC="$HOST-gcc" PDCURSES_NT3="$WORK/nt3/PDCurses-3.9" \
     DEFS="-DGORK_VERSION=\\\"$gver\\\"" gorknt3.exe
 "$HOST-strip" gorknt3.exe
 
+# and both with no network, over a serial line (docs/SERIAL.md)
+make -f Makefile.w32 CC="$HOST-gcc" PDCURSES="$WORK/PDCurses-3.9" \
+    PDCURSES_NT3="$WORK/nt3/PDCurses-3.9" \
+    DEFS="-DGORK_VERSION=\\\"$gver\\\"" gork-nonet.exe gorknt3-nonet.exe
+"$HOST-strip" gork-nonet.exe gorknt3-nonet.exe
+
 # One program for everything from a 486 up: no instruction in it may be
 # newer.  The compiler is told so (-march=i486); this looks at what the
 # libraries brought in.
-for e in gork.exe gorknt3.exe; do
+for e in gork.exe gorknt3.exe gork-nonet.exe gorknt3-nonet.exe; do
     if "$HOST-objdump" -d "$e" | grep -E '[[:space:]](cmov|fcmov|fcomi|fucomi)' >&2; then
         echo "winbuild.sh: $e has instructions a 486 lacks" >&2
         exit 1
@@ -57,4 +65,10 @@ cp gork.exe gorknt3.exe README.md LICENSE "$WORK/pack/"
 cp docs/build/windows.md "$WORK/pack/BUILD.md"
 rm -f "$OUT/gork-$ver-win32-legacy.zip"
 (cd "$WORK/pack" && zip -q "$OUT/gork-$ver-win32-legacy.zip" *)
+cp gork-nonet.exe "$WORK/pack/gork.exe"
+cp gorknt3-nonet.exe "$WORK/pack/gorknt3.exe"
+cp docs/SERIAL.md "$WORK/pack/SERIAL.md"
+rm -f "$OUT/gork-$ver-win32-legacy-nonet.zip"
+(cd "$WORK/pack" && zip -q "$OUT/gork-$ver-win32-legacy-nonet.zip" *)
 echo "$OUT/gork-$ver-win32-legacy.zip"
+echo "$OUT/gork-$ver-win32-legacy-nonet.zip"

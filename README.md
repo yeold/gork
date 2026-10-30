@@ -131,6 +131,9 @@ with gork in it ([docs/build/barebox.md](docs/build/barebox.md)),
 `gork-<version>-grub-x64.zip` and `-grub-aa64.zip`, GRUB for x86-64 and
 arm64 UEFI with gork in it and the module alone ([docs/build/grub.md](docs/build/grub.md)), and the DOS and
 Windows zips below.
+The DOS, legacy Windows and UEFI zips also come as `-nonet`
+(`gork-<version>-dos-nonet.zip` and so on): no network at all, only a
+[serial line](#serial).
 Everything else builds from the source tarball.
 
 There are two DOS packages, both without MCP servers, streaming or input
@@ -376,11 +379,13 @@ Unix builds have no SPX.
 <a id="serial"></a>
 ### Without any network: a serial line
 
-A Unix build made `./configure --with-serial` sends everything over a
-serial port to a `gork-relay -S` at the other end of a null-modem cable:
+A Unix build made `./configure --with-serial`, and the `-nonet` DOS,
+Windows and UEFI packages, send everything over a serial port to a
+`gork-relay -S` at the other end of a null-modem cable:
 
 ```ini
 relay = serial:/dev/ttyS0:38400
+relay = serial:COM1:38400
 ```
 
 [docs/SERIAL.md](docs/SERIAL.md) has the setup and the protocol.
@@ -412,7 +417,7 @@ read the config file, and none has MCP servers, so there is no `mcp.json`.
 
 | Key | Env override | Default | Meaning |
 |---|---|---|---|
-| `relay` | -- | *(required, but for a build `--with-openssl`)* | `host:port` gork connects to: the relay, or a local server. Or `spx:NET.NODE:SOCKET`, a gork-relay on an IPX network: see [Without TCP/IP](#without-tcpip-spx). Or `serial:DEVICE[:BAUD]` in a build `--with-serial`: see [a serial line](#serial). In a build `--with-openssl`, `tls:host:port` does TLS to that server, and with no `relay` at all gork does TLS to `host` |
+| `relay` | -- | *(required, but for a build `--with-openssl`)* | `host:port` gork connects to: the relay, or a local server. Or `spx:NET.NODE:SOCKET`, a gork-relay on an IPX network: see [Without TCP/IP](#without-tcpip-spx). Or `serial:DEVICE[:BAUD[:rtscts]]` in a build `--with-serial` or a `-nonet` package: see [a serial line](#serial). In a build `--with-openssl`, `tls:host:port` does TLS to that server, and with no `relay` at all gork does TLS to `host` |
 | `api_key` | `ANTHROPIC_API_KEY` (`OPENAI_API_KEY` with `protocol = openai`) | *(required for anthropic.com and openai.com)* | Sent as the `x-api-key` header, or as `Authorization: Bearer` with `protocol = openai` |
 | `protocol` | `AGENT_PROTOCOL` | `anthropic` | Wire format: `anthropic` (Messages API) or `openai` (chat completions); see [Local models](#local-models) |
 | `model` | `AGENT_MODEL` | `claude-opus-5` | Model id |

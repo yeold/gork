@@ -35,6 +35,9 @@ NE2000 MLID and IPXODI, with ODIPKT for the packet driver Watt-32 needs.
 Name an IPX.COM made by WSGEN for an NE2000 in $GORK_DOS_IPXCOM instead to
 use that: it takes a card of its own, wired to the relay, raw 802.3, and
 the packet driver a second one.
+A -nonet zip (no network: docs/SERIAL.md) is checked over COM1 instead,
+which QEMU makes a pseudo-terminal, with $GORK_RELAY (needed then) as
+`gork-relay -S` on it, in front of the fake API; there is no SPX check.
 Set $GORK_DOS_SMALL_DISKS for MS-DOS 3.30, 4.01, DR-DOS 7.03 and the like,
 which read only disks laid out the old way (DR-DOS sees no second disk
 otherwise), and $GORK_DOS_FAT12 instead for MS-DOS 2,
@@ -51,6 +54,7 @@ VM = os.path.join(os.environ.get("GORK_VM",
 PORT = 8095
 RELAY = os.environ.get("GORK_RELAY")    # a gork-relay binary: check SPX too
 RELAY_PORT = 8097                       # where it takes the guest's frames
+SERIAL = False                          # a -nonet zip: set in main()
 FAT12 = bool(os.environ.get("GORK_DOS_FAT12"))
 SMALL = FAT12 or bool(os.environ.get("GORK_DOS_SMALL_DISKS"))
 # MS-DOS 2's COMMAND.COM runs nothing named with a directory (and says
@@ -265,19 +269,21 @@ def build_images(zip_path):
        "-d", c)
     sh("unzip", "-qoj", os.path.join(VM, "crynwr.zip"),
        "DRIVERS/CRYNWR/NE2000.COM", "-d", c)
+    # the relay, as the configurations name it
+    to = "serial:COM1:38400" if SERIAL else "10.0.2.2:%d" % PORT
     files = {
         "WATTCP.CFG": "my_ip = dhcp\n" if os.environ.get("GORK_DOS_DHCP") else
                       "my_ip = 10.0.2.15\nnetmask = 255.255.255.0\n"
                       "gateway = 10.0.2.2\nnameserver = 10.0.2.3\n",
-        "GORK.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
+        "GORK.CNF": "relay = %s\nhost = fake.local\n"
                     "timeout = 20\nretries = 0\n"
-                    "allow = d:/shared;c:/tmp\n" % PORT,
-        "SHORT.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
-                     "timeout = 6\nretries = 0\n" % PORT,
-        "BAD.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
-                   "allow = c:/nope\n" % PORT,
-        "STREAM.CNF": "relay = 10.0.2.2:%d\nhost = fake.local\n"
-                      "timeout = 20\nretries = 0\nstream = yes\n" % PORT,
+                    "allow = d:/shared;c:/tmp\n" % to,
+        "SHORT.CNF": "relay = %s\nhost = fake.local\n"
+                     "timeout = 6\nretries = 0\n" % to,
+        "BAD.CNF": "relay = %s\nhost = fake.local\n"
+                   "allow = c:/nope\n" % to,
+        "STREAM.CNF": "relay = %s\nhost = fake.local\n"
+                      "timeout = 20\nretries = 0\nstream = yes\n" % to,
         # the relay's address, as it prints it: network 0 is this segment
         "SPX.CNF": "relay = spx:0.02676F726B01:8443\nhost = fake.local\n"
                    "timeout = 20\nretries = 0\n",
@@ -318,7 +324,7 @@ def build_images(zip_path):
         rest = rest.replace("NE2000 0x60 5 0x300\n",
                             "LH LSL\nLH NE2000\nLH IPXODI\n"
                             "LH ODIPKT24 0 96\n")
-    elif RELAY:
+    elif RELAY and not SERIAL:
         sh("unzip", "-qoj", os.path.join(VM, "crynwr.zip"),
            "DRIVERS/CRYNWR/PDIPX.COM", "-d", c)
         rest = rest.replace("0x300\n", "0x300\nPDIPX\n")
@@ -458,7 +464,7 @@ class Guest:
             card = ["-device", "ne2k_isa,netdev=s0,iobase=0x300,irq=5,"
                     "mac=52:54:00:12:34:57",
                     "-device", "ne2k_isa,netdev=n0,iobase=0x340,irq=10"]
-        elif RELAY:
+        elif RELAY and not SERIAL:
             # the card on a hub with both the user network and the relay
             net = ["-netdev", "user,id=u0",
                    "-netdev", "socket,id=s0,udp=127.0.0.1:%d,"
@@ -468,12 +474,27 @@ class Guest:
                    "-netdev", "hubport,id=n0,hubid=0"]
         self.qemu = subprocess.Popen(
             ["qemu-system-i386", "-m", "15" if STANDARD else "32", "-display", "none", "-vga", "std",
-             "-boot", "a", "-serial", "none",
+             "-boot", "a"] +
+            (["-chardev", "pty,id=com1", "-serial", "chardev:com1"]
+             if SERIAL else ["-serial", "none"]) + [
              "-monitor", "unix:%s,server,nowait" % self.sock_path,
              "-drive", "file=%s,format=raw,if=floppy" % boot,
              "-drive", "file=%s,format=raw,if=ide,index=0" % disk,
              "-drive", "file=%s,format=raw,if=ide,index=1" % disk2] + net +
-            card)
+            card, stdout=subprocess.PIPE if SERIAL else None,
+            stderr=subprocess.STDOUT if SERIAL else None)
+        self.pty = None
+        if SERIAL:          # on stdout: "char device redirected to /dev/pts/N"
+            seen = b""
+            while self.pty is None:
+                line = self.qemu.stdout.readline()
+                assert line, "no pty from QEMU: %r" % seen
+                seen += line
+                m = re.search(rb"(/dev/pts/\d+)", line)
+                if m:
+                    self.pty = m.group(1).decode()
+            threading.Thread(target=self.qemu.stdout.read,  # or a full
+                             daemon=True).start()           # pipe stops it
         for _ in range(50):
             if os.path.exists(self.sock_path):
                 break
@@ -710,7 +731,7 @@ def check_timeout(g):
     g.run("set GORK_CONFIG=c:\\short.cnf")
     s = g.run(GORK + " t")
     g.run("set GORK_CONFIG=")
-    assert "timeout on socket" in s, s
+    assert "timeout on socket" in s or "timeout on the serial line" in s, s
     time.sleep(7)                       # let the late reply drain
     print("ok: timeout")
 
@@ -809,18 +830,28 @@ def main():
     zip_path = sys.argv[1] if len(sys.argv) > 1 else (zips[-1] if zips else None)
     if zip_path is None:
         sys.exit("no gork-*-dos.zip; run `sh dosbuild.sh` first")
+    global SERIAL
+    SERIAL = "-nonet" in os.path.basename(zip_path)
+    if SERIAL and not RELAY:
+        sys.exit("a -nonet zip is checked through gork-relay -S: name it in "
+                 "$GORK_RELAY")
     fetch()
     boot, disk, disk2 = build_images(os.path.abspath(zip_path))
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     srv.daemon_threads = True
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    relay = RELAY and subprocess.Popen(
+    relay = RELAY and not SERIAL and subprocess.Popen(
         [RELAY, "-p", "-t", "0", "-x", "udp:127.0.0.1:%d" % RELAY_PORT,
          "127.0.0.1:%d" % PORT])
     if relay:
         time.sleep(0.3)
         assert relay.poll() is None, "gork-relay did not start"
     g = Guest(boot, disk, disk2)
+    if SERIAL:                          # on COM1's far end
+        relay = subprocess.Popen([RELAY, "-p", "-v", "-t", "0", "-S",
+                                  g.pty + ":38400", "127.0.0.1:%d" % PORT])
+        time.sleep(0.3)
+        assert relay.poll() is None, "gork-relay -S did not start"
     try:
         if WINDOWS2:
             # "Memory Configuration Altered", OK: Enter until the box is up
@@ -843,7 +874,7 @@ def main():
         check_long(g)
         check_run(g)
         check_stream(g)
-        if RELAY:
+        if RELAY and not SERIAL:
             check_spx(g)
         check_timeout(g)
         check_tui(g)

@@ -1,6 +1,7 @@
 #!/bin/sh
 # Cross-build gork.exe for DOS and pack it with CWSDPMI as
-# OUT/gork-<version>-dos.zip.  Fetches a prebuilt DJGPP cross compiler,
+# OUT/gork-<version>-dos.zip, and the build with no network, over a serial
+# line (docs/SERIAL.md), as OUT/gork-<version>-dos-nonet.zip.  Fetches a prebuilt DJGPP cross compiler,
 # PDCurses and Watt-32 into WORK, checksums pinned.  Needs curl, bzip2,
 # unzip, zip and make; run from the source tree:  sh dosbuild.sh [OUT] [WORK]
 set -eu
@@ -29,12 +30,17 @@ unzip -qoj "$WORK/csdpmi7b.zip" bin/CWSDPMI.EXE bin/cwsdpmi.doc -d "$WORK/pack"
 
 make -f Makefile.dj CC="$WORK/djgpp/bin/i586-pc-msdosdjgpp-gcc" \
     PDCURSES="$WORK/pdcurses" WATT="$WORK/watt/net/watt" \
-    DEFS="-DGORK_VERSION=\\\"$(sh version.sh)\\\""
-"$WORK/djgpp/bin/i586-pc-msdosdjgpp-strip" gork.exe
+    DEFS="-DGORK_VERSION=\\\"$(sh version.sh)\\\"" gork.exe gork-nonet.exe
+"$WORK/djgpp/bin/i586-pc-msdosdjgpp-strip" gork.exe gork-nonet.exe
 
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
 cp gork.exe README.md LICENSE "$WORK/pack/"
 cp docs/build/dos.md "$WORK/pack/BUILD.md"
 rm -f "$OUT/gork-$ver-dos.zip"
 (cd "$WORK/pack" && zip -q "$OUT/gork-$ver-dos.zip" *)
+cp gork-nonet.exe "$WORK/pack/gork.exe"
+cp docs/SERIAL.md "$WORK/pack/SERIAL.md"
+rm -f "$OUT/gork-$ver-dos-nonet.zip"
+(cd "$WORK/pack" && zip -q "$OUT/gork-$ver-dos-nonet.zip" *)
 echo "$OUT/gork-$ver-dos.zip"
+echo "$OUT/gork-$ver-dos-nonet.zip"

@@ -155,8 +155,13 @@ typedef struct {
                                           UINTN, CHAR16 *);
     EFI_STATUS (EFIAPI *ConnectController)(EFI_HANDLE, EFI_HANDLE *drivers,
                                            void *path, BOOLEAN recursive);
-    void *DisconnectController, *OpenProtocol,
-         *CloseProtocol, *OpenProtocolInformation, *ProtocolsPerHandle;
+    void *DisconnectController;
+    EFI_STATUS (EFIAPI *OpenProtocol)(EFI_HANDLE, EFI_GUID *, void **,
+                                      EFI_HANDLE agent, EFI_HANDLE controller,
+                                      uint32_t attributes);
+    EFI_STATUS (EFIAPI *CloseProtocol)(EFI_HANDLE, EFI_GUID *,
+                                       EFI_HANDLE agent, EFI_HANDLE controller);
+    void *OpenProtocolInformation, *ProtocolsPerHandle;
     EFI_STATUS (EFIAPI *LocateHandleBuffer)(int type, EFI_GUID *, void *key,
                                             UINTN *n, EFI_HANDLE **);
     EFI_STATUS (EFIAPI *LocateProtocol)(EFI_GUID *, void *reg, void **);
@@ -486,6 +491,38 @@ typedef struct EFI_SIMPLE_NETWORK_PROTOCOL {
     EFI_EVENT                WaitForPacket;
     EFI_SIMPLE_NETWORK_MODE *Mode;
 } EFI_SIMPLE_NETWORK_PROTOCOL;
+
+/* ---- a serial port, for the build with no network (../serline.c) ---- */
+
+#define EFI_SERIAL_IO_PROTOCOL_GUID \
+    { 0xbb25cf6f, 0xf1d4, 0x11d2, \
+      { 0x9a, 0x0c, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0xfd } }
+
+/* OpenProtocol: alone, the drivers that had it (a console) stopped */
+#define EFI_OPEN_PROTOCOL_EXCLUSIVE            0x0020
+
+#define EFI_SERIAL_DATA_TERMINAL_READY         0x0001
+#define EFI_SERIAL_REQUEST_TO_SEND             0x0002
+#define EFI_SERIAL_HARDWARE_FLOW_CONTROL_ENABLE 0x4000
+
+typedef struct EFI_SERIAL_IO_PROTOCOL {
+    uint32_t   Revision;
+    EFI_STATUS (EFIAPI *Reset)(struct EFI_SERIAL_IO_PROTOCOL *);
+    /* parity 1: none; stop bits 1: one; timeout: per byte, microseconds */
+    EFI_STATUS (EFIAPI *SetAttributes)(struct EFI_SERIAL_IO_PROTOCOL *,
+                                       uint64_t baud, uint32_t fifo,
+                                       uint32_t timeout, int parity,
+                                       uint8_t data_bits, int stop_bits);
+    EFI_STATUS (EFIAPI *SetControl)(struct EFI_SERIAL_IO_PROTOCOL *,
+                                    uint32_t);
+    EFI_STATUS (EFIAPI *GetControl)(struct EFI_SERIAL_IO_PROTOCOL *,
+                                    uint32_t *);
+    EFI_STATUS (EFIAPI *Write)(struct EFI_SERIAL_IO_PROTOCOL *, UINTN *size,
+                               void *buf);
+    EFI_STATUS (EFIAPI *Read)(struct EFI_SERIAL_IO_PROTOCOL *, UINTN *size,
+                              void *buf);
+    void      *Mode;
+} EFI_SERIAL_IO_PROTOCOL;
 
 /* ---- for the rest of the library (libc.c, net.c) --------------------- */
 

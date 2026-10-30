@@ -15,8 +15,13 @@ the guest to the fake API on 10.0.2.2.  The disk's files are read back
 afterwards.  Prints "ok:" or "FAIL:" per check and exits 1 if any
 failed.  Needs qemu-system-x86_64 and OVMF, or qemu-system-aarch64 and
 qemu-efi-aarch64 (u-boot-qemu for uboot), mtools and dosfstools.
+
+A -nonet PACKAGE (no network: docs/SERIAL.md) runs on x64 only, over the
+machine's second serial port, COM2 (the console is COM1): a socat
+pseudo-terminal pair takes it to $GORK_RELAY, run as `gork-relay -S`,
+in front of the fake.  Needs socat then.
 """
-import json, os, shutil, subprocess, sys, tempfile, time, zipfile
+import json, os, re, shutil, subprocess, sys, tempfile, time, zipfile
 
 PORT = 8099
 
@@ -95,6 +100,11 @@ def main():
     pkg, fake = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
     machine = sys.argv[3] if len(sys.argv) > 3 else "x64"
     arch, code, varstore, qemu = MACHINES[machine]
+    nonet = "-nonet" in os.path.basename(pkg)
+    relay = os.environ.get("GORK_RELAY")
+    if nonet and (machine != "x64" or not relay):
+        sys.exit("a -nonet package runs on x64, with $GORK_RELAY set")
+    to = "serial:COM2:38400" if nonet else "10.0.2.2:%d" % PORT
     shell = sys.argv[4] if len(sys.argv) > 4 else \
         "/usr/share/efi-shell-%s/shell%s.efi" % (arch, arch)
     t = tempfile.mkdtemp(prefix="uefitest.")
@@ -108,10 +118,10 @@ def main():
             shutil.copyfileobj(src, dst)
     shutil.copy(shell, os.path.join(esp, "EFI", "BOOT", "BOOT%s.EFI" % arch.upper()))
     with open(os.path.join(esp, "gork.cnf"), "w", newline="\r\n") as f:
-        f.write("relay = 10.0.2.2:%d\napi_key = sk-fake\ntimeout = 20\n"
-                "retries = 0\n" % PORT)
+        f.write("relay = %s\napi_key = sk-fake\ntimeout = 20\n"
+                "retries = 0\n" % to)
     with open(os.path.join(esp, "startup.nsh"), "w", newline="\r\n") as f:
-        f.write(SCRIPT)
+        f.write(SCRIPT.replace("10.0.2.2:%d" % PORT, to))
     with open(os.path.join(esp, "w", "abcdefghijkl.c"), "w") as f:
         f.write("old\n")
 
@@ -128,6 +138,20 @@ def main():
 
     fp = subprocess.Popen([fake, str(PORT)], cwd=fdir, stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL)
+    wire = []                           # socat and gork-relay, for COM2
+    if nonet:
+        com2, far = os.path.join(t, "com2"), os.path.join(t, "relay")
+        wire = [subprocess.Popen(["socat", "pty,raw,echo=0,link=" + com2,
+                                  "pty,raw,echo=0,link=" + far])]
+        for _ in range(50):
+            if os.path.exists(com2) and os.path.exists(far):
+                break
+            time.sleep(0.1)
+        wire.append(subprocess.Popen([relay, "-p", "-v", "-t", "0", "-S",
+                                      far + ":38400", "127.0.0.1:%d" % PORT],
+                                     stderr=open(os.path.join(t, "relay.log"), "w")))
+        qemu = qemu + ["-chardev", "serial,id=com2,path=" + os.path.realpath(com2),
+                       "-serial", "mon:stdio", "-serial", "chardev:com2"]
     time.sleep(1)
     try:
         q = subprocess.run(
@@ -139,8 +163,9 @@ def main():
     except subprocess.TimeoutExpired as e:
         out = (e.stdout or b"").decode("utf-8", "replace") + "\n(QEMU timed out)"
     finally:
-        fp.terminate()
-        fp.wait()
+        for p in [fp] + wire:
+            p.terminate()
+            p.wait()
     sh("mcopy", "-i", img, "-s", "-n", "-Q", "::/*", back)
     out = out.replace("\r", "")
     if os.environ.get("UEFITEST_VERBOSE"):
@@ -189,7 +214,8 @@ def main():
          "outside the working directory" in log and read("..", "escape.txt") is None),
         ("a write in a subdirectory", read("sub", "w1.txt") == b"x"),
         ("a UTF-16 config, as the shell writes it", "PONG" in part("utf16")),
-        ("the request timeout", "timeout on socket" in part("slow")),
+        ("the request timeout", "timeout on socket" in part("slow") or
+         "timeout on the serial line" in part("slow")),
         ("exit status in lasterror", "==status 0x1" in out),
     ]
     fails = 0
@@ -198,6 +224,9 @@ def main():
         fails += not good
     if fails and not os.environ.get("UEFITEST_VERBOSE"):
         print(out[-3000:])
+    if fails and nonet:
+        with open(os.path.join(t, "relay.log")) as f:
+            print("gork-relay -S:\n" + f.read()[-4000:])
     if os.environ.get("UEFITEST_KEEP"):
         print("kept: " + t)
     else:

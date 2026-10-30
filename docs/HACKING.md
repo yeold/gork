@@ -107,7 +107,9 @@ A build `--with-openssl` also has `testing/tlstest.py` (TLS of its own,
 with the certificate checked, against a fake API on TLS; needs the
 `openssl` command), and one `--with-serial` has only
 `testing/serialtest.py`, over a pseudo-terminal (see
-[SERIAL.md](SERIAL.md)).
+[SERIAL.md](SERIAL.md)). The `-nonet` DOS, Windows and UEFI packages are
+checked by their systems' own scripts over a serial line, as
+[SERIAL.md](SERIAL.md#tests) says.
 
 `testing/oldvm.sh build` makes a Debian 1.3 (1997: Linux 2.0.33, libc5,
 gcc 2.7.2.1) disk image for QEMU, and `testing/oldvm.sh run` boots it with

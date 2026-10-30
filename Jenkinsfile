@@ -4,6 +4,8 @@
 // the DOS zips, 32-bit (dosbuild.sh) and 16-bit (dos16build.sh), tested on
 // FreeDOS in QEMU (testing/dostest.py); and the legacy Windows zip, cross-
 // built with MinGW (winbuild.sh) and tested under Wine (testing/wintest.py);
+// the -nonet DOS, Windows and UEFI zips, with no network but a serial line
+// to gork-relay -S (docs/SERIAL.md), tested over it in the same stages;
 // static FreeBSD, NetBSD and OpenBSD binaries cross-built with clang
 // (bsdbuild.sh), each run on its own system in QEMU (testing/bsdtest.py);
 // gork for x86-64 and arm64 UEFI (uefibuild.sh), run in the UEFI
@@ -118,7 +120,9 @@ pipeline {
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev >/dev/null
                                 mkdir -p /tmp/vm/dostest && cp /dl/*.zip /tmp/vm/dostest/ 2>/dev/null || :
                                 rc=0
-                                cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos.zip || rc=$?
+                                # then the -nonet zip, over COM1 to gork-relay -S
+                                cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos.zip &&
+                                    GORK_RELAY=$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos-nonet.zip || rc=$?
                                 cp /tmp/vm/dostest/*.zip /dl/ 2>/dev/null || :
                                 chown -R '"$(id -u):$(id -g)"' /dl
                                 exit $rc'
@@ -143,6 +147,7 @@ pipeline {
                                 mkdir -p /tmp/vm/dostest && cp /dl/*.zip /tmp/vm/dostest/ 2>/dev/null || :
                                 rc=0
                                 cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_DOS_DHCP=1 GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16.zip &&
+                                    GORK_RELAY=$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16-nonet.zip &&
                                     GORK_VM=/tmp/vm python3 testing/dosboxtest.py /out/gork-*-dos16.zip || rc=$?
                                 cp /tmp/vm/dostest/*.zip /dl/ 2>/dev/null || :
                                 chown -R '"$(id -u):$(id -g)"' /dl
@@ -163,11 +168,14 @@ pipeline {
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
                                 dpkg --add-architecture i386
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends wine wine32:i386 unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev >/dev/null
-                                mkdir /tmp/w && cd /tmp/w && unzip -q /out/gork-*-win32-legacy.zip
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends wine wine32:i386 unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev socat >/dev/null
+                                mkdir /tmp/w /tmp/wn && cd /tmp/w && unzip -q /out/gork-*-win32-legacy.zip
+                                cd /tmp/wn && unzip -q /out/gork-*-win32-legacy-nonet.zip
                                 cd /src && export GORK_RELAY=$(sh testing/getrelay.sh) &&
                                     python3 testing/wintest.py wine /tmp/w/gork.exe &&
-                                    python3 testing/wintest.py wine /tmp/w/gorknt3.exe'
+                                    python3 testing/wintest.py wine /tmp/w/gorknt3.exe &&
+                                    GORK_NONET=1 python3 testing/wintest.py wine /tmp/wn/gork.exe &&
+                                    GORK_NONET=1 python3 testing/wintest.py wine /tmp/wn/gorknt3.exe'
                         '''
                     }
                 }
@@ -270,7 +278,7 @@ pipeline {
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$BW":/work debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils qemu-efi-aarch64 ovmf genisoimage python3 xz-utils gzip curl ca-certificates \
-                                    u-boot-qemu efi-shell-x64 efi-shell-aa64 mtools dosfstools gcc libc6-dev >/dev/null
+                                    u-boot-qemu efi-shell-x64 efi-shell-aa64 mtools dosfstools gcc libc6-dev make libssl-dev socat >/dev/null
                                 cd /src && mkdir -p /work/tmp && rc=0
                                 for t in freebsd-amd64 freebsd-arm64 netbsd-amd64 netbsd-arm64 openbsd-amd64 openbsd-arm64; do
                                     echo "== $t"
@@ -285,6 +293,9 @@ pipeline {
                                     echo "== uefi $m"
                                     TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi.zip /tmp/fakeapi $m || rc=1
                                 done
+                                # the -nonet one, over COM2 to gork-relay -S
+                                echo "== uefi-nonet x64"
+                                GORK_RELAY=$(sh testing/getrelay.sh) TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi-nonet.zip /tmp/fakeapi x64 || rc=1
                                 chown -R '"$(id -u):$(id -g)"' /work
                                 exit $rc'
                         '''

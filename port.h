@@ -186,6 +186,7 @@ char *realpath(const char *path, char *out);
    job control. */
 #ifdef __EMX__
 #define GORK_EMX
+#include <sys/types.h>          /* before select.h, which wants size_t */
 #include <sys/select.h>
 /* realpath(): absolute, with forward slashes, ENOENT if nothing is there
    (main.c), as on Windows. */

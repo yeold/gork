@@ -33,3 +33,14 @@ gorknt3.exe: main.c relay.c tui.c win.c nt3crt.c port.h cJSON/cJSON.c
 	$(CC) $(NT3) $(CFLAGS) $(DEFS) $(LDFLAGS) -I$(PDCURSES_NT3) -o $@ \
 	    main.c relay.c tui.c win.c nt3crt.c cJSON/cJSON.c \
 	    $(PDCURSES_NT3)/wincon/pdcurses.a -static-libgcc -lwsock32 -lm
+
+# The -nonet builds of both: no network, a serial line to gork-relay -S
+# (docs/SERIAL.md), through the comm API.  No Winsock.
+NONET    = main.c relay.c serline.c tui.c win.c cJSON/cJSON.c
+gork-nonet.exe: $(NONET) serline.h port.h
+	$(CC) $(CFLAGS) $(DEFS) -DGORK_SERIAL $(LDFLAGS) -I$(PDCURSES) -o $@ \
+	    $(NONET) $(PDCURSES)/wincon/pdcurses.a -static-libgcc -lm
+gorknt3-nonet.exe: $(NONET) nt3crt.c serline.h port.h
+	$(CC) $(NT3) $(CFLAGS) $(DEFS) -DGORK_SERIAL $(LDFLAGS) \
+	    -I$(PDCURSES_NT3) -o $@ $(NONET) nt3crt.c \
+	    $(PDCURSES_NT3)/wincon/pdcurses.a -static-libgcc -lm

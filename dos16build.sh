@@ -1,6 +1,7 @@
 #!/bin/sh
 # Cross-build the 16-bit gork.exe for DOS (real mode, 8086 and up) and pack
-# it as OUT/gork-<version>-dos16.zip.  Fetches the Open Watcom compiler and
+# it as OUT/gork-<version>-dos16.zip, and the build with no network (docs/
+# SERIAL.md) as OUT/gork-<version>-dos16-nonet.zip.  Fetches the Open Watcom compiler and
 # the sources of Watt-32 and PDCurses into WORK, checksums pinned, and
 # builds both libraries for the large memory model.  Needs curl, xz, tar,
 # zip and an x86-64 Linux; run from the source tree:
@@ -89,9 +90,34 @@ done
     grep -v W1027 || true)
 test -s "$obj/gork.exe"
 
+# The -nonet build: no network, a serial line to gork-relay -S
+# (docs/SERIAL.md), on the UART itself.  No Watt-32.  serline.c with -zu:
+# its interrupt handler runs on whatever stack it interrupted, DOS's
+# often, so its data must not be reached through SS, as Watcom otherwise
+# does.
+non=$obj/nonet
+mkdir "$non"
+for f in main.c relay.c serline.c tui.c cJSON/cJSON.c; do
+    n=$(basename "$f" .c)
+    zu=; [ "$n" = serline ] && zu=-zu
+    wcc -q -ml -bt=dos -os -fpc -w3 -wcd=200 -wcd=201 -zq -zc -zm -zt64 $zu -nt="${n}_T" \
+        -DGORK_VERSION="\"$gver\"" -DCJSON_NESTING_LIMIT=40 -DGORK_SERIAL -I"$WORK/pdcurses" \
+        -fo="$non/$n.obj" "$f"
+done
+(cd "$non" && wlink option quiet system dos option packcode=1 \
+    option packdata=1 option stack=24k option map=gork.map name gork.exe \
+    file main.obj,relay.obj,serline.obj,tui.obj,cJSON.obj \
+    library "$WORK/pdcurses/dos/pdcurses.lib" 2>&1 | grep -v W1027 || true)
+test -s "$non/gork.exe"
+
 ver=$(sed -n 's/^AC_INIT(\[gork\], \[\(.*\)\])/\1/p' configure.ac)
 cp "$obj/gork.exe" README.md LICENSE "$WORK/pack/"
 cp docs/build/dos.md "$WORK/pack/BUILD.md"
 rm -f "$OUT/gork-$ver-dos16.zip"
 (cd "$WORK/pack" && zip -q "$OUT/gork-$ver-dos16.zip" ./*)
+cp "$non/gork.exe" "$WORK/pack/"
+cp docs/SERIAL.md "$WORK/pack/SERIAL.md"
+rm -f "$OUT/gork-$ver-dos16-nonet.zip"
+(cd "$WORK/pack" && zip -q "$OUT/gork-$ver-dos16-nonet.zip" ./*)
 echo "$OUT/gork-$ver-dos16.zip"
+echo "$OUT/gork-$ver-dos16-nonet.zip"

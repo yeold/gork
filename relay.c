@@ -16,7 +16,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include "port.h"
-#ifdef _WIN32
+#if defined(GORK_SERIAL)
+#include <signal.h>
+#include <time.h>
+#ifndef GORK_NO_FORK
+#include <unistd.h>
+#endif
+#include "serline.h"
+#elif defined(_WIN32)
 #include <winsock.h>            /* 1.1: all that Windows 95 has */
 #include <wsipx.h>
 #elif defined(GORK_DOS16)
@@ -33,15 +40,6 @@
 #include <net/gen/netdb.h>
 #include <net/gen/tcp.h>
 #include <net/gen/tcp_io.h>
-#elif defined(GORK_SERIAL)
-#include <fcntl.h>
-#include <signal.h>
-#include <termios.h>
-#include <time.h>
-#include <unistd.h>
-#ifndef GORK_NO_SELECT
-#include <sys/time.h>
-#endif
 #else
 #include <netdb.h>
 #include <netinet/in.h>
@@ -77,13 +75,13 @@ static time_t deadline;
 #define alarm(s) (deadline = (s) ? time(NULL) + (s) : 0)
 #endif
 
-#if defined(_WIN32) || defined(GORK_BEOS)
+#if (defined(_WIN32) || defined(GORK_BEOS)) && !defined(GORK_SERIAL)
 /* Sockets are not file descriptors. */
 #define close(fd)       closesocket(fd)
 #define write(fd, p, n) send(fd, p, (int)(n), 0)
 #define read(fd, p, n)  recv(fd, p, (int)(n), 0)
 #endif
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(GORK_SERIAL)
 /* Their errors are not in errno. */
 static void sock_perror(const char *what) {
   fprintf(stderr, "gork: %s: Winsock error %d\n", what, WSAGetLastError());
@@ -425,7 +423,7 @@ static int rx_take(const char *p, size_t n) {
 /* connect / read / write                                             */
 /* ------------------------------------------------------------------ */
 
-#ifdef GORK_DOS16
+#if defined(GORK_DOS16) && !defined(GORK_SERIAL)
 /* One connection at a time, on Watt-32's own socket.  It is polled:
    tcp_tick() is what makes the library run. */
 static tcp_Socket sock16;
@@ -557,11 +555,12 @@ static int read_to_eof(int fd) {
 #define F_ESC_END 0xdc
 #define F_ESC_ESC 0xdd
 
-static int ser_fd = -1;
-static char ser_spec[256];      /* what ser_fd was opened as */
+static int ser_open;            /* the line is open, as ser_spec */
+static char ser_spec[256];
 static unsigned char ser_id;
 static int ser_closed;          /* the relay sent this request's 'C' */
 static int ser_synced;          /* a frame of this request has come */
+static int ser_dropped;         /* damaged frames before that */
 
 static struct frame {
   int esc, bad;
@@ -618,23 +617,6 @@ static int frame_byte(struct frame *f, int c) {
   return 0;
 }
 
-static int ser_write(const unsigned char *p, size_t n) {
-  while (n > 0) {
-    int w = (int)write(ser_fd, p, n);
-
-    if (w < 0) {
-      if (errno == EINTR)
-        fprintf(stderr, "gork: timeout while sending\n");
-      else
-        fprintf(stderr, "gork: serial line: %s\n", strerror(errno));
-      return -1;
-    }
-    p += w;
-    n -= (size_t)w;
-  }
-  return 0;
-}
-
 static int ser_frame(int type, const char *p, size_t n) {
   static unsigned char raw[FRAME_MAX + 4], out[2 * (FRAME_MAX + 4) + 2];
   unsigned sum;
@@ -656,33 +638,16 @@ static int ser_frame(int type, const char *p, size_t n) {
     }
   }
   out[o++] = F_END;
-  return ser_write(out, o);
+  return line_write(out, o);
 }
 
-static const struct {
-  long baud;
-  speed_t code;
-} speeds[] = {
-  { 1200, B1200 }, { 2400, B2400 }, { 4800, B4800 }, { 9600, B9600 },
-  { 19200, B19200 }, { 38400, B38400 },
-#ifdef B57600
-  { 57600, B57600 },
-#endif
-#ifdef B115200
-  { 115200, B115200 },
-#endif
-#ifdef B230400
-  { 230400, B230400 },
-#endif
-  { 0, B0 }
-};
-
-/* "serial:DEVICE[:BAUD[:rtscts]]": open the line, raw, 8N1.  0 or -1. */
-static int ser_open(const char *spec) {
+/* "serial:DEVICE[:BAUD[:rtscts]]": open the line.  0 or -1.  DEVICE is
+   the system's name for the port (/dev/ttyS0, COM1); it may not hold a
+   colon. */
+static int ser_start(const char *spec) {
   char dev[256], *p, *q;
   long baud = 9600;
-  int i, rtscts = 0;
-  struct termios t;
+  int rtscts = 0;
 
   if (strlen(spec) >= sizeof dev) {
     fprintf(stderr, "gork: serial device name too long\n");
@@ -701,65 +666,22 @@ static int ser_open(const char *spec) {
       rtscts = 1;
     }
     baud = strtol(p, &q, 10);
-    if (*q != '\0')
-      baud = -1;
+    if (*q != '\0' || baud <= 0) {
+      fprintf(stderr, "gork: serial: '%s' is no speed\n", p);
+      return -1;
+    }
   }
-  for (i = 0; speeds[i].baud != 0 && speeds[i].baud != baud; i++)
-    ;
-  if (speeds[i].baud == 0) {
-    fprintf(stderr, "gork: serial: %s is not a speed this system has\n",
-            p != NULL ? p : "?");
+  if (line_open(dev, baud, rtscts) != 0)
     return -1;
-  }
-#ifndef CRTSCTS
-  if (rtscts) {
-    fprintf(stderr, "gork: serial: this system has no RTS/CTS flow "
-                    "control\n");
-    return -1;
-  }
-#endif
-  /* O_NONBLOCK: do not wait for a carrier the null modem may not give */
-  ser_fd = open(dev, O_RDWR | O_NOCTTY | O_NONBLOCK);
-  if (ser_fd < 0) {
-    fprintf(stderr, "gork: %s: %s\n", dev, strerror(errno));
-    return -1;
-  }
-  fcntl(ser_fd, F_SETFL, fcntl(ser_fd, F_GETFL) & ~O_NONBLOCK);
-  fcntl(ser_fd, F_SETFD, FD_CLOEXEC);   /* run_command's children */
-  if (tcgetattr(ser_fd, &t) != 0) {
-    fprintf(stderr, "gork: %s: not a serial line: %s\n", dev,
-            strerror(errno));
-    close(ser_fd);
-    ser_fd = -1;
-    return -1;
-  }
-  t.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL |
-                 IXON | IXOFF);
-  t.c_iflag |= IGNPAR;
-  t.c_oflag &= ~OPOST;
-  t.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-  t.c_cflag &= ~(CSIZE | PARENB | CSTOPB | HUPCL);
-  t.c_cflag |= CS8 | CREAD | CLOCAL;
-#ifdef CRTSCTS
-  if (rtscts)
-    t.c_cflag |= CRTSCTS;
-  else
-    t.c_cflag &= ~CRTSCTS;
-#endif
-  t.c_cc[VMIN] = 1;
-  t.c_cc[VTIME] = 0;
-  cfsetispeed(&t, speeds[i].code);
-  cfsetospeed(&t, speeds[i].code);
-  if (tcsetattr(ser_fd, TCSANOW, &t) != 0) {
-    fprintf(stderr, "gork: %s: %s\n", dev, strerror(errno));
-    close(ser_fd);
-    ser_fd = -1;
-    return -1;
-  }
+  ser_open = 1;
   strcpy(ser_spec, spec);
   /* a number of its own, so that a reply to an earlier gork is not taken
      for ours */
+#ifdef GORK_NO_FORK
+  ser_id = (unsigned char)(time(NULL) ^ (unsigned long)clock());
+#else
   ser_id = (unsigned char)(time(NULL) ^ getpid());
+#endif
   return 0;
 }
 
@@ -771,16 +693,16 @@ static int tcp_connect(const char *host, long port) {
                     "serial:DEVICE[:BAUD] and not %s\n", host);
     return -1;
   }
-  if (ser_fd >= 0 && strcmp(host, ser_spec) != 0) {
-    close(ser_fd);
-    ser_fd = -1;
+  if (ser_open && strcmp(host, ser_spec) != 0) {
+    line_close();
+    ser_open = 0;
   }
-  if (ser_fd < 0 && ser_open(host) != 0)
+  if (!ser_open && ser_start(host) != 0)
     return -1;
-  tcflush(ser_fd, TCIFLUSH);    /* what is left of an abandoned reply */
+  line_flush();                 /* what is left of an abandoned reply */
   ser_id++;
-  ser_closed = ser_synced = 0;
-  return ser_frame('O', NULL, 0) == 0 ? ser_fd : -1;
+  ser_closed = ser_synced = ser_dropped = 0;
+  return ser_frame('O', NULL, 0) == 0 ? 0 : -1;
 }
 
 static int write_all(int fd, const char *p, size_t n) {
@@ -807,51 +729,35 @@ static void conn_close(int fd) {
 /* Returns 0 at the relay's 'C', -1 on error, -2 if relay_abort asked to
    stop. */
 static int read_to_eof(int fd) {
-  unsigned char chunk[READ_CHUNK];
-#ifndef GORK_NO_SELECT
-  fd_set rd;
-  struct timeval tv;
-#endif
+  unsigned char chunk[512];
+  /* a deadline of its own: a read that returns every 200 ms is never cut
+     short by the alarm, where there is one */
+  time_t end = time(NULL) + relay_timeout;
   int r, i, rc;
 
+  (void)fd;
   for (;;) {
-#ifndef GORK_NO_SELECT
-    /* wake every 200 ms so that the user can abort */
-    FD_ZERO(&rd);
-    FD_SET(fd, &rd);
-    tv.tv_sec = 0;
-    tv.tv_usec = 200000;
-    r = select(fd + 1, &rd, NULL, NULL, &tv);
+    r = line_read(chunk, sizeof chunk);
+    if (r >= 0 && time(NULL) >= end)
+      r = -2;
+    if (r == -2)
+      fprintf(stderr, "gork: timeout on the serial line after %lu bytes\n",
+              rx.total);
+    if (r < 0)
+      return -1;
     if (r == 0) {
       if (relay_abort != NULL && relay_abort())
         return -2;
       continue;
     }
-    if (r < 0) {
-      if (errno == EINTR)
-        fprintf(stderr, "gork: timeout on the serial line after %lu "
-                        "bytes\n", rx.total);
-      else
-        perror("select");
-      return -1;
-    }
-#endif
-    r = (int)read(fd, chunk, sizeof chunk);
-    if (r <= 0) {
-      if (r < 0 && errno == EINTR)
-        fprintf(stderr, "gork: timeout on the serial line after %lu "
-                        "bytes\n", rx.total);
-      else
-        fprintf(stderr, "gork: serial line: %s\n",
-                r == 0 ? "hung up" : strerror(errno));
-      return -1;
-    }
     for (i = 0; i < r; i++) {
       rc = frame_byte(&ser_rx, chunk[i]);
       /* Before the first frame of ours, damage is the end of an
          abandoned reply, cut short: not ours to worry about. */
-      if (rc < 0 && !ser_synced)
+      if (rc < 0 && !ser_synced) {
+        ser_dropped = 1;
         continue;
+      }
       if (rc < 0) {
         fprintf(stderr, "gork: a damaged frame on the serial line, after "
                         "%lu bytes: try a lower speed, or rtscts\n",
@@ -860,11 +766,17 @@ static int read_to_eof(int fd) {
       }
       if (rc == 0 || ser_rx.b[1] != ser_id)
         continue;
-      ser_synced = 1;
       if (ser_rx.b[0] == 'C') {
         ser_closed = 1;
+        /* nothing came whole but the end: what was damaged was ours */
+        if (!ser_synced && ser_dropped) {
+          fprintf(stderr, "gork: the reply came damaged over the serial "
+                          "line: try a lower speed, or rtscts\n");
+          return -1;
+        }
         return 0;
       }
+      ser_synced = 1;
       if (ser_rx.b[0] == 'D') {
         rc = rx_take((const char *)ser_rx.b + 2, ser_rx.len);
         if (rc != 0)
@@ -1310,7 +1222,7 @@ static int read_to_eof(int fd) {
   }
 }
 
-#endif /* GORK_DOS16 */
+#endif /* GORK_DOS16, GORK_SERIAL, sockets */
 
 /* "spx:NET.NODE" as the 4 and 6 bytes of an IPX address; 0 or -1. */
 static int spx_address(const char *host, unsigned char *net,
@@ -1347,7 +1259,11 @@ static int spx_connect(const char *host, int socket_no) {
                     "in hex, as the relay prints it\n", host);
     return -1;
   }
-#if defined(__MSDOS__)
+#if defined(GORK_SERIAL)
+  (void)socket_no;
+  fprintf(stderr, "gork: this gork talks over a serial line only\n");
+  return -1;
+#elif defined(__MSDOS__)
   {
     int rc = dosspx_open(net, node, (unsigned)socket_no, relay_abort);
     return rc == 0 ? 0 : rc;
