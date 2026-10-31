@@ -358,7 +358,8 @@ int tui_init(const char *status, const char *title)
 #elif defined(GORK_EMX)
     char *name = cap_name, *dir = getenv("TMP");
 #else
-    char  name[] = "/tmp/gorkXXXXXX";
+    char  name[512];
+    const char *dir = getenv("TMPDIR");     /* Termux has no /tmp */
 #endif
     int   fd;
     FILE *tty;
@@ -378,6 +379,10 @@ int tui_init(const char *status, const char *title)
 #ifdef GORK_EMX                         /* no /tmp: %TMP%, or here */
     if (dir == NULL) dir = getenv("TEMP");
     if (dir == NULL || strlen(dir) + 16 > sizeof cap_name) dir = ".";
+    sprintf(name, "%s/gorkXXXXXX", dir);
+#else
+    if (dir == NULL || *dir == '\0' || strlen(dir) + 16 > sizeof name)
+        dir = "/tmp";
     sprintf(name, "%s/gorkXXXXXX", dir);
 #endif
     fd = mkstemp(name);

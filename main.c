@@ -1242,6 +1242,8 @@ static char *tool_run_command(cJSON *input, int *is_err)
         execl("/bin/ape/sh", "sh", "-c", cmd->valuestring, (char *) NULL);
 #else
         execl("/bin/sh", "sh", "-c", cmd->valuestring, (char *) NULL);
+        /* Android (Termux) has no /bin: its sh is on PATH */
+        execlp("sh", "sh", "-c", cmd->valuestring, (char *) NULL);
 #endif
         _exit(127);
     }
