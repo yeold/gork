@@ -348,8 +348,7 @@ same: tools, skills, MCP servers and compacting. What differs:
 - No token limit is sent; the server's default applies.
 - Effort goes out as `reasoning_effort`, with the same five names. Servers
   that know fewer levels may refuse `xhigh` or `max`.
-- Replies are not streamed, and reasoning text a server returns beside the
-  answer is dropped.
+- Reasoning text a server returns beside the answer is dropped.
 - `path` is the whole request path, not a base URL: where another client
   is given `https://server/v1` and adds `/chat/completions` itself, gork
   takes `path = /v1/chat/completions`, which is the default. `path = /v1`

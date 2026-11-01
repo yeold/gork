@@ -1,0 +1,13 @@
+# The -nonet packages (DOS, Windows, UEFI), over a serial line to a
+# machine that runs  gork-relay -t 0 -S /dev/ttyS0:38400 api.anthropic.com
+# See SERIAL.md. Save as gork.cnf (beside gork.exe or gork.efi; on
+# Windows NT and later in %USERPROFILE%).
+
+# serial:PORT[:BAUD[:rtscts]], the same speed at both ends.
+# DOS: COM1 to COM4. UEFI: COM1, COM2, ... in the firmware's order; keep
+# off the port the firmware's console uses.
+relay   = serial:COM1:38400
+api_key = sk-ant-REPLACE-ME
+
+# A reply comes whole, and slowly at low speeds: allow for it.
+timeout = 300
