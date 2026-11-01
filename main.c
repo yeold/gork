@@ -40,8 +40,8 @@
  *   GORK_ALLOW_RUN  set: offer run_command in batch mode (the TUI always
  *                    offers it, since it asks before each command)
  *
- * If GORK.md exists in the working directory it is sent as the system
- * prompt, followed by an index of the skills in .gork/skills/ and
+ * ~/.gork/GORK.md and then GORK.md in the working directory, those that
+ * exist, are sent as the system prompt, followed by an index of the skills in .gork/skills/ and
  * ~/.gork/skills/.  File tools are confined to the working directory and
  * any `allow` directories (reads may also reach ~/.gork/skills).  MCP
  * servers listed in ~/.gork/mcp.json add their tools (mcp.c).
@@ -533,6 +533,40 @@ static int read_stream(FILE *f, struct buf *b, size_t max)
         if (b->len > max) return 1;
     }
     return 0;
+}
+
+/* The user's rules, ~/.gork/GORK.md (_gork on DOS and Windows); a
+   project's GORK.md follows them in the system prompt. */
+static char user_rules[PATH_MAX];
+
+/* Append the rules file `path` to b, after a blank line if b has some
+   already: 1, or 0 if there is no such file.  A missing file is normal,
+   an unreadable one is not -- silently running without the operator's
+   rules would be worse -- so that says why and is -1. */
+static int load_rules(const char *path, struct buf *b)
+{
+    FILE   *f = fopen(path, RB);
+    size_t  start = b->len;
+    int     rc;
+
+    if (f == NULL) {
+        if (errno == ENOENT) return 0;
+        fprintf(stderr, "gork: cannot read %s: %s\n", path, strerror(errno));
+        return -1;
+    }
+    if (start > 0 && buf_add(b, "\n\n", 2) != 0) rc = -1;
+    else rc = read_stream(f, b, b->len + TOOL_READ_MAX);
+    fclose(f);
+    if (rc != 0) {
+        fprintf(stderr, "gork: %s is too large or out of memory\n", path);
+        return -1;
+    }
+    if (b->len == start + (start > 0 ? 2 : 0)) {    /* empty */
+        b->len = start;
+        b->p[start] = '\0';
+        return 0;
+    }
+    return 1;
 }
 
 /* Is resolved path p inside directory root? */
@@ -2041,7 +2075,7 @@ struct conn {
     const char *api_host, *path, *key;
     const char *system;                 /* GORK.md, or NULL */
     const char *mcp_config;             /* ~/.gork/mcp.json, or NULL */
-    int         have_rules;             /* GORK.md was found and non-empty */
+    int         have_rules;             /* 1: ~/.gork/GORK.md, 2: GORK.md */
     int         max_turns, retries;
     long        ctx_window;             /* tokens */
     int         auto_compact;           /* percent of ctx_window, 0 = off */
@@ -3146,7 +3180,10 @@ static int interactive(const struct conn *c)
     }
     report_overrides();                 /* inside the TUI, or it's wiped */
     if (c->have_rules)
-        fprintf(stderr, "gork: rules loaded from %s\n", RULES_FILE);
+        fprintf(stderr, "gork: rules loaded from %s%s%s\n",
+                c->have_rules & 1 ? user_rules : "",
+                c->have_rules == 3 ? " and " : "",
+                c->have_rules & 2 ? RULES_FILE : "");
     if (nskills > 0)
         fprintf(stderr, "gork: %d skill%s available\n", nskills,
                 nskills == 1 ? "" : "s");
@@ -3270,14 +3307,13 @@ int main(int argc, char **argv)
     struct conn c;
     cJSON      *messages;
     struct buf  rules;
-    FILE       *f;
     const char *relay, *home;
 #ifndef GORK_SERIAL
     const char *colon;
 #endif
     char        relay_host[256], skills_path[PATH_MAX], mcp_path[PATH_MAX];
     char        trust_path[PATH_MAX];
-    int         done, lvl;
+    int         done, lvl, rc;
 
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
         printf("gork %s\n", VERSION);
@@ -3492,29 +3528,20 @@ int main(int argc, char **argv)
         trust_edits = lvl == 2;
     }
 
-    /* System prompt = GORK.md, then the skill index.  A missing GORK.md
-       is normal, an unreadable one is not -- silently running without the
-       operator's rules would be worse. */
+    /* System prompt = ~/.gork/GORK.md, GORK.md, then the skill index. */
     if (buf_init(&rules) != 0) {
         fprintf(stderr, "gork: out of memory\n");
         return 1;
     }
-    f = fopen(RULES_FILE, RB);
-    if (f == NULL && errno != ENOENT) {
-        fprintf(stderr, "gork: cannot read %s: %s\n", RULES_FILE,
-                strerror(errno));
-        return 1;
+    c.have_rules = 0;
+    if (home != NULL &&
+        join(user_rules, sizeof user_rules, home,
+             "/" DOT_GORK "/" RULES_FILE) == 0) {
+        if ((rc = load_rules(user_rules, &rules)) < 0) return 1;
+        if (rc > 0) c.have_rules |= 1;
     }
-    if (f != NULL) {
-        if (read_stream(f, &rules, TOOL_READ_MAX) != 0) {
-            fprintf(stderr, "gork: %s is too large or out of memory\n",
-                    RULES_FILE);
-            fclose(f);
-            return 1;
-        }
-        fclose(f);
-    }
-    c.have_rules = rules.len > 0;
+    if ((rc = load_rules(RULES_FILE, &rules)) < 0) return 1;
+    if (rc > 0) c.have_rules |= 2;
 
     scan_skills(DOT_GORK "/skills");
     c.mcp_config = NULL;

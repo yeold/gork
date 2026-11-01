@@ -448,8 +448,11 @@ Two more switches are environment-only:
 ### Rules
 
 If `GORK.md` exists in the working directory, its contents are sent as the
-system prompt on every request. A missing file is fine; an unreadable or
-oversized (>64 KiB) one stops gork rather than running without your rules.
+system prompt on every request. Rules for every project go in
+`~/.gork/GORK.md` (`_gork` on DOS and Windows: see [Config](#config)),
+which comes first, before the project's. A missing file is fine; an
+unreadable or oversized (>64 KiB) one stops gork rather than running
+without your rules.
 
 ### Skills
 
@@ -470,7 +473,7 @@ gork loads skills from `.gork/skills/<name>/` in the working directory and
 from `~/.gork/skills/<name>/` (`_gork` on DOS and Windows: see
 [Config](#config)); a project skill wins over a user skill of the
 same name. Only each skill's name and description go into the system prompt
-(after `GORK.md`); the model calls the `skill` tool to load the full
+(after the rules); the model calls the `skill` tool to load the full
 instructions when a task matches. A skill without a description is skipped
 with a warning.
 

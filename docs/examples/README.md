@@ -40,7 +40,7 @@ In the config files a comment is a line of its own: text after a value,
 
 | File | What | Copy to |
 |---|---|---|
-| [`GORK.md`](GORK.md) | Project rules, sent as the system prompt | the project's directory |
+| [`GORK.md`](GORK.md) | Rules, sent as the system prompt | the project's directory; for every project, `~/.gork/GORK.md` (`_gork` on DOS and Windows) |
 | [`skills/commit/SKILL.md`](skills/commit/SKILL.md) | A skill | `.gork/skills/commit/` in the project, or `~/.gork/skills/commit/` (`_gork` on DOS and Windows) |
 | [`mcp.json`](mcp.json) | MCP servers: Unix, macOS, Cygwin | `~/.gork/mcp.json`; Cygwin: `%USERPROFILE%\.gork\mcp.json` |
 
