@@ -403,7 +403,9 @@ int tui_init(const char *status, const char *title)
     win_own_console();
 #endif
 #ifdef GORK_UNICODE
-    setlocale(LC_ALL, "");
+    /* LC_CTYPE only: curses needs it for UTF-8, while LC_NUMERIC would make
+       cJSON print 1,5 for 1.5 (it is built without ENABLE_LOCALES). */
+    setlocale(LC_CTYPE, "");
 #endif
     /* $TERM spelled out: AIX PS/2's curses fails on NULL, which elsewhere
        means the same thing. */
