@@ -226,32 +226,30 @@ pipeline {
                 // it builds) and kept, stripped, in the cache.  Run on
                 // System 7.5.3 in Basilisk II when the agent has a Quadra
                 // 800 ROM in the cache (q800.rom: Apple's, put there by
-                // hand), else not.  Not released yet, so the package stays
-                // out of out/
+                // hand), else built and not run.
                 stage('mac') {
                     steps {
                         sh '''
                             MC="$HOME/.cache/gork-mac" && mkdir -p "$MC"
-                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$MC":/work debian:stable sh -ec '
+                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$MC":/work debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git ca-certificates build-essential cmake bison flex texinfo ruby libgmp-dev libmpfr-dev libmpc-dev libboost-all-dev zlib1g-dev python3 zip >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                rm -rf /work/pkg
-                                sh macbuild.sh /work/pkg /work && chown -R '"$(id -u):$(id -g)"' /work'
+                                sh macbuild.sh /out /work && chown -R '"$(id -u):$(id -g)"' /out /work'
                             if [ ! -f "$MC/q800.rom" ]; then
                                 echo "mac: no ROM in $MC/q800.rom: not run"
                                 exit 0
                             fi
                             # System 7.5.3 from the Internet Archive, kept in
                             # the cache; Basilisk II is in contrib
-                            docker run --rm -v "$PWD":/src:ro -v "$MC":/mc debian:stable sh -ec '
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$MC":/mc debian:stable sh -ec '
                                 sed -i "s/Components: main/Components: main contrib/" /etc/apt/sources.list.d/debian.sources
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends basilisk2 xvfb python3-pip gcc libc6-dev ca-certificates >/dev/null
                                 pip install -q --break-system-packages --root-user-action=ignore machfs==1.3 macresources==1.2
                                 gcc -o /tmp/fakeapi /src/testing/fakeapi.c
                                 rc=0
-                                cd /src && GORK_VM=/mc/vm python3 testing/mactest.py /mc/pkg/gork-*-mac68k.zip /tmp/fakeapi /mc/q800.rom || rc=$?
+                                cd /src && GORK_VM=/mc/vm python3 testing/mactest.py /out/gork-*-mac68k.zip /tmp/fakeapi /mc/q800.rom || rc=$?
                                 chown -R '"$(id -u):$(id -g)"' /mc
                                 exit $rc'
                         '''
