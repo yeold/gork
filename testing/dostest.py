@@ -740,8 +740,11 @@ def check_tui(g):
     """Trust prompt, the line editor, approval, PgUp/PgDn, Esc, a clean
     exit."""
     del requests[:]
+    # The third reply must be slower than the Esc that stops it and faster
+    # than GORK.CNF's timeout = 20: at 30 a loaded host timed out first, and
+    # the task was dropped instead of aborted, so "aborted" never appeared.
     script[:] = [tool("write_file", path="tui.txt", content="x\n"),
-                 text("all done"), text("never seen", delay=30)]
+                 text("all done"), text("never seen", delay=12)]
     g.type("cls\n")
     g.wait(r"^C:\\W>$", 10)
     g.type(GORK + "\n")
