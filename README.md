@@ -10,8 +10,8 @@ Claude Code or Cline in a terminal, it runs the usual agentic tool-use loop
 in, repeat -- on vintage and modern systems from 1984 to today:
 MS-DOS 2.11 and Windows 1.04, Linux 1.0, the first BSDs, Solaris 2.5.1,
 SunOS 4, AIX, HP-UX, SVR4, NeXTSTEP, OS/2 Warp, BeOS, QNX, Plan 9,
-Windows 95 and NT 3.1, Minix, GNU/Hurd, Haiku, bare-metal UEFI and the
-barebox and GRUB boot loaders, and just
+Windows 95 and NT 3.1, Minix, GNU/Hurd, Haiku, classic Mac OS on 68k,
+bare-metal UEFI and the barebox and GRUB boot loaders, and just
 as well on a current Linux, macOS or Windows 11. One codebase for all of
 them, with a batch CLI mode and a full-screen interactive curses TUI. The
 [table below](#tested-systems) says what it has been run on.
@@ -33,7 +33,7 @@ gork is built with OpenSSL.
 ## Features at a glance
 
 - **Strict ANSI C89 / ISO C90**: ~5,000 lines of portable C, ~100 KB stripped binary, no C99, no threads, no OpenSSL/TLS library required on the target machine.
-- **Runs across four decades of hardware and OSes**: 16-bit real-mode MS-DOS (8086, 640 KB RAM) and 32-bit DOS (DJGPP), Windows 1.0 to 11 and NT 3.1+, early Linux (kernel 1.0, Slackware, Debian), FreeBSD/NetBSD/OpenBSD/DragonFly/MidnightBSD, commercial Unix (SunOS 4, Solaris, illumos, AIX, HP-UX, SVR4), NeXTSTEP/OPENSTEP, OS/2 Warp, BeOS, Haiku, QNX, Minix 2 & 3, Plan 9 (9front), GNU/Hurd, macOS (PowerPC Tiger to Apple silicon), bare-metal UEFI (`x86-64` and `arm64`, with its own built-in TCP/IP stack when firmware lacks one), and the barebox and GRUB boot loaders (as a command, on that stack).
+- **Runs across four decades of hardware and OSes**: 16-bit real-mode MS-DOS (8086, 640 KB RAM) and 32-bit DOS (DJGPP), Windows 1.0 to 11 and NT 3.1+, early Linux (kernel 1.0, Slackware, Debian), FreeBSD/NetBSD/OpenBSD/DragonFly/MidnightBSD, commercial Unix (SunOS 4, Solaris, illumos, AIX, HP-UX, SVR4), NeXTSTEP/OPENSTEP, OS/2 Warp, BeOS, Haiku, QNX, Minix 2 & 3, Plan 9 (9front), GNU/Hurd, macOS (PowerPC Tiger to Apple silicon), classic Mac OS on 68k, bare-metal UEFI (`x86-64` and `arm64`, with its own built-in TCP/IP stack when firmware lacks one), and the barebox and GRUB boot loaders (as a command, on that stack).
 - **Full agentic coding workflow**: local tools for reading, creating and editing files (`read_file`, `write_file`, `edit_file`), directory listing (`list_dir`), shell command execution (`run_command`), project rules (`GORK.md`), `SKILL.md` skills (compatible with Claude Code and Cline), and **Model Context Protocol (MCP)** servers over stdio and streamable HTTP.
 - **Interactive curses TUI & batch CLI**: full-screen terminal chat interface with tool approval prompts, directory trust, context window tracking and auto-compaction (`/compact`), or scriptable one-shot batch mode.
 - **Anthropic, OpenAI & local LLMs**: native `/v1/messages` and `/v1/chat/completions` (`protocol = openai`) support for Claude, OpenAI, Ollama, llama.cpp, LM Studio and vLLM over TCP/IP or IPX/SPX.
@@ -97,6 +97,7 @@ of `testing/looptest.py`.
 | UEFI (experimental; the `uefi` package) | UEFI 2.70 on x86-64, no operating system: `gorkx64.efi` from the UEFI shell, on the firmware's TCP/IP; EDK2's OVMF 2025.02, in QEMU. Batch mode only | arm64 (`gorkaa64.efi`), on EDK2's AAVMF in QEMU; U-Boot 2025.01 (arm64, in QEMU) and firmware with no TCP/IP of its own, on gork's own | Real PC firmware: untested |
 | barebox (experimental; the `barebox-arm64` package) | barebox 2026.09 on arm64, as a `gork` command built in, on gork's own TCP/IP: QEMU's `virt` machine. Batch mode only | | Real boards: untested |
 | GRUB (experimental; the `grub-x64` and `grub-aa64` packages) | GRUB 2.14 on x86-64 and arm64 UEFI, as a `gork` command (a module), on gork's own TCP/IP; files written in RAM: OVMF and AAVMF 2025.02, in QEMU. Batch mode only | | Real PCs, and distributions' own GRUBs: untested |
+| Classic Mac OS, 68k (experimental; the `mac68k` package) | System 7.5.3 (1994) on a 68020 or better, in Basilisk II: batch mode in a console window, MacTCP for the network. No TUI, no `run_command` and no MCP (there is no shell and no curses) | | A real Mac: untested. System 6, and MacTCP on a 68000 (a Mac Plus or SE): untested |
 | DOS, 16-bit (experimental; the `dos16` package) | MS-DOS 2.11 (1984, Compaq's), real mode, built with Open Watcom for the 8086 | MS-DOS 3.30, 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04, 2.11/386, 3.0 and 3.1, also in standard mode | An emulated 8086 and 286 (DOSBox-X), no real one. Small limits (below) |
 
 Beyond x86, Linux on s390x (big-endian), armhf, arm64, ppc64el, riscv64

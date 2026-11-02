@@ -34,6 +34,7 @@ building on each system.
 | `gork-<v>-dos.zip` (386, DJGPP), and `-dos-nonet.zip` | Jenkins, `dosbuild.sh` | `testing/dostest.py` on FreeDOS in QEMU |
 | `gork-<v>-dos16.zip` (8086, Open Watcom), and `-dos16-nonet.zip` | Jenkins, `dos16build.sh` | the same, and `testing/dosboxtest.py` on an 8086 and a 286 in DOSBox-X |
 | `gork-<v>-win32-legacy.zip` (`gork.exe`, `gorknt3.exe`), and `-win32-legacy-nonet.zip` | Jenkins, `winbuild.sh` | `testing/wintest.py` under Wine; again on Windows by GitHub Actions |
+| `gork-<v>-mac68k.zip` (`gork.bin` as MacBinary, and `gork.dsk`) | Jenkins, `macbuild.sh` (Retro68, from a pinned commit) | `testing/mactest.py`: System 7.5.3 in Basilisk II, sixteen checks; run only when the agent's cache holds a Mac ROM, so the package is built either way |
 | `gork-<v>-win32.zip` (Cygwin) | GitHub Actions, `cygpack.sh` | `testing/cygpacktest.py` |
 | `gork-<v>-macos.pkg`, `-macos.tar.gz` (universal, unsigned) | GitHub Actions | `testing/looptest.py` |
 
@@ -154,16 +155,17 @@ CodeQL does not see the DOS and Windows code, which is behind `#ifdef`.
   there.
 - [TODO-DOS.md](TODO-DOS.md) has the open DOS items, and
   [TODO-FEATURES.md](TODO-FEATURES.md) the planned features and build flags.
-- The 68k Mac build is not released yet. The `mac` stage runs its test
-  when the agent has a Quadra 800 ROM at
+- The 68k Mac package is released now that the agent's ROM makes
+  `testing/mactest.py` run: the `mac` stage builds it into `out/` either
+  way, but a build **without** the ROM ships a package no test has
+  touched. The stage looks for a Quadra 800 ROM at
   `~/.cache/gork-mac/q800.rom` (1 MB, checksum F1ACAD13: Apple's, copied
   there by hand, never committed, and it must be the file's first longword
   — a different Mac ROM boots the wrong model and the test hangs rather
-  than fails). Without it the stage builds the package and says so. With
-  it the test fetches System 7.5.3 from the Internet Archive once into
-  `~/.cache/gork-mac/vm` and runs sixteen checks in Basilisk II; it passes
-  on the agent (`master` #34, 2026-11-02), which also settles that no
-  `--security-opt label=disable` is needed there.
+  than fails). With it the test fetches System 7.5.3 from the Internet
+  Archive once into `~/.cache/gork-mac/vm` and runs sixteen checks in
+  Basilisk II; it passes on the agent (`master` #34, 2026-11-02), which
+  also settles that no `--security-opt label=disable` is needed there.
 - The Windows 95/98 runs in [TODO-REAL.md](TODO-REAL.md) are not
   scripted, so Jenkins does not repeat them; `winspxtest.py` needs an
   installed Windows and is run by hand.
