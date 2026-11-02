@@ -6,14 +6,14 @@ building on each system.
 
 ## Branches and versions
 
-- Work happens on `dev`, which goes to `master` on Forgejo as it is
-  (`git push origin dev dev:master`); Jenkins builds `master`. `main` on
-  GitHub gets commits cherry-picked from `dev`, leaving out what belongs
-  to the development setup only (`AGENTS.md`, `CLAUDE.md`). Keep such
-  files in commits of their own, so that the rest picks cleanly. From
-  2026-10-19 to 2026-11-02 the three were one history; before that they
-  were copied commit by commit, and the old Forgejo history is kept under
-  the tags `old-dev` and `old-master`.
+- Work happens on `dev`, on Forgejo only. `master` (Forgejo) and `main`
+  (GitHub) are one history, made of commits cherry-picked from `dev`,
+  leaving out what belongs to the development setup only (`AGENTS.md`,
+  `CLAUDE.md`): `git push origin master && git push github master:main`.
+  Keep such files in commits of their own, so that the rest picks
+  cleanly. From 2026-10-19 to 2026-11-02 `dev` was that history too;
+  before that the three were copied commit by commit, and the old
+  Forgejo history is kept under the tags `old-dev` and `old-master`.
 - The version is in four places, changed together: `configure.ac`,
   `gork.spec`, the top of `debian/changelog`, and the fallback `VERSION`
   in `main.c`. A beta is `X.Y~beta` there and `vX.Y-beta` as a tag.
@@ -44,11 +44,10 @@ the system's libc all the same (tried on Alpine, which has none).
 
 1. Set the version in the four places, with a `debian/changelog` entry:
    its text becomes the release notes.
-2. Push `dev` to `master`, cherry-pick the new commits onto `main`, and
-   wait for both builds to pass.
-3. Tag `vX.Y` (annotated, "gork X.Y") on each forge's own head: `main`'s
-   on GitHub first, then `master`'s on Forgejo. The two commits differ
-   only by the development files. Jenkins builds from Forgejo, started by its webhook: it
+2. Cherry-pick the new commits onto `master`, push it to `master` and
+   `main`, and wait for both builds to pass.
+3. Tag `vX.Y` (annotated, "gork X.Y") and push it to GitHub first, then
+   to Forgejo. Jenkins builds from Forgejo, started by its webhook: it
    builds the tag, creates the release on GitHub and on Forgejo and
    uploads its packages (`release.sh`); the debs, RPMs and tarballs also
    go to Forgejo's package registry. GitHub Actions builds the same tag,
