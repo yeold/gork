@@ -154,12 +154,16 @@ CodeQL does not see the DOS and Windows code, which is behind `#ifdef`.
   there.
 - [TODO-DOS.md](TODO-DOS.md) has the open DOS items, and
   [TODO-FEATURES.md](TODO-FEATURES.md) the planned features and build flags.
-- The 68k Mac build is not released yet, and the `mac` stage only runs
-  its test when the agent has a Quadra 800 ROM in
-  `~/.cache/gork-mac/q800.rom` (Apple's: it is copied there by hand, never
-  committed). Without it the stage builds the package and says so. If the
-  agent enforces SELinux, the stage may also need
-  `--security-opt label=disable` on its container to read the volume.
+- The 68k Mac build is not released yet. The `mac` stage runs its test
+  when the agent has a Quadra 800 ROM at
+  `~/.cache/gork-mac/q800.rom` (1 MB, checksum F1ACAD13: Apple's, copied
+  there by hand, never committed, and it must be the file's first longword
+  — a different Mac ROM boots the wrong model and the test hangs rather
+  than fails). Without it the stage builds the package and says so. With
+  it the test fetches System 7.5.3 from the Internet Archive once into
+  `~/.cache/gork-mac/vm` and runs sixteen checks in Basilisk II; it passes
+  on the agent (`master` #34, 2026-11-02), which also settles that no
+  `--security-opt label=disable` is needed there.
 - The Windows 95/98 runs in [TODO-REAL.md](TODO-REAL.md) are not
   scripted, so Jenkins does not repeat them; `winspxtest.py` needs an
   installed Windows and is run by hand.

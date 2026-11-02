@@ -77,8 +77,9 @@ Retro68 toolchain built already instead. Needs git, gcc and g++, make,
 cmake, bison, flex, texinfo, ruby, the GMP, MPFR, MPC, Boost and zlib
 headers (for Retro68), python3 and zip.
 
-Jenkins builds it, and tests it when the agent has a Mac ROM; it does not
-release it yet.
+Jenkins builds it, and tests it in Basilisk II when the agent has a Mac
+ROM (see [MAINTAINING.md](../MAINTAINING.md), "Open questions"); it does
+not release it yet.
 
 ## Test
 
