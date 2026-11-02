@@ -34,7 +34,7 @@ building on each system.
 | `gork-<v>-dos.zip` (386, DJGPP), and `-dos-nonet.zip` | Jenkins, `dosbuild.sh` | `testing/dostest.py` on FreeDOS in QEMU |
 | `gork-<v>-dos16.zip` (8086, Open Watcom), and `-dos16-nonet.zip` | Jenkins, `dos16build.sh` | the same, and `testing/dosboxtest.py` on an 8086 and a 286 in DOSBox-X |
 | `gork-<v>-win32-legacy.zip` (`gork.exe`, `gorknt3.exe`), and `-win32-legacy-nonet.zip` | Jenkins, `winbuild.sh` | `testing/wintest.py` under Wine; again on Windows by GitHub Actions |
-| `gork-<v>-mac68k.zip` (`gork.bin` as MacBinary, and `gork.dsk`) | Jenkins, `macbuild.sh` (Retro68, from a pinned commit) | `testing/mactest.py`: System 7.5.3 in Basilisk II, sixteen checks; run only when the agent's cache holds a Mac ROM, so the package is built either way |
+| `gork-<v>-mac68k.zip` (`gork.bin` as MacBinary, and `gork.dsk`) | Jenkins, `macbuild.sh` (Retro68, from a pinned commit) | `testing/mactest.py`: System 7.5.3 in Basilisk II, sixteen checks; run only when the agent's cache holds a Mac ROM, so the package is built either way. New in 2026-11-02: until `aacbefe` the stage built into the cache and never reached `out/` (see "Making a release", step 6) |
 | `gork-<v>-win32.zip` (Cygwin) | GitHub Actions, `cygpack.sh` | `testing/cygpacktest.py` |
 | `gork-<v>-macos.pkg`, `-macos.tar.gz` (universal, unsigned) | GitHub Actions | `testing/looptest.py` |
 
@@ -62,6 +62,13 @@ the system's libc all the same (tried on Alpine, which has none).
 5. An asset that is already on a release makes its upload fail. To
    replace one, delete the release on that forge and run the tag build
    again; never start a second build of a tag otherwise.
+6. For the 68k Mac package specifically, `aacbefe` (2026-11-02) is the
+   first commit whose `mac` stage writes `gork-<v>-mac68k.zip` into
+   `out/`; before it the stage built into the cache and nothing was
+   published. That commit has only ever run on `dev`, so the first
+   release that carries the Mac package must cherry-pick it and then
+   check one `master` build: its archived `out/` should hold
+   `gork-<v>-mac68k.zip`. Do that check **before** tagging, not after.
 
 ## Jenkins
 
