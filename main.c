@@ -284,6 +284,7 @@ char *os2_realpath(const char *path, char *out)
 #define LIST_DEPTH    8         /* list_dir recursion limit */
 
 #define RULES_FILE    "GORK.md"
+#define AGENTS_FILE   "AGENTS.md"   /* the common name, read without GORK.md */
 
 /* realpath of the working directory at startup; file tools stay inside it. */
 static char work_root[PATH_MAX];
@@ -538,6 +539,9 @@ static int read_stream(FILE *f, struct buf *b, size_t max)
 /* The user's rules, ~/.gork/GORK.md (_gork on DOS and Windows); a
    project's GORK.md follows them in the system prompt. */
 static char user_rules[PATH_MAX];
+
+/* The project's rules file that was read: GORK.md, or AGENTS.md. */
+static const char *project_rules = RULES_FILE;
 
 /* Append the rules file `path` to b, after a blank line if b has some
    already: 1, or 0 if there is no such file.  A missing file is normal,
@@ -2075,7 +2079,7 @@ struct conn {
     const char *api_host, *path, *key;
     const char *system;                 /* GORK.md, or NULL */
     const char *mcp_config;             /* ~/.gork/mcp.json, or NULL */
-    int         have_rules;             /* 1: ~/.gork/GORK.md, 2: GORK.md */
+    int         have_rules;             /* 1: ~/.gork/GORK.md, 2: project's */
     int         max_turns, retries;
     long        ctx_window;             /* tokens */
     int         auto_compact;           /* percent of ctx_window, 0 = off */
@@ -3183,7 +3187,7 @@ static int interactive(const struct conn *c)
         fprintf(stderr, "gork: rules loaded from %s%s%s\n",
                 c->have_rules & 1 ? user_rules : "",
                 c->have_rules == 3 ? " and " : "",
-                c->have_rules & 2 ? RULES_FILE : "");
+                c->have_rules & 2 ? project_rules : "");
     if (nskills > 0)
         fprintf(stderr, "gork: %d skill%s available\n", nskills,
                 nskills == 1 ? "" : "s");
@@ -3528,7 +3532,8 @@ int main(int argc, char **argv)
         trust_edits = lvl == 2;
     }
 
-    /* System prompt = ~/.gork/GORK.md, GORK.md, then the skill index. */
+    /* System prompt = ~/.gork/GORK.md, GORK.md (or else AGENTS.md), then
+       the skill index. */
     if (buf_init(&rules) != 0) {
         fprintf(stderr, "gork: out of memory\n");
         return 1;
@@ -3540,7 +3545,11 @@ int main(int argc, char **argv)
         if ((rc = load_rules(user_rules, &rules)) < 0) return 1;
         if (rc > 0) c.have_rules |= 1;
     }
-    if ((rc = load_rules(RULES_FILE, &rules)) < 0) return 1;
+    if ((rc = load_rules(RULES_FILE, &rules)) == 0) {
+        project_rules = AGENTS_FILE;
+        rc = load_rules(AGENTS_FILE, &rules);
+    }
+    if (rc < 0) return 1;
     if (rc > 0) c.have_rules |= 2;
 
     scan_skills(DOT_GORK "/skills");

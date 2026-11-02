@@ -6,6 +6,7 @@ gork (1.5) unstable; urgency=medium
     same.  A reply that arrives only damaged is reported as such.
   * New: ~/.gork/GORK.md (_gork\GORK.md on DOS and Windows), rules for
     every project, sent before the project's own GORK.md.
+  * New: without a GORK.md, the project's AGENTS.md is read instead.
   * New: ca_file and tls_verify, for servers with a self-signed
     certificate, in a build --with-openssl.
   * docs/examples: a config per service (Anthropic, OpenAI, OpenRouter,

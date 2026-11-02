@@ -256,8 +256,8 @@ Leave off the task to get a chat TUI, Cline-style:
 ```
 
 The first time you start the TUI in a directory, gork asks whether to trust
-it -- before reading anything from it, since `GORK.md` and `.gork/skills`
-become instructions to the model:
+it -- before reading anything from it, since `GORK.md` (or `AGENTS.md`) and
+`.gork/skills` become instructions to the model:
 
 ```
 Trust this directory?
@@ -448,7 +448,7 @@ Two more switches are environment-only:
 ### Rules
 
 If `GORK.md` exists in the working directory, its contents are sent as the
-system prompt on every request. Rules for every project go in
+system prompt on every request; without one, `AGENTS.md` is read instead. Rules for every project go in
 `~/.gork/GORK.md` (`_gork` on DOS and Windows: see [Config](#config)),
 which comes first, before the project's. A missing file is fine; an
 unreadable or oversized (>64 KiB) one stops gork rather than running

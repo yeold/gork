@@ -293,6 +293,41 @@ def check_rules_and_tools():
     print("ok: rules, write/run, path confinement")
 
 
+def check_agents_md():
+    """Without GORK.md, AGENTS.md is the project's rules; with both, only
+    GORK.md is read."""
+    systems = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            req = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            systems.append(req.get("system"))
+            reply(self, {"id": "m1", "stop_reason": "end_turn",
+                         "content": [{"type": "text", "text": "done"}]})
+
+        def log_message(self, *a):
+            pass
+
+    with tempfile.TemporaryDirectory() as tmp:
+        with open(os.path.join(tmp, "AGENTS.md"), "w") as f:
+            f.write("Agents rules.\n")
+        srv = serve(H, 8108)
+        try:
+            p1 = run_gork(8108, "hi", cwd=tmp)
+            with open(os.path.join(tmp, "GORK.md"), "w") as f:
+                f.write("Gork rules.\n")
+            p2 = run_gork(8108, "hi", cwd=tmp)
+        finally:
+            srv.shutdown()
+
+    for p in (p1, p2):
+        assert p.returncode == 0, f"exit {p.returncode}: {p.stderr}"
+    assert systems == ["Agents rules.\n", "Gork rules.\n"], systems
+    print("ok: AGENTS.md without GORK.md")
+
+
 # ------------------------------------------------------- local, unauthed
 
 def check_local_no_key():
@@ -1826,6 +1861,7 @@ def run(check, *needs):
 run(check_tool_loop)
 run(check_openai)
 run(check_rules_and_tools)
+run(check_agents_md)
 run(check_local_no_key)
 run(check_key_still_required_for_anthropic)
 run(check_allow_and_edit)
