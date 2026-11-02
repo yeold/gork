@@ -62,6 +62,31 @@ the system's libc all the same (tried on Alpine, which has none).
    replace one, delete the release on that forge and run the tag build
    again; never start a second build of a tag otherwise.
 
+## Jenkins
+
+Jenkins is at http://osgiliath.selea.internal:8080 and reads Forgejo, not
+GitHub: `gork` builds `master` and the `v*` tags, `gork-relay` builds its
+`main` and tags, both started by Forgejo's webhooks (push, create,
+delete). The old `main` job is still listed and disabled.
+
+Two sets of tokens, and they fail differently:
+
+- `github-release-token` and `forgejo-release-token` (Secret text) are
+  handed to `release.sh` as `$GITHUB_TOKEN` and `$FORGEJO_TOKEN`. A bad
+  one fails only its own upload, and a dead Forgejo token fails the
+  `release` stage with `curl: (22) ... 401` after the GitHub loop has
+  already run: check both forges before re-running, and delete a release
+  first if its assets are already there.
+- The Gitea plugin has Personal Access Tokens of its own (`forgejo`,
+  `forgejo-jenkins-token`) for checkout and commit statuses. Without
+  `read:user` among their scopes the build dies in checkout
+  (`fetchRepository`, 401) and posts no status, though the build log
+  still reports the SCM notifier's own 401.
+
+A change to a job's configuration makes Jenkins build the tags under
+seven days old once more, on its own: stop such a build before its
+`release` stage, or it will try to upload assets that already exist.
+
 ## Tests
 
 | Suite | What it runs |
@@ -129,3 +154,12 @@ CodeQL does not see the DOS and Windows code, which is behind `#ifdef`.
   there.
 - [TODO-DOS.md](TODO-DOS.md) has the open DOS items, and
   [TODO-FEATURES.md](TODO-FEATURES.md) the planned features and build flags.
+- The 68k Mac build is not released yet, and the `mac` stage only runs
+  its test when the agent has a Quadra 800 ROM in
+  `~/.cache/gork-mac/q800.rom` (Apple's: it is copied there by hand, never
+  committed). Without it the stage builds the package and says so. If the
+  agent enforces SELinux, the stage may also need
+  `--security-opt label=disable` on its container to read the volume.
+- The Windows 95/98 runs in [TODO-REAL.md](TODO-REAL.md) are not
+  scripted, so Jenkins does not repeat them; `winspxtest.py` needs an
+  installed Windows and is run by hand.
