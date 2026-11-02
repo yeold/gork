@@ -1,3 +1,24 @@
+gork (1.5) unstable; urgency=medium
+
+  * New: -nonet packages for DOS (32- and 16-bit), legacy Windows and
+    UEFI (gork-<version>-dos-nonet.zip and so on): no network at all,
+    only a serial line to gork-relay -S.  OS/2 builds with EMX do the
+    same.  A reply that arrives only damaged is reported as such.
+  * New: ~/.gork/GORK.md (_gork\GORK.md on DOS and Windows), rules for
+    every project, sent before the project's own GORK.md.
+  * New: ca_file and tls_verify, for servers with a self-signed
+    certificate, in a build --with-openssl.
+  * docs/examples: a config per service (Anthropic, OpenAI, OpenRouter,
+    Mistral, LM Studio, Ollama, llama.cpp, a serial line ...), a sample
+    GORK.md and a skill.
+  * Fixed: under a locale with a decimal comma (sv_SE) the TUI sent
+    invalid JSON for non-integer numbers, and the API answered 400.
+  * Fixed: on Termux the TUI did not start, and run_command found no sh.
+  * Fixed: a Windows checkout with core.autocrlf could not run version.sh
+    or autoreconf; .gitattributes keeps every file LF.
+
+ -- Yeold <isac.selea@gmail.com>  Mon, 02 Nov 2026 12:23:51 +0100
+
 gork (1.4) unstable; urgency=medium
 
   * New: configure --with-openssl.  gork does TLS itself, with the

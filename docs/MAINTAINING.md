@@ -25,12 +25,12 @@ building on each system.
 | `.deb` (amd64) | Jenkins, Debian stable | |
 | `gork-<v>-linux-<arch>.tar.gz`, ten CPUs, static | Jenkins, `linuxbuild.sh` | `testing/linuxtest.sh`: the suite under qemu-user |
 | `gork-<v>-{freebsd,netbsd,openbsd}-{amd64,arm64}.tar.gz`, static | Jenkins, `bsdbuild.sh` (clang against each release's base sets) | `testing/bsdtest.py`: `vmcheck.sh` on the release's own image in QEMU |
-| `gork-<v>-uefi.zip` (`gorkx64.efi`, `gorkaa64.efi`) | Jenkins, `uefibuild.sh` (clang) | `testing/uefitest.py`: the UEFI shell under OVMF and AAVMF, and on gork's own TCP/IP under OVMF and U-Boot, in QEMU |
+| `gork-<v>-uefi.zip` (`gorkx64.efi`, `gorkaa64.efi`), and `-uefi-nonet.zip` | Jenkins, `uefibuild.sh` (clang) | `testing/uefitest.py`: the UEFI shell under OVMF and AAVMF, and on gork's own TCP/IP under OVMF and U-Boot, in QEMU |
 | `gork-<v>-barebox-arm64.zip` (barebox with a `gork` command) | Jenkins, `bareboxbuild.sh` (barebox 2026.09, aarch64 gcc) | `testing/bareboxtest.py`: at barebox's prompt in QEMU's arm64 `virt` machine, on gork's own TCP/IP |
 | `gork-<v>-grub-x64.zip`, `gork-<v>-grub-aa64.zip` (GRUB with a `gork` module, and `gork.mod`) | Jenkins, `grubbuild.sh` (GRUB 2.14, gcc; aarch64-linux-gnu gcc) | `testing/grubtest.py`: at GRUB's prompt under OVMF and AAVMF in QEMU, on gork's own TCP/IP |
-| `gork-<v>-dos.zip` (386, DJGPP) | Jenkins, `dosbuild.sh` | `testing/dostest.py` on FreeDOS in QEMU |
-| `gork-<v>-dos16.zip` (8086, Open Watcom) | Jenkins, `dos16build.sh` | the same, and `testing/dosboxtest.py` on an 8086 and a 286 in DOSBox-X |
-| `gork-<v>-win32-legacy.zip` (`gork.exe`, `gorknt3.exe`) | Jenkins, `winbuild.sh` | `testing/wintest.py` under Wine; again on Windows by GitHub Actions |
+| `gork-<v>-dos.zip` (386, DJGPP), and `-dos-nonet.zip` | Jenkins, `dosbuild.sh` | `testing/dostest.py` on FreeDOS in QEMU |
+| `gork-<v>-dos16.zip` (8086, Open Watcom), and `-dos16-nonet.zip` | Jenkins, `dos16build.sh` | the same, and `testing/dosboxtest.py` on an 8086 and a 286 in DOSBox-X |
+| `gork-<v>-win32-legacy.zip` (`gork.exe`, `gorknt3.exe`), and `-win32-legacy-nonet.zip` | Jenkins, `winbuild.sh` | `testing/wintest.py` under Wine; again on Windows by GitHub Actions |
 | `gork-<v>-win32.zip` (Cygwin) | GitHub Actions, `cygpack.sh` | `testing/cygpacktest.py` |
 | `gork-<v>-macos.pkg`, `-macos.tar.gz` (universal, unsigned) | GitHub Actions | `testing/looptest.py` |
 
