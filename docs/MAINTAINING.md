@@ -9,7 +9,8 @@ building on each system.
 - Work happens on `dev`, on Forgejo only. `master` (Forgejo) and `main`
   (GitHub) are one history, made of commits cherry-picked from `dev`,
   leaving out what belongs to the development setup only (`AGENTS.md`,
-  `CLAUDE.md`): `git push origin master && git push github master:main`.
+  `CLAUDE.md`, `memory-bank/`):
+  `git push origin master && git push github master:main`.
   Keep such files in commits of their own, so that the rest picks
   cleanly. From 2026-10-19 to 2026-11-02 `dev` was that history too;
   before that the three were copied commit by commit, and the old
