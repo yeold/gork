@@ -111,7 +111,7 @@ seven days old once more, on its own: stop such a build before its
 
 | Suite | What it runs |
 |---|---|
-| `python3 testing/looptest.py ./gork` | The Unix build against fake APIs: 25 checks; those of the TUI or MCP are skipped when the build has none |
+| `python3 testing/looptest.py ./gork` | The Unix build against fake APIs: 27 checks; those of the TUI or MCP are skipped when the build has none |
 | `python3 testing/tlstest.py ./gork` | A build `--with-openssl`: TLS straight to a fake API, the certificate checked; three checks |
 | `python3 testing/serialtest.py ./gork` | A build `--with-serial`: over a pseudo-terminal, against a relay the script plays; six checks |
 | `python3 testing/wintest.py [wine] gork.exe` | The legacy Windows programs: batch mode, and under Wine the TUI with `/save` and `/load` |

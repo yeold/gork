@@ -315,6 +315,32 @@ static void scroll_key(int ch)
     if (ch == KEY_NPAGE) scroll_rows -= LINES / 2;
 }
 
+/* Esc aborts, but it also begins every other sequence: a scroll key, an
+   arrow (which is what a mouse wheel sends), a mouse report.  curses hands
+   over a bare 27 when it does not know the sequence, or when its bytes
+   arrive apart (over ssh, in tmux), and that used to abort a reply or
+   decline an approval when all the user did was scroll.  So after a 27,
+   read on for the rest of a sequence: what comes back is the key, with a
+   lone Esc (nothing following) as 27.
+   The wait only costs anything when a 27 arrives, and then only when it was
+   a real Esc: a key sequence that follows comes at once.  It is longer than
+   the reply poll's interval (200 ms), which is when this runs, so a split
+   sequence is caught even if its halves land either side of a poll.
+   shortcut: a sequence split by more than ESC_ALONE_MS is nearly always
+   meant as an abort by then anyway; a key reader of its own would lift it.
+   The caller's loop goes on reading keys as `then` says: -1 blocking, 0 not. */
+#define ESC_ALONE_MS 500
+static int esc_alone(int ch, int then)
+{
+    if (ch != 27) return ch;
+    timeout(ESC_ALONE_MS);
+    ch = getch();
+    timeout(then);
+    if (ch == ERR) return 27;   /* nothing followed: a real Esc */
+    scroll_key(ch);             /* the rest of it: PgUp/Dn still scroll */
+    return ch;
+}
+
 /* Default SIGINT would leave the terminal in cbreak/noecho. */
 static void on_signal(int sig)
 {
@@ -744,7 +770,7 @@ int tui_confirm(const char *title, const char *detail)
     hint_text = hint;
     for (;;) {
         draw();
-        ch = getch();
+        ch = esc_alone(getch(), -1);
         if (ch == 'y' || ch == 'Y' || ch == 'a' || ch == 'A' ||
             ch == 'n' || ch == 'N' || ch == 27)
             break;
@@ -816,14 +842,14 @@ int tui_poll_abort(void)
     tui_drain();
     nodelay(stdscr, TRUE);
     while ((ch = getch()) != ERR) {
-        if (ch == 27) {
+        if (esc_alone(ch, 0) == 27) {
             /* Stop here and empty the queue: 64-bit Solaris curses leaves
                a -1 in it after a lone Esc and crashes on the next getch. */
             esc = 1;
             flushinp();
             break;
         }
-        scroll_key(ch);         /* anything else typed now is dropped */
+        /* the rest of what was typed while waiting is dropped, as before */
     }
     nodelay(stdscr, FALSE);
     if (esc) {

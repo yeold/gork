@@ -1394,6 +1394,167 @@ def check_tui_abort():
     print("ok: Esc abort, context in status bar")
 
 
+def check_tui_scroll_no_abort():
+    """Scrolling while a reply is in flight scrolls, it does not abort: every
+    scroll key begins with Esc, and curses hands over a bare 27 for a
+    sequence it does not know (an arrow, which is what a mouse wheel sends)
+    or whose bytes arrive apart (over ssh, in tmux)."""
+    release = threading.Event()
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["content-length"]))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            for e in text_events("still here", pieces=1)[:2]:
+                self.wfile.write(b"data: %s\n\n" % json.dumps(e).encode())
+            self.wfile.flush()
+            release.wait(15)            # in flight: the abort poll runs now
+            for e in text_events("still here", pieces=1)[2:]:
+                self.wfile.write(b"data: %s\n\n" % json.dumps(e).encode())
+            self.wfile.flush()
+
+        def log_message(self, *a):
+            pass
+
+    srv = serve(H, 8107, threaded=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8107\n")
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        # PgUp whole; PgUp in two pieces 300 ms apart, as over ssh; and an
+        # arrow, which is what a terminal sends for a wheel notch in a pane.
+        keys = [b"\x1b[5~", b"\x1b", b"[5~", b"\x1b[A"]
+        out, step, deadline = b"", 0, time.time() + 25
+        while time.time() < deadline and step < 3:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 4096)
+                except OSError:
+                    break
+            if step == 0 and b"Enter send" in out:
+                os.write(fd, b"hi\r")
+                step = 1
+            elif step == 1 and b"waiting for the model" in out:
+                for k in keys:
+                    os.write(fd, k)
+                    if k == b"\x1b":         # the split one
+                        time.sleep(0.3)
+                step = 2
+            elif step == 2 and b"still here" in out:
+                os.write(fd, b"/quit\r")
+                step = 3
+        release.set()
+        if step < 3:
+            os.kill(pid, 9)
+        status = reap(pid, fd)
+    srv.shutdown()
+
+    text = out.decode(errors="replace")
+    assert step == 3, (step, text[-2000:])
+    assert "aborting" not in text, "scrolling aborted the reply"
+    assert os.waitstatus_to_exitcode(status) == 0
+    print("ok: scrolling mid-reply does not abort")
+
+
+def check_tui_confirm_scroll():
+    """A scroll key at an approval prompt scrolls the preview, it does not
+    answer it: an arrow (a wheel notch in a pane) and a PgUp whose bytes
+    arrive apart both used to read as Esc, which declines."""
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+        posts = 0
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["content-length"]))
+            H.posts += 1
+            if H.posts > 1:             # the tool ran: a plain answer
+                reply(self, {"id": "m", "stop_reason": "end_turn",
+                             "usage": {"input_tokens": 20, "output_tokens": 2},
+                             "content": [{"type": "text", "text": "done"}]})
+                return
+            body = json.dumps({
+                "id": "m", "stop_reason": "tool_use",
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+                "content": [{"type": "tool_use", "id": "t1",
+                             "name": "write_file",
+                             "input": {"path": "out.txt", "content": "x"}}]})
+            body = body.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    srv = serve(H, 8108, threaded=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8108\n")
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        out, step, deadline = b"", 0, time.time() + 20
+        while time.time() < deadline and step < 3:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 4096)
+                except OSError:
+                    break
+            if step == 0 and b"Enter send" in out:
+                os.write(fd, b"write it\r")
+                step = 1
+            elif step == 1 and b"Allow" in out:
+                os.write(fd, b"\x1b[A")      # an arrow: a wheel notch
+                time.sleep(0.3)
+                os.write(fd, b"\x1b")        # and a PgUp, split in two
+                time.sleep(0.3)
+                os.write(fd, b"[5~")
+                time.sleep(0.3)
+                os.write(fd, b"y")           # then answer it
+                step = 2
+            elif step == 2 and (b"approved" in out or b"declined" in out):
+                time.sleep(0.5)          # let the split key's tail drain
+                os.write(fd, b"\x15")    # ^U: clear anything typed meanwhile
+                os.write(fd, b"/quit\r")
+                step = 3
+        if step < 3:
+            os.kill(pid, 9)
+        reap(pid, fd)
+    srv.shutdown()
+
+    text = out.decode(errors="replace")
+    assert step == 3, (step, text[-2000:])
+    assert "declined" not in text, "a scroll key declined the approval"
+    assert "approved" in text, "the approval never happened"
+    print("ok: scrolling at an approval prompt does not answer it")
+
+
 def check_tui_tty_prompt():
     """A command that prompts on /dev/tty (ssh, ftp) gets a typed line,
     Enter included, while the TUI is up.  /effort sets the effort sent."""
@@ -1885,6 +2046,8 @@ run(check_stream_openai)
 run(check_tui_stream, "TUI")
 run(check_auto_compact)
 run(check_tui_abort, "TUI")
+run(check_tui_scroll_no_abort, "TUI")
+run(check_tui_confirm_scroll, "TUI")
 run(check_tui_tty_prompt, "TUI")
 run(check_tui_mcp_esc_and_editing, "TUI", "MCP")
 run(check_tui_mcp_http_esc, "TUI", "MCP")
