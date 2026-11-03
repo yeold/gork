@@ -245,7 +245,8 @@ and run a task:
 
 Agent text goes to stdout; tool calls and diagnostics go to stderr, so
 `./gork ... 2>/dev/null` gives you just the answer.
-`./gork --version` prints the version and exits.
+`./gork --version` prints the version and exits, `./gork --help` the
+options (the settings with their defaults and variables).
 
 <a id="interactive"></a>
 ### Interactive TUI (Terminal User Interface)

@@ -12,6 +12,7 @@
  *
  * Usage:
  *   ./gork ["your task"]
+ *   ./gork --help
  *   ./gork --version
  *
  * With a task: run it, print the answer on stdout, exit (batch mode).
@@ -3306,6 +3307,38 @@ static int dos_self_dir(char *dir, size_t size)
 }
 #endif
 
+/* The settings text is the CFG table; conf_hint says where load_config()
+   looked, which differs per system.  Printed before any config is read:
+   --help has to work when the config is what is broken. */
+static void print_help(const char *prog)
+{
+    int i;
+
+    printf("usage: %s [\"task\"]\n", prog);
+    printf("       %s --help\n", prog);
+    printf("       %s --version\n", prog);
+    printf("\n");
+#ifdef GORK_NO_TUI
+    printf("Batch only in this build: give the task on the command line.\n");
+#else
+    printf("With a task: run it, print the answer on stdout, exit.\n");
+    printf("Without: the interactive TUI, which asks before writes and "
+           "commands.\n");
+#endif
+    printf("\nSettings: %s, `key = value`, or the variable shown; the\n"
+           "variable beats the file.  An empty `default` takes the "
+           "model's own.\n\n", conf_hint);
+    printf("  key               variable                default\n");
+    for (i = 0; i < NCFG; i++)
+        printf("  %-17s %-23s %s\n", CFG[i].name,
+               CFG[i].env != NULL ? CFG[i].env : "-",
+               CFG[i].fallback != NULL ? CFG[i].fallback : "(none)");
+#ifndef GORK_NO_RUN
+    printf("\nGORK_ALLOW_RUN  set: offer run_command in batch mode too\n");
+#endif
+    printf("GORK_TRACE      set: dump response headers and bodies to stderr\n");
+}
+
 int main(int argc, char **argv)
 {
     struct conn c;
@@ -3323,8 +3356,14 @@ int main(int argc, char **argv)
         printf("gork %s\n", VERSION);
         return 0;
     }
+    if (argc == 2 && (strcmp(argv[1], "--help") == 0 ||
+                      strcmp(argv[1], "-h") == 0)) {
+        print_help(argv[0]);
+        return 0;
+    }
     if (argc > 2) {
-        fprintf(stderr, "usage: %s [\"task\" | --version]\n", argv[0]);
+        fprintf(stderr, "usage: %s [\"task\" | --help | --version]\n",
+                argv[0]);
         return 2;
     }
 #ifdef __MSDOS__

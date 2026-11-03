@@ -1842,6 +1842,12 @@ def has_mcp():
 out = subprocess.run([BINARY, "--version"], capture_output=True, text=True)
 assert out.returncode == 0 and re.match(r"gork v?\d+\.\d+", out.stdout), out
 print("ok: --version")
+for flag in ("--help", "-h"):      # before any config file is read
+    out = subprocess.run([BINARY, flag], capture_output=True, text=True)
+    assert (out.returncode == 0 and "usage:" in out.stdout
+            and "api_key" in out.stdout and "max_turns" in out.stdout), out
+assert subprocess.run([BINARY, "a", "b"]).returncode == 2
+print("ok: --help")
 FEATURES = {"TUI": has_tui(), "MCP": has_mcp()}
 print("build: " + ", ".join(("" if v else "no ") + k for k, v in FEATURES.items())
       + (", through gork-relay" if RELAY else ""))
