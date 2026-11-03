@@ -69,6 +69,9 @@ the system's libc all the same (tried on Alpine, which has none).
    release that carries the Mac package must cherry-pick it and then
    check one `master` build: its archived `out/` should hold
    `gork-<v>-mac68k.zip`. Do that check **before** tagging, not after.
+   Done on 2026-11-03: `aacbefe` and `596211e` picked onto `master`, one
+   build (#36) SUCCESS with the package archived and all sixteen
+   `mactest.py` checks run on it.
 
 ## Jenkins
 
@@ -85,6 +88,15 @@ Two sets of tokens, and they fail differently:
   `release` stage with `curl: (22) ... 401` after the GitHub loop has
   already run: check both forges before re-running, and delete a release
   first if its assets are already there.
+- `forgejo-release-token` held a PAT that had been revoked on Forgejo
+  (2026-11-03): a `401 access token does not exist` means the token is
+  gone server side, where a wrong credential *ID* stops the stage in
+  `withCredentials` before any `sh` runs. It is now a copy of the `forgejo`
+  PAT's value, so rotating that one means updating this one too. Check
+  both without a release, by asking the API from the script console:
+  `/api/v1/user` and `/api/v1/repos/yeold/gork/releases/tags/v1.5` with
+  `token <pat>` should be 200 on Forgejo, and
+  `/repos/yeold/gork/releases/tags/v1.5` with `Bearer <pat>` on GitHub.
 - The Gitea plugin has Personal Access Tokens of its own (`forgejo`,
   `forgejo-jenkins-token`) for checkout and commit statuses. Without
   `read:user` among their scopes the build dies in checkout
