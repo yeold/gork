@@ -359,6 +359,8 @@ same: tools, skills, MCP servers and compacting. What differs:
   for Anthropic. The relay passes `Host` on as gork wrote it, so `host`
   must name that service, not the relay; left out, it is
   `api.anthropic.com`, and the service most likely answers 404.
+- Requests carry `User-Agent: gork <version>` and the same in `X-Title`, so
+  OpenRouter and its like can tell gork from another client.
 
 <a id="without-tcpip-spx"></a>
 ### Without TCP/IP: IPX/SPX

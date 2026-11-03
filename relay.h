@@ -71,6 +71,11 @@ extern void (*relay_stream)(const char *p, size_t n);
    instead of `x-api-key`, and no anthropic-version.  For `protocol = openai`. */
 extern int relay_bearer;
 
+/* "gork <version>", sent as User-Agent and `X-Title` so a service can tell
+   gork (and which build) from another client: OpenRouter shows the title in
+   its logs and on the key's activity page.  NULL means plain "gork". */
+extern const char *relay_agent;
+
 /* Seconds one request (and one MCP tool call) may take; `timeout`. */
 extern int relay_timeout;
 

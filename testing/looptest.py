@@ -125,6 +125,8 @@ def check_tool_loop():
     assert hdrs["x-api-key"] == "sk-test", hdrs.get("x-api-key")
     assert hdrs["anthropic-version"] == "2023-06-01", hdrs.get("anthropic-version")
     assert hdrs["host"] == "fake.local", hdrs.get("host")
+    assert re.match(r"gork v?\d", hdrs["user-agent"]), hdrs.get("user-agent")
+    assert hdrs["x-title"] == hdrs["user-agent"], hdrs.get("x-title")
     names = [t["name"] for t in first["tools"]]
     assert names == ["list_dir", "read_file", "write_file", "edit_file"], \
         f"run_command opt-in, no skill tool: {names}"

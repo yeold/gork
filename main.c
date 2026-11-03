@@ -3425,6 +3425,7 @@ int main(int argc, char **argv)
         return 2;
     }
     relay_bearer = openai;
+    relay_agent = "gork " VERSION;      /* User-Agent and X-Title */
     /* auto: in the TUI, where someone is watching; not in batch mode */
     if (strcmp(cfg(CFG_STREAM), "auto") == 0) {
 #ifndef GORK_BARE

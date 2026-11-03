@@ -100,6 +100,7 @@ const char *relay_ca_file;
 int relay_tls_verify = 1;
 int relay_bearer;
 int relay_retry_after;
+const char *relay_agent;
 
 /* The connection is SPX and not TCP: on DOS, where it is no descriptor. */
 static int spx;
@@ -1354,8 +1355,11 @@ int relay_http(const char *method, const char *conn_host, long conn_port,
       add(&head, method) != 0 || add(&head, " ") != 0 ||
       add(&head, path) != 0 ||
       add(&head, " HTTP/1.0\r\nHost: ") != 0 || add(&head, host) != 0 ||
-      add(&head, "\r\nUser-Agent: gork/0\r\n"
-                 "Content-Type: application/json\r\n") != 0 ||
+      add(&head, "\r\nUser-Agent: ") != 0 ||
+      add(&head, relay_agent != NULL ? relay_agent : "gork") != 0 ||
+      add(&head, "\r\nX-Title: ") != 0 ||
+      add(&head, relay_agent != NULL ? relay_agent : "gork") != 0 ||
+      add(&head, "\r\nContent-Type: application/json\r\n") != 0 ||
       add(&head, extra) != 0 ||
       add(&head, "Content-Length: ") != 0 || add(&head, num) != 0 ||
       add(&head, "\r\nConnection: close\r\n\r\n") != 0) {
