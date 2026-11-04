@@ -1945,6 +1945,77 @@ def check_run_timeout_and_esc():
     print("ok: run_command timeout, Esc interrupts it")
 
 
+def check_tui_paste():
+    """A block pasted into the TUI stays one message, its lines kept: each
+    newline in it starts a new line instead of sending, and the Enter typed
+    after the paste sends the lot."""
+    turns = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            turns.append(json.loads(self.rfile.read(int(self.headers["content-length"]))))
+            reply(self, {"id": "m", "stop_reason": "end_turn", "content": [
+                {"type": "text", "text": "reply%d" % len(turns)}]})
+
+        def log_message(self, *a):
+            pass
+
+    srv = serve(H, 8109)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8109\nstream = no\n")
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              ANTHROPIC_API_KEY="sk-test",
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        out, step, deadline = b"", 0, time.time() + 20
+        while time.time() < deadline and step < 4:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 4096)
+                except OSError:
+                    break
+            if step == 0 and b"Enter send" in out:
+                time.sleep(0.2)
+                os.write(fd, b"one\r")
+                step = 1
+            elif step == 1 and idle_after(out, b"reply1"):
+                time.sleep(0.2)
+                # two lines in one write, as a terminal hands over a paste
+                os.write(fd, b"first line\rsecond line\r")
+                step = 2
+            elif step == 2 and idle_after(out, b"reply2"):
+                time.sleep(0.2)
+                os.write(fd, b"typed\r")     # nothing follows it: it sends
+                step = 3
+            elif step == 3 and idle_after(out, b"reply3"):
+                os.write(fd, b"/quit\r")
+                step = 4
+        if step < 4:
+            os.kill(pid, 9)
+        status = reap(pid, fd)
+    srv.shutdown()
+
+    text = out.decode(errors="replace")
+    assert step == 4, (step, text[-2000:])
+    assert os.waitstatus_to_exitcode(status) == 0
+    said = [t["messages"][-1]["content"] for t in turns]
+    assert said == ["one", "first line\nsecond line", "typed"], said
+
+    print("ok: a paste in the TUI stays one message")
+
+
 def has_tui():
     """Does this build have a TUI?  Without one, gork refuses to start
     with no task (--without-tui)."""
@@ -2052,4 +2123,5 @@ run(check_tui_tty_prompt, "TUI")
 run(check_tui_mcp_esc_and_editing, "TUI", "MCP")
 run(check_tui_mcp_http_esc, "TUI", "MCP")
 run(check_run_timeout_and_esc, "TUI")
+run(check_tui_paste, "TUI")
 print("all checks passed" + (" (%d skipped: not in this build)" % len(skipped) if skipped else ""))

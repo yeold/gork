@@ -280,7 +280,9 @@ Each message continues the same conversation. Before any `write_file`,
 decline (the model is told and adapts), `a` allow that tool for the rest of
 the session. Reads never ask.
 
-Keys: Enter send, `\` then Enter a new line (not on DOS), Left/Right/Home/End/Delete
+Keys: Enter send, `\` then Enter a new line (neither on DOS), and a block pasted
+in stays one message, its lines kept: Enter sends the lot once the paste is in.
+Left/Right/Home/End/Delete
 edit, Up/Down earlier lines, PgUp/PgDn scroll, Ctrl-U clear the line, Esc abort the running task, Ctrl-D (on an empty line) or `/quit` exit. `/new` clears the conversation. A task
 that fails (network, API error) is dropped from the conversation so the next
 message starts clean; an aborted one is kept, so you can redirect it.

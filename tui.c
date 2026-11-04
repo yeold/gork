@@ -79,6 +79,7 @@ static const char  *hint_text = HINT_IDLE;
 static char         input[4096];
 static size_t       input_len;
 static size_t       input_pos;          /* the cursor: a byte offset */
+static int          pending_ch = -1;    /* peeked for, not yet handled */
 
 /* Earlier lines, for the Up and Down keys. */
 #ifdef GORK_DOS16
@@ -229,6 +230,33 @@ static int input_line(size_t pos, size_t *start, size_t *end)
     return n;
 }
 
+#ifndef GORK_BARE               /* Enter always sends there: nothing asks */
+/* Is a key already waiting to be read?  Nothing blocks: if bytes are on
+   their way but have not all arrived, this says no and a hand-typed Enter
+   still sends. */
+static int input_pending(void)
+{
+    if (pending_ch >= 0) return 1;
+    nodelay(stdscr, TRUE);
+    pending_ch = getch();
+    nodelay(stdscr, FALSE);
+    return pending_ch != ERR;
+}
+#endif
+
+/* The next key, of the ones already sitting in the input buffer: a paste
+   comes as one block, so every key but its last is there when its newline
+   is read.  Anywhere else getch() blocks, which is what the loop wants. */
+static int next_ch(void)
+{
+    int ch;
+
+    if (pending_ch < 0) return getch();
+    ch = pending_ch;
+    pending_ch = -1;
+    return ch;
+}
+
 static void draw(void)
 {
     /* Leave the rightmost column untouched: on the Minix 3.3.0 console it
@@ -334,7 +362,7 @@ static int esc_alone(int ch, int then)
 {
     if (ch != 27) return ch;
     timeout(ESC_ALONE_MS);
-    ch = getch();
+    ch = next_ch();
     timeout(then);
     if (ch == ERR) return 27;   /* nothing followed: a real Esc */
     scroll_key(ch);             /* the rest of it: PgUp/Dn still scroll */
@@ -619,11 +647,26 @@ char *tui_read_line(void)
 
     for (;;) {
         draw();
-        ch = getch();
+        ch = next_ch();
         switch (ch) {
         case '\n': case '\r': case KEY_ENTER:
             if (input_len == 0) break;
 #ifndef GORK_BARE
+            /* A pasted block arrives as its lines with their newlines, and
+               sending each one would send the block as separate messages
+               (a command, then its output, then the question).  Keys still
+               waiting to be read mean the rest of a paste, so a newline
+               with any is a line break; typed by hand, Enter has nothing
+               after it and sends. */
+            if (input_pending()) {
+                if (input_len < sizeof input - 1) {
+                    memmove(input + input_pos + 1, input + input_pos,
+                            input_len - input_pos + 1);
+                    input[input_pos++] = '\n';
+                    input_len++;
+                }
+                break;
+            }
             /* a backslash before the cursor: not sent, a new line */
             if (input_pos > 0 && input[input_pos - 1] == '\\') {
                 input[input_pos - 1] = '\n';
@@ -770,7 +813,7 @@ int tui_confirm(const char *title, const char *detail)
     hint_text = hint;
     for (;;) {
         draw();
-        ch = esc_alone(getch(), -1);
+        ch = esc_alone(next_ch(), -1);
         if (ch == 'y' || ch == 'Y' || ch == 'a' || ch == 'A' ||
             ch == 'n' || ch == 'N' || ch == 27)
             break;
@@ -841,10 +884,10 @@ int tui_poll_abort(void)
     if (!active) return 0;
     tui_drain();
     nodelay(stdscr, TRUE);
-    while ((ch = getch()) != ERR) {
+    while ((ch = next_ch()) != ERR) {
         if (esc_alone(ch, 0) == 27) {
             /* Stop here and empty the queue: 64-bit Solaris curses leaves
-               a -1 in it after a lone Esc and crashes on the next getch. */
+               a -1 in it after a lone Esc and crashes on the next read. */
             esc = 1;
             flushinp();
             break;
