@@ -1,3 +1,24 @@
+gork (1.6) unstable; urgency=medium
+
+  * New: a block pasted into the TUI stays one message, its lines kept.
+    A newline with more keys waiting behind it starts a new line instead of
+    sending, so a pasted command and its output go to the model together;
+    Enter typed afterwards sends the lot.  Not on DOS, which always sends.
+  * New: the 68k Mac package, gork-<version>-mac68k.zip, joins the releases:
+    System 7.5.3 on a 68020 or better, batch mode in a console window, on
+    MacTCP.  No TUI, no run_command and no MCP there: no shell, no curses.
+  * New: --help (-h) lists the settings with their defaults and variables,
+    and where the config file is looked for.  It works when the config file
+    itself is what is broken.
+  * New: requests carry User-Agent: gork <version>, and the same in X-Title,
+    so OpenRouter and its like can tell gork from another client.
+  * Fixed: scrolling in the TUI aborted the running task, or answered "no"
+    at an approval prompt.  Every scroll key begins with Esc and curses
+    hands over a bare 27 for a sequence it does not know (an arrow, which
+    is what a mouse wheel sends), which was taken for the key.
+
+ -- Yeold <isac.selea@gmail.com>  Wed, 04 Nov 2026 19:10:00 +0100
+
 gork (1.5) unstable; urgency=medium
 
   * New: -nonet packages for DOS (32- and 16-bit), legacy Windows and
