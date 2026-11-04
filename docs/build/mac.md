@@ -1,7 +1,8 @@
 # gork on the classic Mac OS
 
-Work in progress, not released yet: it runs on System 7.5.3 in Basilisk
-II (Test, below), and has not yet met a real Mac.
+Experimental: it runs on System 7.5.3 in Basilisk II (Test, below), and
+has not yet met a real Mac. Released since 1.6, as
+`gork-<version>-mac68k.zip`.
 
 gork for System 7 on a 68k Mac (a 68020 or better) is a program with a
 console window, in batch mode, on MacTCP (or Open Transport's MacTCP).
@@ -77,9 +78,9 @@ Retro68 toolchain built already instead. Needs git, gcc and g++, make,
 cmake, bison, flex, texinfo, ruby, the GMP, MPFR, MPC, Boost and zlib
 headers (for Retro68), python3 and zip.
 
-Jenkins builds it, and tests it in Basilisk II when the agent has a Mac
-ROM (see [MAINTAINING.md](../MAINTAINING.md), "Open questions"); it does
-not release it yet.
+Jenkins builds it, tests it in Basilisk II when the agent has a Mac ROM
+(see [MAINTAINING.md](../MAINTAINING.md), "Open questions"), and releases
+it with the other packages.
 
 ## Test
 
