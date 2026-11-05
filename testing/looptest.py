@@ -2016,6 +2016,99 @@ def check_tui_paste():
     print("ok: a paste in the TUI stays one message")
 
 
+def check_tui_compact_and_resume():
+    """`/compact` at the prompt replaces the conversation with the model's
+    summary and keeps going; `/resume` is `/load`.  The summary is asked
+    for whole (no streaming), so the screen does not fill with it."""
+    turns = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            req = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            turns.append(req)
+            n = len(turns)
+            if n % 2 == 1:                      # a task
+                reply(self, {"id": "m%d" % n, "stop_reason": "end_turn",
+                             "usage": {"input_tokens": 100, "output_tokens": 10},
+                             "content": [{"type": "text", "text": "reply%d" % n}]})
+            else:                               # the summary, asked whole
+                reply(self, {"id": "m%d" % n, "stop_reason": "end_turn",
+                             "content": [{"type": "text", "text": "SUMMARY-X"}]})
+
+        def log_message(self, *a):
+            pass
+
+    srv = serve(H, 8110)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8110\nstream = yes\n")
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              ANTHROPIC_API_KEY="sk-test",
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        out, step, deadline = b"", 0, time.time() + 20
+        while time.time() < deadline and step < 7:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 4096)
+                except OSError:
+                    break
+            if step == 0 and b"Enter send" in out:
+                os.write(fd, b"one\r")
+                step = 1
+            elif step == 1 and idle_after(out, b"reply1"):
+                os.write(fd, b"/compact\r")
+                step = 2
+            elif step == 2 and b"compacted to about" in out:
+                step = 3
+            elif step == 3 and idle_after(out, b"compacted to about"):
+                os.write(fd, b"/save\r")
+                step = 4
+            elif step == 4 and b"gork: saved 1 messages" in out:
+                os.write(fd, b"/new\r")
+                step = 5
+            elif step == 5 and b"conversation cleared" in out:
+                os.write(fd, b"/resume\r")       # the /load alias
+                step = 6
+            elif step == 6 and b"gork: loaded 1 messages" in out:
+                os.write(fd, b"again\r")
+                step = 6.5
+            elif step == 6.5 and idle_after(out, b"reply3"):
+                os.write(fd, b"/quit\r")
+                step = 7
+        if step < 7:
+            os.kill(pid, 9)
+        status = reap(pid, fd)
+    srv.shutdown()
+
+    text = out.decode(errors="replace")
+    assert step == 7, (step, text[-2000:])
+    assert os.waitstatus_to_exitcode(status) == 0
+    # the summary came back and the conversation is that one message
+    assert "stream" not in turns[1], "the summary must be asked whole"
+    assert "Summarize this conversation" in json.dumps(turns[1]["messages"])
+    # the task and its reply, plus the ask
+    assert len(turns[1]["messages"]) == 3, turns[1]["messages"]
+    # what /resume loaded was the compacted conversation: one message, the
+    # summary, and the new task after it
+    msgs = turns[2]["messages"]
+    assert len(msgs) == 2 and "SUMMARY-X" in json.dumps(msgs), msgs
+    assert msgs[0]["role"] == "user" and msgs[-1]["role"] == "user", msgs
+
+    print("ok: /compact, /resume and /new in the TUI")
+
+
 def has_tui():
     """Does this build have a TUI?  Without one, gork refuses to start
     with no task (--without-tui)."""
@@ -2124,4 +2217,5 @@ run(check_tui_mcp_esc_and_editing, "TUI", "MCP")
 run(check_tui_mcp_http_esc, "TUI", "MCP")
 run(check_run_timeout_and_esc, "TUI")
 run(check_tui_paste, "TUI")
+run(check_tui_compact_and_resume, "TUI")
 print("all checks passed" + (" (%d skipped: not in this build)" % len(skipped) if skipped else ""))

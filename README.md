@@ -595,12 +595,17 @@ interrupt it too.
 ## Known gaps
 
 - **The TUI is only partly covered by the test suites.** They drive the
-  trust prompt, approvals, Esc and `/quit`; the rest was checked by hand.
+  trust prompt, approvals, Esc, a pasted block, the reply arriving as it
+  streams, `/effort`, `/save`, `/load`, `/resume`, `/compact`, `/new` and
+  `/quit`; the rest was checked by hand. MCP is driven over both stdio and
+  HTTP.
 - **Path confinement is check-then-open.** A symlink swapped in between can
   escape it. That stops a model, not a hostile local user.
-- **Streaming is new, and untried against the real services.** It
-  passes against the test servers, for both protocols; `stream = no` turns
-  it off if a server's stream does not agree with gork.
+- **Streaming was checked against one real service.** It passes against the
+  test servers for both protocols, and against OpenRouter's
+  `chat/completions` (a streamed tool call included); no streamed reply has
+  been tried against api.anthropic.com. `stream = no` turns it off if a
+  server's stream does not agree with gork.
 
 ## Working on gork
 
