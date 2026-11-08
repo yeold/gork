@@ -71,9 +71,12 @@ pipeline {
                     steps {
                         sh '''
                             docker run --rm -v "$PWD/out":/out fedora:latest sh -ec '
-                                dnf -yq install rpm-build gcc make ncurses-devel
+                                dnf -yq install rpm-build gcc make ncurses-devel ncurses-static
                                 # the source tarball, not the Linux and BSD binaries beside it
                                 rpmbuild -ta "$(ls /out/gork-*.tar.gz | grep -vE -- "-(linux|freebsd|netbsd|openbsd)-")" --define "_topdir /tmp/rpm"
+                                # curses must be static or the package runs only
+                                # on Fedora (see gork.spec)
+                                ! rpm -qp --requires /tmp/rpm/RPMS/*/gork-[0-9]*.rpm | grep -q libncurses
                                 cp /tmp/rpm/SRPMS/*.rpm /tmp/rpm/RPMS/*/*.rpm /out/ && chown -R '"$(id -u):$(id -g)"' /out'
                         '''
                     }

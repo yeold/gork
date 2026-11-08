@@ -25,7 +25,7 @@ building on each system.
 | Package | Built by | Checked by |
 |---|---|---|
 | `gork-<v>.tar.gz` (source) | Jenkins, `make dist` | builds the RPM and the deb |
-| `.rpm`, `.src.rpm` (x86-64) | Jenkins, Fedora | |
+| `.rpm`, `.src.rpm` (x86-64) | Jenkins, Fedora | the rpm stage fails if the package still requires `libncurses`, since curses is linked in so that it runs past Fedora (openSUSE needs that: its curses is `--enable-reentrant`, and a Fedora-linked binary dies there on `undefined symbol: curscr`) |
 | `.deb` (amd64) | Jenkins, Debian stable | |
 | `gork-<v>-linux-<arch>.tar.gz`, ten CPUs, static | Jenkins, `linuxbuild.sh` | `testing/linuxtest.sh`: the suite under qemu-user |
 | `gork-<v>-{freebsd,netbsd,openbsd}-{amd64,arm64}.tar.gz`, static | Jenkins, `bsdbuild.sh` (clang against each release's base sets) | `testing/bsdtest.py`: `vmcheck.sh` on the release's own image in QEMU |
