@@ -1,3 +1,13 @@
+gork (1.6.1) unstable; urgency=medium
+
+  * Fixed: the .rpm from 1.6 did not start on openSUSE (or any distribution
+    whose ncurses is built --enable-reentrant): "undefined symbol: curscr",
+    before main ran.  curses is now linked into the package, as it already
+    was in the static Linux binaries, so one rpm runs on both.  The .deb had
+    the same fault there, on a versioned symbol.
+
+ -- Yeold <isac.selea@gmail.com>  Sun, 08 Nov 2026 21:50:00 +0100
+
 gork (1.6) unstable; urgency=medium
 
   * New: a block pasted into the TUI stays one message, its lines kept.

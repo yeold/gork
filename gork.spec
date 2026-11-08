@@ -1,6 +1,6 @@
 Name:           gork
-Version:        1.6
-Release:        2%{?dist}
+Version:        1.6.1
+Release:        1%{?dist}
 Summary:        Lightweight AI agent harness for old and obscure operating systems
 # cJSON, which is vendored, is MIT
 License:        GPL-3.0-or-later AND MIT
