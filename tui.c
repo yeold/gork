@@ -356,6 +356,12 @@ static void scroll_key(int ch)
    sequence is caught even if its halves land either side of a poll.
    shortcut: a sequence split by more than ESC_ALONE_MS is nearly always
    meant as an abort by then anyway; a key reader of its own would lift it.
+   A sequence curses does not decode -- a wheel notch in a terminal whose
+   terminfo has the application-mode arrows, a mouse report -- comes back
+   as 27 and its bytes as separate keys.  Reading only one of them left the
+   rest to be typed into the input line as text ("[A" after scrolling).
+   So read the whole sequence, to its final byte, and report 0 for one gork
+   does not act on: no caller treats 0 as a key or as an abort.
    The caller's loop goes on reading keys as `then` says: -1 blocking, 0 not. */
 #define ESC_ALONE_MS 500
 static int esc_alone(int ch, int then)
@@ -363,9 +369,20 @@ static int esc_alone(int ch, int then)
     if (ch != 27) return ch;
     timeout(ESC_ALONE_MS);
     ch = next_ch();
+    if (ch == ERR) {                /* nothing followed: a real Esc */
+        timeout(then);
+        return 27;
+    }
+    if (ch == '[' || ch == 'O') {
+        /* a sequence: swallow the rest, to its final byte 0x40..0x7e */
+        ch = next_ch();
+        while (ch != ERR && !(ch >= 0x40 && ch <= 0x7e))
+            ch = next_ch();
+        timeout(then);
+        return 0;                   /* an arrow, a wheel notch: ignored */
+    }
     timeout(then);
-    if (ch == ERR) return 27;   /* nothing followed: a real Esc */
-    scroll_key(ch);             /* the rest of it: PgUp/Dn still scroll */
+    scroll_key(ch);                 /* a key curses did decode */
     return ch;
 }
 
@@ -647,7 +664,11 @@ char *tui_read_line(void)
 
     for (;;) {
         draw();
-        ch = next_ch();
+        /* A sequence curses does not decode comes back as 27 and its bytes
+           as separate keys: read the whole of it here too, so its tail is
+           not typed into the line.  An arrow or a wheel notch scrolls the
+           pane, not the history, so 0 is dropped. */
+        ch = esc_alone(next_ch(), -1);
         switch (ch) {
         case '\n': case '\r': case KEY_ENTER:
             if (input_len == 0) break;
@@ -872,6 +893,10 @@ void tui_resume(void)
 {
     if (!active) return;
     reset_prog_mode();
+    /* A wheel notch while a command had the terminal left the tail of its
+       escape sequence in the input queue: its Esc went to the command as the
+       interrupt key.  Dropped here, or it is typed into the next line. */
+    flushinp();
     hint_text = HINT_BUSY;
     clearok(curscr, TRUE);
     draw();
