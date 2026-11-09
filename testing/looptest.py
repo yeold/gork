@@ -1471,6 +1471,153 @@ def check_tui_scroll_no_abort():
     print("ok: scrolling mid-reply does not abort")
 
 
+def check_tui_wheel_tail_not_typed():
+    """A wheel notch is a sequence curses may not decode: its Esc is acted on
+    and the rest of the bytes used to be typed into the input line as text
+    ("[A").  Scrolling at the input line must leave the line empty."""
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            said.append(body["messages"][-1].get("content"))
+            reply(self, {"id": "m", "stop_reason": "end_turn",
+                         "usage": {"input_tokens": 10, "output_tokens": 2},
+                         "content": [{"type": "text", "text": "ok"}]})
+
+        def log_message(self, *a):
+            pass
+
+    said = []
+    srv = serve(H, 8114, threaded=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8114\n")
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        out, step, deadline = b"", 0, time.time() + 25
+        while time.time() < deadline and step < 3:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 4096)
+                except OSError:
+                    break
+            if step == 0 and b"Enter send" in out:
+                time.sleep(0.3)
+                for k in (b"\x1b[A", b"\x1b[B", b"\x1b[5~", b"\x1b[6~"):
+                    os.write(fd, k)
+                    time.sleep(0.15)
+                time.sleep(0.3)
+                os.write(fd, b"plain\r")       # typed with an empty line
+                step = 1
+            elif step == 1 and said:
+                os.write(fd, b"/quit\r")
+                step = 2
+        if step < 3:
+            os.kill(pid, 9)
+        reap(pid, fd)
+    srv.shutdown()
+
+    text = out.decode(errors="replace")
+    assert step == 2, (step, text[-2000:])
+    assert said and said[0] == "plain", \
+        "a scroll key's tail was typed into the line: %r" % (said,)
+    print("ok: a wheel notch leaves no characters in the input line")
+
+
+def check_tui_run_wheel_tail_not_typed():
+    """Scrolling while a command runs: the terminal is in shell mode and the
+    sequence's Esc goes to the command as the interrupt key, so its tail must
+    not be left in the queue to be typed into the next line."""
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+        posts = 0
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            said.append(body["messages"][-1].get("content"))
+            H.posts += 1
+            if H.posts == 1:
+                content = [{"type": "tool_use", "id": "t1",
+                            "name": "run_command",
+                            "input": {"command": "trap '' INT; sleep 2"}}]
+                stop = "tool_use"
+            else:
+                content = [{"type": "text", "text": "done"}]
+                stop = "end_turn"
+            reply(self, {"id": "m", "stop_reason": stop,
+                         "usage": {"input_tokens": 10, "output_tokens": 2},
+                         "content": content})
+
+        def log_message(self, *a):
+            pass
+
+    said = []
+    srv = serve(H, 8115, threaded=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8115\n")
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              GORK_ALLOW_RUN="1",
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        out, step, deadline = b"", 0, time.time() + 40
+        while time.time() < deadline and step < 5:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 4096)
+                except OSError:
+                    break
+            if step == 0 and b"Enter send" in out:
+                os.write(fd, b"run it\r")
+                step = 1
+            elif step == 1 and b"Allow" in out:
+                os.write(fd, b"y")
+                step = 2
+            elif step == 2 and b"running command" in out:
+                time.sleep(0.3)
+                for k in (b"\x1b[A", b"\x1b[B"):     # wheel notches
+                    os.write(fd, k)
+                    time.sleep(0.15)
+                step = 3
+            elif step == 3 and idle_after(out, b"done"):
+                os.write(fd, b"plain\r")
+                step = 4
+            elif step == 4 and any("plain" in json.dumps(m) for m in said):
+                os.write(fd, b"/quit\r")
+                step = 5
+        if step < 5:
+            os.kill(pid, 9)
+        reap(pid, fd)
+    srv.shutdown()
+
+    text = out.decode(errors="replace")
+    assert step == 5, (step, text[-2000:])
+    assert "plain" in json.dumps(said), "the follow-up message never arrived"
+    assert "[A" not in json.dumps(said) and "[B" not in json.dumps(said), \
+        "a scroll key's tail was typed into the line: %r" % (said,)
+    print("ok: scrolling while a command runs leaves no characters behind")
+
+
 def check_tui_confirm_scroll():
     """A scroll key at an approval prompt scrolls the preview, it does not
     answer it: an arrow (a wheel notch in a pane) and a PgUp whose bytes
@@ -2212,6 +2359,8 @@ run(check_auto_compact)
 run(check_tui_abort, "TUI")
 run(check_tui_scroll_no_abort, "TUI")
 run(check_tui_confirm_scroll, "TUI")
+run(check_tui_wheel_tail_not_typed, "TUI")
+run(check_tui_run_wheel_tail_not_typed, "TUI")
 run(check_tui_tty_prompt, "TUI")
 run(check_tui_mcp_esc_and_editing, "TUI", "MCP")
 run(check_tui_mcp_http_esc, "TUI", "MCP")
