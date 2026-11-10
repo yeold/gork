@@ -173,7 +173,7 @@ char *os2_realpath(const char *path, char *out)
 #define VERSION GORK_VERSION
 #endif
 #ifndef VERSION
-#define VERSION "1.6.1"
+#define VERSION "1.6.2"
 #endif
 
 /* DOS (DJGPP) has 8.3 file names: no leading dot, one extension.  Windows

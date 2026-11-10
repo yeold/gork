@@ -1,3 +1,20 @@
+gork (1.6.2) unstable; urgency=medium
+
+  * Fixed: scrolling with a mouse wheel typed "[A" into the input line,
+    because every scroll key begins with Esc and curses hands over the bytes
+    of a sequence it does not know one key at a time.
+  * Fixed: PgUp and PgDn printed characters instead of scrolling when the
+    bytes of a key arrive apart, as they do in a browser console, over ssh
+    or in tmux; and they did nothing at all where the terminfo has neither
+    (vt100, ansi).
+  * Fixed: Home and End did nothing in the input line on any terminal whose
+    sequence is not the one curses decodes (ESC[H and ESC[F on vt100, ansi,
+    ssh, tmux; ESC[1~ and 4~ on the Linux console; ESC[7~ and 8~ on rxvt).
+  * Fixed: Left, Right and Delete were dead in the same way.
+  * The packages' Homepage and URL now point at https://gork.yeold.org.
+
+ -- Yeold <isac.selea@gmail.com>  Tue, 10 Nov 2026 21:58:00 +0100
+
 gork (1.6.1) unstable; urgency=medium
 
   * Fixed: the .rpm from 1.6 did not start on openSUSE (or any distribution
