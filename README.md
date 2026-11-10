@@ -30,6 +30,9 @@ LM Studio (see [Local models](#local-models)). It speaks plaintext HTTP/1.0;
 reaching an HTTPS endpoint is the job of a [relay](#why-a-relay), unless
 gork is built with OpenSSL.
 
+The project page is <https://gork.yeold.org>: what it is, which systems it
+runs on, and where to download it.
+
 ## Features at a glance
 
 - **Strict ANSI C89 / ISO C90**: ~5,000 lines of portable C, ~100 KB stripped binary, no C99, no threads, no OpenSSL/TLS library required on the target machine.

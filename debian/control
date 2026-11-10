@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Yeold <isac.selea@gmail.com>
 Build-Depends: debhelper-compat (= 13), libncurses-dev
 Standards-Version: 4.6.2
-Homepage: https://github.com/yeold/gork
+Homepage: https://gork.yeold.org
 
 Package: gork
 Architecture: any

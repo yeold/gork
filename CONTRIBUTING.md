@@ -1,7 +1,8 @@
 # Contributing
 
 Bug reports, results from systems nobody has tried, and patches are all
-welcome.
+welcome. The project page is <https://gork.yeold.org>; the code and the
+issue list are on GitHub, at <https://github.com/yeold/gork>.
 
 ## Reports
 

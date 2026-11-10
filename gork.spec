@@ -4,7 +4,7 @@ Release:        1%{?dist}
 Summary:        Lightweight AI agent harness for old and obscure operating systems
 # cJSON, which is vendored, is MIT
 License:        GPL-3.0-or-later AND MIT
-URL:            https://github.com/yeold/gork
+URL:            https://gork.yeold.org
 Source0:        %{name}-%{version}.tar.gz
 BuildRequires:  gcc make ncurses-devel
 # curses static on Fedora (below); openSUSE's static libtinfo.a segfaults.
