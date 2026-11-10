@@ -1613,11 +1613,14 @@ def check_tui_split_pgup_scrolls():
 
 
 def check_tui_home_end_sequences():
-    """Home and End in the input line, over the sequences a terminal sends
-    when its terminfo is not the one curses read: with TERM=xterm curses
-    decodes only ESC OH and ESC OF, and esc_alone() dropped ESC[H, ESC[F,
-    ESC[1~/4~ (Linux console, screen) and ESC[7~/8~ (rxvt) -- so Home and
-    End did nothing at all."""
+    """Home, End, Delete and the left/right arrows in the input line, over
+    the sequences a terminal sends when curses could not assemble the key:
+    with TERM=xterm curses decodes only ESC OH and ESC OF, and esc_alone()
+    dropped everything else it read -- ESC[H, ESC[F, ESC[1~/4~ (Linux
+    console, screen), ESC[7~/8~ (rxvt) and ESC[D/C/3~ -- so those keys did
+    nothing at all.  A mouse wheel notch is ESC[A/ESC[B] too and must go on
+    scrolling rather than recalling history, so the arrows are checked here
+    only where they cannot be a wheel: Left and Right."""
     class H(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"
         said = []
@@ -1646,13 +1649,16 @@ def check_tui_home_end_sequences():
                               GORK_CONFIG=os.path.join(tmp, "k.conf"))
             os.execv(BINARY, [BINARY])
 
-        # each line is "abc", then a Home or End in one of its forms, then
-        # "X": Home puts the X at the front, End at the end
+        # each line is "abc", one key in a form curses cannot decode, then
+        # "X": what comes out says what the key did.  "abXc" is a key that
+        # moved the cursor, "abcX" one that did nothing at the line's end.
         forms = [("Home", b"\x1b[H"), ("Home", b"\x1b[1~"), ("Home", b"\x1b[7~"),
-                 ("Home", b"\x1bOH"), ("End", b"\x1bOF"), ("End", b"\x1b[F"),
-                 ("End", b"\x1b[4~"), ("End", b"\x1b[8~")]
-        want = ["Xabc" if w == "Home" else "abcX" for w, _ in forms]
-        out, i, sent, deadline = b"", 0, 0, time.time() + 40
+                 ("End", b"\x1bOF"), ("End", b"\x1b[F"), ("End", b"\x1b[4~"),
+                 ("Left", b"\x1b[D"), ("Left", b"\x1bOD"),
+                 ("Right", b"\x1b[3~")]
+        want = ["Xabc", "Xabc", "Xabc", "abcX", "abcX", "abcX",
+                "abXc", "abXc", "abcX"]
+        out, i, sent, deadline = b"", 0, 0, time.time() + 60
         while time.time() < deadline and i < len(forms):
             r, _, _ = select.select([fd], [], [], 0.1)
             if r:
@@ -1678,8 +1684,9 @@ def check_tui_home_end_sequences():
     srv.shutdown()
 
     assert i == len(forms), (i, out.decode(errors="replace")[-2000:])
-    assert H.said == want, "Home/End dropped a sequence: %r" % (H.said,)
-    print("ok: Home and End work in every sequence a terminal sends")
+    assert H.said == want, "a key dropped its sequence: %r" % (H.said,)
+    print("ok: Home, End, Left, Right and Delete work in every sequence a "
+          "terminal sends")
 
 
 def check_tui_run_wheel_tail_not_typed():

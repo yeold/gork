@@ -402,21 +402,27 @@ static int esc_alone(int ch, int then)
         timeout(then);
         /* PgUp and PgDn are 5~ and 6~ in every terminfo that has them; Home
            and End are H and F (vt100, ansi) or 1~ and 4~ (the Linux console,
-           screen), while xterm names OH and OF, which curses does decode.
-           So the forms recognised here are the ones a terminal still sends
-           when the terminfo curses read is not the one it is in -- an ssh, a
-           tmux, a browser console -- and 7~ and 8~, which rxvt uses.  Handed
-           on as KEY_HOME/KEY_END, which tui_read_line() moves the cursor
-           with. */
+           screen), while xterm names OH and OF, which curses does decode, and
+           7~ and 8~ are rxvt's.  So the forms recognised here are the ones a
+           terminal still sends when the terminfo curses read is not the one
+           it is in -- a split by a browser console, an ssh or a tmux -- and
+           are handed on as the KEY_ the decoded form would have given.
+           Up and Down are not among them: ESC[A and ESC[B arriving like this
+           are a mouse wheel more often than an arrow, and the wheel scrolls. */
         if (last == '~' && (n == 5 || n == 6)) {
             scroll_key(n == 5 ? KEY_PPAGE : KEY_NPAGE);
             return 0;
         }
-        if (last == '~' && (n == 1 || n == 7)) return KEY_HOME;
-        if (last == '~' && (n == 4 || n == 8)) return KEY_END;
+        if (i == 1 && last == 'A') return 0;            /* the wheel */
+        if (i == 1 && last == 'B') return 0;
+        if (i == 1 && last == 'C') return KEY_RIGHT;
+        if (i == 1 && last == 'D') return KEY_LEFT;
         if (i == 1 && last == 'H') return KEY_HOME;
         if (i == 1 && last == 'F') return KEY_END;
-        return 0;                   /* an arrow, a wheel notch: ignored */
+        if (last == '~' && (n == 1 || n == 7)) return KEY_HOME;
+        if (last == '~' && (n == 4 || n == 8)) return KEY_END;
+        if (last == '~' && n == 3) return KEY_DC;
+        return 0;                   /* anything else: ignored */
     }
     timeout(then);
     scroll_key(ch);                 /* a key curses did decode */
