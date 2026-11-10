@@ -373,7 +373,7 @@ static void scroll_key(int ch)
 
 static int esc_alone(int ch, int then)
 {
-    int first, last, i, n;          /* C89: no declarations after statements */
+    int last, i, n;                 /* C89: no declarations after statements */
 
     if (ch != 27) return ch;
     timeout(ESC_SEQ_MS);
@@ -384,26 +384,38 @@ static int esc_alone(int ch, int then)
     }
     if (ch == '[' || ch == 'O') {
         /* a sequence: read on to its final byte 0x40..0x7e.  curses decoded
-           none of it, so PgUp/PgDn have to be recognised here: that is the
-           whole point of this, since a slow terminal splits them and the
-           scroll key arrives this way instead of as KEY_PPAGE. */
-        first = last = -1;
+           none of it, so the keys gork acts on have to be recognised here:
+           that is the whole point of this, since a slow terminal splits them
+           and they arrive this way instead of as KEY_PPAGE, KEY_HOME or
+           KEY_END. */
         i = n = 0;
+        last = -1;
 
         for (;;) {
             ch = next_ch();
             if (ch == ERR) break;
-            if (i++ == 0) first = ch;
+            i++;
             last = ch;
             if (ch >= '0' && ch <= '9') n = n * 10 + (ch - '0');
             if (ch >= 0x40 && ch <= 0x7e) break;
         }
         timeout(then);
-        /* CSI 5~ and 6~ are PgUp and PgDn, in every terminfo that has them */
-        if (first >= '0' && first <= '9' && last == '~' &&
-            (n == 5 || n == 6)) {
+        /* PgUp and PgDn are 5~ and 6~ in every terminfo that has them; Home
+           and End are H and F (vt100, ansi) or 1~ and 4~ (the Linux console,
+           screen), while xterm names OH and OF, which curses does decode.
+           So the forms recognised here are the ones a terminal still sends
+           when the terminfo curses read is not the one it is in -- an ssh, a
+           tmux, a browser console -- and 7~ and 8~, which rxvt uses.  Handed
+           on as KEY_HOME/KEY_END, which tui_read_line() moves the cursor
+           with. */
+        if (last == '~' && (n == 5 || n == 6)) {
             scroll_key(n == 5 ? KEY_PPAGE : KEY_NPAGE);
+            return 0;
         }
+        if (last == '~' && (n == 1 || n == 7)) return KEY_HOME;
+        if (last == '~' && (n == 4 || n == 8)) return KEY_END;
+        if (i == 1 && last == 'H') return KEY_HOME;
+        if (i == 1 && last == 'F') return KEY_END;
         return 0;                   /* an arrow, a wheel notch: ignored */
     }
     timeout(then);

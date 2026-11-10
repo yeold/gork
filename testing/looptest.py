@@ -1612,6 +1612,76 @@ def check_tui_split_pgup_scrolls():
     print("ok: a PgUp split by 700 ms scrolls and types nothing")
 
 
+def check_tui_home_end_sequences():
+    """Home and End in the input line, over the sequences a terminal sends
+    when its terminfo is not the one curses read: with TERM=xterm curses
+    decodes only ESC OH and ESC OF, and esc_alone() dropped ESC[H, ESC[F,
+    ESC[1~/4~ (Linux console, screen) and ESC[7~/8~ (rxvt) -- so Home and
+    End did nothing at all."""
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+        said = []
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            H.said.append(body["messages"][-1].get("content"))
+            reply(self, {"id": "m", "stop_reason": "end_turn", "content": [
+                {"type": "text", "text": "reply%d" % len(H.said)}]})
+
+        def log_message(self, *a):
+            pass
+
+    srv = serve(H, 8117, threaded=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8117\n")
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        # each line is "abc", then a Home or End in one of its forms, then
+        # "X": Home puts the X at the front, End at the end
+        forms = [("Home", b"\x1b[H"), ("Home", b"\x1b[1~"), ("Home", b"\x1b[7~"),
+                 ("Home", b"\x1bOH"), ("End", b"\x1bOF"), ("End", b"\x1b[F"),
+                 ("End", b"\x1b[4~"), ("End", b"\x1b[8~")]
+        want = ["Xabc" if w == "Home" else "abcX" for w, _ in forms]
+        out, i, sent, deadline = b"", 0, 0, time.time() + 40
+        while time.time() < deadline and i < len(forms):
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 4096)
+                except OSError:
+                    break
+            if sent == 0 and b"Enter send" in out:
+                os.write(fd, b"abc")
+                time.sleep(0.2)
+                os.write(fd, forms[i][1])
+                time.sleep(0.2)
+                os.write(fd, b"X\r")
+                sent = 1
+            elif sent == 1 and len(H.said) == i + 1:
+                i += 1
+                sent = 0
+        os.write(fd, b"/quit\r")
+        time.sleep(1.5)
+        if i < len(forms):
+            os.kill(pid, 9)
+        reap(pid, fd)
+    srv.shutdown()
+
+    assert i == len(forms), (i, out.decode(errors="replace")[-2000:])
+    assert H.said == want, "Home/End dropped a sequence: %r" % (H.said,)
+    print("ok: Home and End work in every sequence a terminal sends")
+
+
 def check_tui_run_wheel_tail_not_typed():
     """Scrolling while a command runs: the terminal is in shell mode and the
     sequence's Esc goes to the command as the interrupt key, so its tail must
@@ -2438,6 +2508,7 @@ run(check_tui_scroll_no_abort, "TUI")
 run(check_tui_confirm_scroll, "TUI")
 run(check_tui_wheel_tail_not_typed, "TUI")
 run(check_tui_split_pgup_scrolls, "TUI")
+run(check_tui_home_end_sequences, "TUI")
 run(check_tui_run_wheel_tail_not_typed, "TUI")
 run(check_tui_tty_prompt, "TUI")
 run(check_tui_mcp_esc_and_editing, "TUI", "MCP")
