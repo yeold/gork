@@ -351,11 +351,7 @@ static void scroll_key(int ch)
    read on for the rest of a sequence: what comes back is the key, with a
    lone Esc (nothing following) as 27.
    The wait only costs anything when a 27 arrives, and then only when it was
-   a real Esc: a key sequence that follows comes at once.  It is longer than
-   the reply poll's interval (200 ms), which is when this runs, so a split
-   sequence is caught even if its halves land either side of a poll.
-   shortcut: a sequence split by more than ESC_ALONE_MS is nearly always
-   meant as an abort by then anyway; a key reader of its own would lift it.
+   a real Esc: a key sequence that follows comes at once.
    A sequence curses does not decode -- a wheel notch in a terminal whose
    terminfo has the application-mode arrows, a mouse report -- comes back
    as 27 and its bytes as separate keys.  Reading only one of them left the
@@ -363,22 +359,51 @@ static void scroll_key(int ch)
    So read the whole sequence, to its final byte, and report 0 for one gork
    does not act on: no caller treats 0 as a key or as an abort.
    The caller's loop goes on reading keys as `then` says: -1 blocking, 0 not. */
-#define ESC_ALONE_MS 500
+
+/* How long to wait for the rest of a sequence, and between its bytes.
+   A terminal in a browser (Proxmox's console, noVNC) or one over ssh or in
+   tmux can put a gap of hundreds of ms between any two bytes of a key, and
+   this used to be 500 ms: a PgUp whose 27 arrived 600 ms before its '[' was
+   taken as a lone Esc, so the pane did not scroll and "[5~" was typed into
+   the input line instead.  curses' own ESCDELAY (50 ms here) covers only
+   the 27, so the whole sequence needs this one.
+   shortcut: a gap over a second is a stalled link, not a key; a longer
+   wait would cost that much on every real Esc. */
+#define ESC_SEQ_MS 1000
+
 static int esc_alone(int ch, int then)
 {
+    int first, last, i, n;          /* C89: no declarations after statements */
+
     if (ch != 27) return ch;
-    timeout(ESC_ALONE_MS);
+    timeout(ESC_SEQ_MS);
     ch = next_ch();
     if (ch == ERR) {                /* nothing followed: a real Esc */
         timeout(then);
         return 27;
     }
     if (ch == '[' || ch == 'O') {
-        /* a sequence: swallow the rest, to its final byte 0x40..0x7e */
-        ch = next_ch();
-        while (ch != ERR && !(ch >= 0x40 && ch <= 0x7e))
+        /* a sequence: read on to its final byte 0x40..0x7e.  curses decoded
+           none of it, so PgUp/PgDn have to be recognised here: that is the
+           whole point of this, since a slow terminal splits them and the
+           scroll key arrives this way instead of as KEY_PPAGE. */
+        first = last = -1;
+        i = n = 0;
+
+        for (;;) {
             ch = next_ch();
+            if (ch == ERR) break;
+            if (i++ == 0) first = ch;
+            last = ch;
+            if (ch >= '0' && ch <= '9') n = n * 10 + (ch - '0');
+            if (ch >= 0x40 && ch <= 0x7e) break;
+        }
         timeout(then);
+        /* CSI 5~ and 6~ are PgUp and PgDn, in every terminfo that has them */
+        if (first >= '0' && first <= '9' && last == '~' &&
+            (n == 5 || n == 6)) {
+            scroll_key(n == 5 ? KEY_PPAGE : KEY_NPAGE);
+        }
         return 0;                   /* an arrow, a wheel notch: ignored */
     }
     timeout(then);

@@ -1535,6 +1535,83 @@ def check_tui_wheel_tail_not_typed():
     print("ok: a wheel notch leaves no characters in the input line")
 
 
+def check_tui_split_pgup_scrolls():
+    """A PgUp whose bytes arrive apart -- what a terminal in a browser
+    (Proxmox's console, noVNC), ssh or tmux does -- must still scroll, and
+    leave nothing in the input line.  It used to do neither: the wait for
+    the rest of the sequence was 500 ms, so a 600 ms gap made the 27 a lone
+    Esc (no scroll) and the tail "[5~" text in the line.  curses decoded
+    none of it, so the sequence is read here and PgUp/PgDn recognised."""
+    class H(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.0"
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            said.append(body["messages"][-1].get("content"))
+            long = "\n".join("line %d of a long answer" % i for i in range(60))
+            reply(self, {"id": "m", "stop_reason": "end_turn",
+                         "usage": {"input_tokens": 10, "output_tokens": 2},
+                         "content": [{"type": "text", "text": long}]})
+
+        def log_message(self, *a):
+            pass
+
+    said = []
+    srv = serve(H, 8116, threaded=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.realpath(tmp)
+        os.makedirs(os.path.join(tmp, ".gork"))
+        with open(os.path.join(tmp, ".gork", "trusted"), "w") as f:
+            f.write(f"trust {tmp}\n")
+        with open(os.path.join(tmp, "k.conf"), "w") as f:
+            f.write("relay = 127.0.0.1:8116\n")
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(tmp)
+            os.environ.update(HOME=tmp, TERM="xterm", AGENT_HOST="fake.local",
+                              GORK_CONFIG=os.path.join(tmp, "k.conf"))
+            os.execv(BINARY, [BINARY])
+
+        out, step, deadline = b"", 0, time.time() + 30
+        while time.time() < deadline and step < 4:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 65536)
+                except OSError:
+                    break
+            if step == 0 and b"Enter send" in out:
+                time.sleep(0.3)
+                os.write(fd, b"hi\r")
+                step = 1
+            elif step == 1 and b"line 59" in out:
+                time.sleep(0.5)
+                # the gap a browser console puts between two bytes of a key
+                os.write(fd, b"\x1b")
+                time.sleep(0.7)
+                os.write(fd, b"[5~")
+                step = 2
+            elif step == 2 and len(said) == 1:
+                time.sleep(1.0)
+                os.write(fd, b"plain\r")       # typed with an empty line
+                step = 3
+            elif step == 3 and len(said) >= 2:
+                os.write(fd, b"/quit\r")
+                step = 4
+        if step < 5:
+            os.kill(pid, 9)
+        reap(pid, fd)
+    srv.shutdown()
+
+    text = out.decode(errors="replace")
+    assert step == 4, (step, text[-2000:])
+    assert "[scrolled]" in text, \
+        "a split PgUp did not scroll the pane"
+    assert said[1] == "plain", \
+        "a split PgUp's tail was typed into the line: %r" % (said[1:],)
+    print("ok: a PgUp split by 700 ms scrolls and types nothing")
+
+
 def check_tui_run_wheel_tail_not_typed():
     """Scrolling while a command runs: the terminal is in shell mode and the
     sequence's Esc goes to the command as the interrupt key, so its tail must
@@ -2360,6 +2437,7 @@ run(check_tui_abort, "TUI")
 run(check_tui_scroll_no_abort, "TUI")
 run(check_tui_confirm_scroll, "TUI")
 run(check_tui_wheel_tail_not_typed, "TUI")
+run(check_tui_split_pgup_scrolls, "TUI")
 run(check_tui_run_wheel_tail_not_typed, "TUI")
 run(check_tui_tty_prompt, "TUI")
 run(check_tui_mcp_esc_and_editing, "TUI", "MCP")
