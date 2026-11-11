@@ -4,9 +4,10 @@
 # OUT/gork-<version>-grub-ARCH.zip: ARCH x64 (x86-64, the default) or
 # aa64 (arm64, with the aarch64-linux-gnu gcc and binutils, CROSS).
 # GRUB's source is fetched into WORK, checksum pinned.  Needs an x86-64
-# gcc and binutils, make, bison, flex, gawk, python3, xz and zip; run from
-# the source tree (the autotools are not wanted: grubbuild.sh makes the
-# generated grub-core/Makefile.core.am with gentpl.py instead):
+# gcc and binutils, make, bison, flex, gawk, python3, xz and zip, and
+# automake 1.16 (Debian bookworm, not `stable`: configure bakes the version
+# in, and GRUB 2.14 was generated with 1.16); autoconf and autopoint are
+# not needed, see below.  Run from the source tree:
 #     sh grubbuild.sh [OUT] [WORK] [ARCH]   (KEEP=1: keep the build tree)
 #
 # gork's half (main.c, relay.c, notui.c, cJSON, ip.c, fwlibc.c and
@@ -37,17 +38,22 @@ i386) # a BIOS PC: GRUB's one driver there is the PXE ROM's (pxe.c), so
       # gork has a network card only on a machine booted over the network,
       # from a card whose PXE ROM GRUB can drive.  GRUB builds 32-bit code
       # for i386 itself (-march=i386, no MMX or SSE), and gork's half is
-      # built the same way: cJSON's doubles go through the FPU or software.
+      # built the same way; cJSON's doubles go through the FPU or software.
+      # -mrtd -mregparm=3 is GRUB's own calling convention on i386 (glue.c
+      # is compiled with it by GRUB): arguments in eax, edx and ecx, and
+      # the callee pops.  Both halves must agree, bb_* and card_* included.
       CROSS=; target=i386; platform=pc; fmt=i386-pc; boot=gork-biospxe.bin
       LDFLAGS="-m elf_i386"
-      MFLAGS="-m32 -march=i386 -mno-mmx -mno-sse -mno-sse2 -fcf-protection=none" ;;
+      MFLAGS="-m32 -march=i386 -mno-mmx -mno-sse -mno-sse2 -fcf-protection=none
+          -mrtd -mregparm=3" ;;
 of)   # Open Firmware (IEEE 1275): GRUB's ofnet.c drives the firmware's
       # card, and GRUB builds it for powerpc-ieee1275 and sparc64-ieee1275
-      # (and i386-ieee1275).  PowerPC here: ppc64 is what QEMU's pseries
-      # gives, and its firmware is Open Firmware.  fcf-protection is
-      # x86's; cJSON's doubles go through the FPU, which Open Firmware
-      # leaves in place for the client program.
-      CROSS=${CROSS:-powerpc64-linux-gnu-}; target=powerpc64
+      # (and i386-ieee1275).  PowerPC here: GRUB maps powerpc64-ieee1275 to
+      # target_cpu=powerpc, which is a 32-bit big-endian build, so the
+      # compiler is powerpc-linux-gnu, not powerpc64 (little-endian).
+      # fcf-protection is x86's; cJSON's doubles go through the FPU, which
+      # Open Firmware leaves in place for the client program.
+      CROSS=${CROSS:-powerpc-linux-gnu-}; target=powerpc
       platform=ieee1275; fmt=powerpc-ieee1275; boot=gork-of.elf
       MFLAGS="-mno-altivec -mno-vsx" ;;
 *)    echo "grubbuild.sh: ARCH is x64, aa64, i386 or of" >&2; exit 2 ;;
@@ -112,16 +118,31 @@ module = {
 EOF
 # Makefile.core.am is generated from Makefile.core.def by gentpl.py, and
 # grub-core/Makefile.am includes it: the tarball's copy knows nothing of the
-# gork module appended above, so it is made again here.  gentpl.py is plain
-# python and needs none of the autotools.  configure and the Makefile.in
-# files are the tarball's own and are kept: autoreconf breaks GRUB 2.14's
-# configure.ac here (autoconf reports the standard macros as undefined), and
-# rebuilding them would also want the exact automake that made them (1.16).
+# gork module appended above, so it is made again here (plain python, none
+# of the autotools).  Makefile.in is then made from it by automake, which is
+# why automake is needed -- and why it must be the 1.16 that GRUB 2.14 was
+# generated with: configure bakes `automake-1.16' into the Makefiles, and
+# Debian's bookworm has it while trixie and later (and so `debian:stable')
+# do not.  configure itself is the tarball's and is not regenerated:
+# autoreconf breaks GRUB 2.14's configure.ac here (autoconf reports the
+# standard macros as undefined).
 (cd "$src" && python3 gentpl.py grub-core/Makefile.core.def \
     grub-core/Makefile.gcry.def > grub-core/Makefile.core.am.new &&
     mv grub-core/Makefile.core.am.new grub-core/Makefile.core.am)
-(cd "$B/build" && "$src/configure" -q --target=$target --with-platform=$platform \
-    --disable-werror >/dev/null && make -s -j"$(nproc)" >/dev/null)
+# AC_CHECK_TOOL finds the compiler by its --host prefix, which a bare
+# --target does not give it: without these it picks the host's gcc and
+# then fails GRUB's big-endian probe.  Empty for the x86 targets, where
+# the host compiler is the target's.
+if [ -n "$CROSS" ]; then
+    TCFG="TARGET_CC=${CROSS}gcc TARGET_OBJCOPY=${CROSS}objcopy
+        TARGET_STRIP=${CROSS}strip TARGET_NM=${CROSS}nm
+        TARGET_RANLIB=${CROSS}ranlib"
+else
+    TCFG=""
+fi
+(cd "$B/build" && env $TCFG "$src/configure" -q --target=$target \
+    --with-platform=$platform --disable-werror >/dev/null &&
+    make -s -j"$(nproc)" >/dev/null)
 
 # The image: GRUB with gork, the network and the usual file systems in it.
 # On UEFI that is BOOTX64.EFI or BOOTAA64.EFI in EFI/BOOT; on a BIOS PC it

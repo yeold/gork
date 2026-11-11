@@ -1238,6 +1238,17 @@ card_seed (void)
   asm volatile ("mrs %0, cntvct_el0" : "=r" (t));
   lo = t;
   hi = t >> 32;
+#elif defined (__powerpc__)
+  /* the time base, which Open Firmware leaves running */
+  grub_uint32_t hi2;
+
+  do
+    {
+      asm volatile ("mftbu %0" : "=r" (hi));
+      asm volatile ("mftb %0" : "=r" (lo));
+      asm volatile ("mftbu %0" : "=r" (hi2));
+    }
+  while (hi != hi2);
 #else
   asm volatile ("rdtsc" : "=a" (lo), "=d" (hi));
 #endif
@@ -1294,10 +1305,11 @@ run_on_own_stack (int argc, char **argv)
 }
 #else
 #if defined (__i386__)
-/* A BIOS PC is 32-bit, where a call's arguments go on the stack and there
-   are few registers to spare: gork's own stack gets the three words on it,
-   then the call, then GRUB's stack back.  Written without input operands,
-   as the registers are wanted for the arguments themselves. */
+/* A BIOS PC is 32-bit, where GRUB's own convention is -mregparm=3: the
+   arguments go in %eax and %edx, and the callee pops nothing.  gork's half
+   is built with the same flags, so this is a plain call on gork's own
+   stack.  The registers are named outright, as there are too few for
+   constraints and the arguments at once. */
 static int __attribute__ ((noinline))
 run_on_own_stack (int argc, char **argv)
 {
@@ -1306,10 +1318,9 @@ run_on_own_stack (int argc, char **argv)
 
   asm volatile ("movl %%esp, %%ebp\n\t"	/* callee-saved: GRUB's stack */
 		"movl %[top], %%esp\n\t"
-		"pushl %[v]\n\t"		/* argv, then argc: gork_start */
-		"pushl %[a]\n\t"
+		"movl %[a], %%eax\n\t"		/* argc, then argv */
+		"movl %[v], %%edx\n\t"
 		"call gork_start\n\t"
-		"addl $8, %%esp\n\t"
 		"movl %%ebp, %%esp\n\t"
 		"movl %%eax, %[r]"
 		: [r] "=m" (r)
@@ -1318,8 +1329,11 @@ run_on_own_stack (int argc, char **argv)
   return r;
 }
 #elif defined (__powerpc__)
-/* PowerPC: arguments in r3 and r4, the stack pointer and the chain word
-   in r1, all three of which the ABI says are the caller's to keep. */
+/* PowerPC: arguments in r3 and r4; the stack pointer is r1 and the chain
+   word lives above it, both the caller's to keep.  r31 is callee-saved, so
+   GRUB's caller expects it back; r0 and the volatile registers below the
+   arguments are not named, as GRUB's flags forbid clobbering r11 and r12,
+   which the linker and the ABI use. */
 static int __attribute__ ((noinline))
 run_on_own_stack (int argc, char **argv)
 {
@@ -1333,7 +1347,7 @@ run_on_own_stack (int argc, char **argv)
 		"mr 1, 31"
 		: "+r" (r), "+r" (v), "+r" (top)
 		:
-		: "r6", "r7", "r8", "r9", "r10", "r11", "r12",
+		: "r0", "r6", "r7", "r8", "r9", "r10",
 		  "cr0", "ctr", "lr", "memory");
   return r;
 }
