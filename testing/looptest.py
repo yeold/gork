@@ -520,6 +520,17 @@ def check_list_dir():
     print("ok: list_dir")
 
 
+def kill_gork(pid):
+    """End gork after a check gave up on it.  It may have exited on its own
+    already -- which is one way a check gives up -- so a dead pid is not an
+    error: `reap` then reports the status and the check's assertion says
+    which step was never reached."""
+    try:
+        os.kill(pid, 9)
+    except ProcessLookupError:
+        pass
+
+
 def reap(pid, fd):
     """Wait for gork to exit while still reading its pty.  On the way out it
     waits for its output to drain, and a BSD pty never drains into a master
@@ -1250,7 +1261,7 @@ def check_tui_stream():
                 step = 4
         go_on.set()
         if step < 4:
-            os.kill(pid, 9)
+            kill_gork(pid)
         status = reap(pid, fd)
     srv.shutdown()
 
@@ -1380,7 +1391,7 @@ def check_tui_abort():
                 step = 5
         release.set()
         if step < 5:
-            os.kill(pid, 9)
+            kill_gork(pid)
         status = reap(pid, fd)
     srv.shutdown()
 
@@ -1460,7 +1471,7 @@ def check_tui_scroll_no_abort():
                 step = 3
         release.set()
         if step < 3:
-            os.kill(pid, 9)
+            kill_gork(pid)
         status = reap(pid, fd)
     srv.shutdown()
 
@@ -1505,7 +1516,7 @@ def check_tui_wheel_tail_not_typed():
             os.execv(BINARY, [BINARY])
 
         out, step, deadline = b"", 0, time.time() + 25
-        while time.time() < deadline and step < 3:
+        while time.time() < deadline and step < 2:
             r, _, _ = select.select([fd], [], [], 0.1)
             if r:
                 try:
@@ -1523,8 +1534,8 @@ def check_tui_wheel_tail_not_typed():
             elif step == 1 and said:
                 os.write(fd, b"/quit\r")
                 step = 2
-        if step < 3:
-            os.kill(pid, 9)
+        if step < 2:
+            kill_gork(pid)
         reap(pid, fd)
     srv.shutdown()
 
@@ -1598,8 +1609,8 @@ def check_tui_split_pgup_scrolls():
             elif step == 3 and len(said) >= 2:
                 os.write(fd, b"/quit\r")
                 step = 4
-        if step < 5:
-            os.kill(pid, 9)
+        if step < 4:
+            kill_gork(pid)
         reap(pid, fd)
     srv.shutdown()
 
@@ -1679,7 +1690,7 @@ def check_tui_home_end_sequences():
         os.write(fd, b"/quit\r")
         time.sleep(1.5)
         if i < len(forms):
-            os.kill(pid, 9)
+            kill_gork(pid)
         reap(pid, fd)
     srv.shutdown()
 
@@ -1760,7 +1771,7 @@ def check_tui_run_wheel_tail_not_typed():
                 os.write(fd, b"/quit\r")
                 step = 5
         if step < 5:
-            os.kill(pid, 9)
+            kill_gork(pid)
         reap(pid, fd)
     srv.shutdown()
 
@@ -1845,7 +1856,7 @@ def check_tui_confirm_scroll():
                 os.write(fd, b"/quit\r")
                 step = 3
         if step < 3:
-            os.kill(pid, 9)
+            kill_gork(pid)
         reap(pid, fd)
     srv.shutdown()
 
@@ -1930,7 +1941,7 @@ def check_tui_tty_prompt():
                 os.write(fd, b"/quit\r")
                 step = 5
         if step < 5:
-            os.kill(pid, 9)
+            kill_gork(pid)
         status = reap(pid, fd)
     srv.shutdown()
 
@@ -2042,7 +2053,7 @@ def check_tui_mcp_esc_and_editing():
                 os.write(fd, b"/quit\r")
                 step = 7
         if step < 7:
-            os.kill(pid, 9)
+            kill_gork(pid)
         status = reap(pid, fd)
         notes = logged()
     srv.shutdown()
@@ -2127,7 +2138,7 @@ def check_tui_mcp_http_esc():
                 os.write(fd, b"/quit\r")
                 step = 4
         if step < 4:
-            os.kill(pid, 9)
+            kill_gork(pid)
         status = reap(pid, fd)
         fake.kill()
         fake.wait()
@@ -2234,7 +2245,7 @@ def check_run_timeout_and_esc():
                     os.write(fd, b"/quit\r")
                     step = 5
             if step < 5:
-                os.kill(pid, 9)
+                kill_gork(pid)
             status = reap(pid, fd)
     finally:
         srv.shutdown()
@@ -2304,7 +2315,7 @@ def check_tui_paste():
                 os.write(fd, b"/quit\r")
                 step = 4
         if step < 4:
-            os.kill(pid, 9)
+            kill_gork(pid)
         status = reap(pid, fd)
     srv.shutdown()
 
@@ -2389,7 +2400,7 @@ def check_tui_compact_and_resume():
                 os.write(fd, b"/quit\r")
                 step = 7
         if step < 7:
-            os.kill(pid, 9)
+            kill_gork(pid)
         status = reap(pid, fd)
     srv.shutdown()
 
