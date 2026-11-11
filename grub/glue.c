@@ -1293,6 +1293,51 @@ run_on_own_stack (int argc, char **argv)
   return r;
 }
 #else
+#if defined (__i386__)
+/* A BIOS PC is 32-bit, where a call's arguments go on the stack and there
+   are few registers to spare: gork's own stack gets the three words on it,
+   then the call, then GRUB's stack back.  Written without input operands,
+   as the registers are wanted for the arguments themselves. */
+static int __attribute__ ((noinline))
+run_on_own_stack (int argc, char **argv)
+{
+  char *top = gork_stack + GORK_STACK;
+  long r;
+
+  asm volatile ("movl %%esp, %%ebp\n\t"	/* callee-saved: GRUB's stack */
+		"movl %[top], %%esp\n\t"
+		"pushl %[v]\n\t"		/* argv, then argc: gork_start */
+		"pushl %[a]\n\t"
+		"call gork_start\n\t"
+		"addl $8, %%esp\n\t"
+		"movl %%ebp, %%esp\n\t"
+		"movl %%eax, %[r]"
+		: [r] "=m" (r)
+		: [a] "m" (argc), [v] "m" (argv), [top] "m" (top)
+		: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory", "cc");
+  return r;
+}
+#elif defined (__powerpc__)
+/* PowerPC: arguments in r3 and r4, the stack pointer and the chain word
+   in r1, all three of which the ABI says are the caller's to keep. */
+static int __attribute__ ((noinline))
+run_on_own_stack (int argc, char **argv)
+{
+  register long r asm ("r3") = argc;
+  register char **v asm ("r4") = argv;
+  register char *top asm ("r5") = gork_stack + GORK_STACK;
+
+  asm volatile ("mr 31, 1\n\t"		/* callee-saved: GRUB's stack */
+		"mr 1, 5\n\t"
+		"bl gork_start\n\t"
+		"mr 1, 31"
+		: "+r" (r), "+r" (v), "+r" (top)
+		:
+		: "r6", "r7", "r8", "r9", "r10", "r11", "r12",
+		  "cr0", "ctr", "lr", "memory");
+  return r;
+}
+#else
 static int __attribute__ ((noinline))
 run_on_own_stack (int argc, char **argv)
 {
@@ -1311,6 +1356,7 @@ run_on_own_stack (int argc, char **argv)
 		: "rbx", "rcx", "rdx", "r8", "r9", "r10", "r11", "memory", "cc");
   return r;
 }
+#endif
 #endif
 
 void

@@ -912,3 +912,71 @@ int gork_start(int argc, char **argv)
     fw_stdio_init();
     return main(argc, argv);
 }
+
+/* A 32-bit machine has no 64-bit divide instruction, and a freestanding
+   build does not get the compiler's helpers: cJSON's doubles and a file's
+   size divide 64-bit numbers, so the four helpers are here, in plain C.
+   (64-bit targets have them in the hardware.)  Kernighan and Ritchie's
+   long division, shifted; unsigned, with the signed ones on top. */
+#if defined(__i386__)
+#include <stddef.h>             /* NULL, for __udivmoddi4 below */
+
+unsigned long long
+__udivmoddi4(unsigned long long a, unsigned long long b, unsigned long long *rem)
+{
+    unsigned long long q = 0, r = 0;
+    int i;
+
+    for (i = 63; i >= 0; i--)
+    {
+        r = (r << 1) | ((a >> i) & 1);
+        if (r >= b)
+        {
+            r -= b;
+            q |= 1ULL << i;
+        }
+    }
+    if (rem != NULL) *rem = r;
+    return q;
+}
+
+unsigned long long __udivdi3(unsigned long long a, unsigned long long b)
+{
+    return __udivmoddi4(a, b, NULL);
+}
+
+/* what GCC calls it now, for a signed divide that wants both answers */
+long long
+__divmoddi4(long long a, long long b, long long *rem)
+{
+    int neg = (a < 0) != (b < 0);
+    unsigned long long r;
+    unsigned long long q = __udivmoddi4(a < 0 ? -(unsigned long long)a : a,
+                                        b < 0 ? -(unsigned long long)b : b, &r);
+    if (rem != NULL) *rem = a < 0 ? -(long long)r : (long long)r;
+    return neg ? -(long long)q : (long long)q;
+}
+
+unsigned long long __umoddi3(unsigned long long a, unsigned long long b)
+{
+    unsigned long long r;
+    __udivmoddi4(a, b, &r);
+    return r;
+}
+
+long long __divdi3(long long a, long long b)
+{
+    int neg = (a < 0) != (b < 0);
+    unsigned long long q = __udivmoddi4(a < 0 ? -(unsigned long long)a : a,
+                                        b < 0 ? -(unsigned long long)b : b, NULL);
+    return neg ? -(long long)q : (long long)q;
+}
+
+long long __moddi3(long long a, long long b)
+{
+    unsigned long long r;
+    __udivmoddi4(a < 0 ? -(unsigned long long)a : a,
+                 b < 0 ? -(unsigned long long)b : b, &r);
+    return a < 0 ? -(long long)r : (long long)r;
+}
+#endif
