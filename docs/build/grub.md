@@ -7,7 +7,8 @@ on gork's own TCP/IP (`ip.c`, the one the UEFI and barebox ports use) over
 GRUB's network card drivers. The release has GRUB 2.14 for UEFI with
 `gork` built in, and the module alone: `gork-<version>-grub-x64.zip` for
 x86-64 PCs (`BOOTX64.EFI`) and `gork-<version>-grub-aa64.zip` for arm64
-(`BOOTAA64.EFI`).
+(`BOOTAA64.EFI`); and `gork-<version>-grub-i386.zip` for a BIOS PC
+(`gork.pxe`), which is PXE only -- see below.
 
 ## Run, in QEMU
 
@@ -88,10 +89,59 @@ does not); gork then starts the drivers of every device and has GRUB's
 
 No TUI and no MCP: one program at a time, as on DOS, UEFI and barebox.
 
+## A BIOS PC: PXE only
+
+On a BIOS PC GRUB has one network driver, the PXE ROM's
+(`grub-core/net/drivers/i386/pc/pxe.c`, the only one built for
+`i386-pc`), and the ROM is in the card, not in GRUB: a machine booted
+from its disk has no card at all. So `gork-<version>-grub-i386.zip` is
+`gork.pxe`, a core image built by `grub-mkimage -O i386-pc-pxe` for a
+card's ROM to fetch. There is no floppy or disk image that would give
+BIOS GRUB a card.
+
+Boot it in QEMU, with a card whose ROM knows PXE and QEMU's own TFTP
+server (no `grub.cfg` needed: GRUB stops at its prompt, on the serial
+line `grub.cfg` asks for, or on VGA):
+
+```sh
+mkdir -p tftp/boot/grub
+unzip gork-<version>-grub-i386.zip -d tftp
+cat >tftp/boot/grub/gork.cnf <<EOF
+relay = 10.0.2.2:8443
+api_key = sk-ant-...
+EOF
+qemu-system-i386 -m 256 -display none -serial stdio \
+    -netdev user,id=n0,tftp=tftp,bootfile=gork.pxe \
+    -device rtl8139,netdev=n0 -boot n
+```
+
+A scripted run needs a `grub.cfg` (`testing/grubtest.py` writes one), and
+it has to turn the serial console on itself, since on BIOS GRUB's console
+is VGA: `serial --unit=0 --speed=115200` then
+`terminal_output serial console`, both of which are modules in the image.
+The `(pxe)` device is GRUB's TFTP "file system": a file is fetched when it
+is opened, and there are no directories there, so gork's working directory
+is `(gork)` as usual and `$prefix` is `(pxe)/boot/grub`.
+
+Two things the UEFI builds never showed, both fixed in `glue.c`:
+
+- GRUB's TFTP file system answers a directory listing for **any** path
+  with success, so a missing file read as an existing empty directory
+  (`EISDIR`) instead of not being there (`ENOENT`), and gork stopped
+  before its first request, on a `GORK.md` it did not need. A net device
+  is no longer asked whether something is a directory.
+- TFTP reports a file the server does not have as `GRUB_ERR_IO` with the
+  server's message, not as `GRUB_ERR_FILE_NOT_FOUND`, so the same missing
+  file was a hard error; `gerr()` reads the message.
+
+The package also keeps `gork-disk.img`, a plain `i386-pc` core image with
+`boot.img` and `grub-bios-setup`, for `gork`'s file tools on a machine
+booted from disk. No card is reachable from it.
+
 ## In a GRUB of one's own
 
 `gork.mod` is for GRUB 2.14 on UEFI (`x86_64-efi`, or `arm64-efi` in the
-`aa64` package), as GNU releases it. Put it with GRUB's other modules
+`aa64` package; `i386-pc` in the `i386` one), as GNU releases it. Put it with GRUB's other modules
 (`$prefix/x86_64-efi/` or `$prefix/arm64-efi/`) and
 `insmod gork`; GRUB loads `net`, `normal`, `datetime` and `setjmp` with
 it. It needs a network card driver (`efinet`) loaded too. Distributions
@@ -102,17 +152,23 @@ that is not signed into it, so it may refuse gork.mod: the
 ## Build
 
 ```sh
-sh grubbuild.sh [OUT] [WORK] [x64|aa64]
+sh grubbuild.sh [OUT] [WORK] [x64|aa64|i386|of]
 ```
 
 On x86-64; `aa64` with the `aarch64-linux-gnu-` gcc and binutils too
-(`CROSS` names another prefix). Needs gcc and binutils, make, bison, flex, gawk, autoconf,
+(`CROSS` names another prefix), and `i386` with the host's gcc and
+`gcc-multilib` (`-m32`); `of` (PowerPC Open Firmware) with
+`powerpc-linux-gnu-` and still unproven. `i386` builds 32-bit code with
+GRUB's own calling convention (`-mrtd -mregparm=3`) and no MMX or SSE,
+as GRUB builds `i386-pc`; `grub/glue.c` matches it for every `bb_*` and
+`card_*` call. Needs gcc and binutils, make, bison, flex, gawk, autoconf,
 autoconf-archive, automake, autopoint (gettext), python3, xz and zip. It
 fetches GRUB's source (checksum pinned), builds gork's half, adds the
 module to GRUB's `grub-core/Makefile.core.def`, builds GRUB for
 `x86_64-efi` or `arm64-efi` and makes `BOOTX64.EFI` or `BOOTAA64.EFI`
 with `grub-mkimage`. `testing/grubtest.py` boots it in QEMU under OVMF or
-AAVMF and runs the checks against `testing/fakeapi.c`.
+AAVMF, or the `i386` package over PXE with QEMU's TFTP server, and runs
+the checks against `testing/fakeapi.c`.
 
 ## How it works
 

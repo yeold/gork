@@ -152,6 +152,13 @@ gerr (void)
     case GRUB_ERR_BAD_FILENAME:
       e = EINVAL;
       break;
+    /* TFTP reports a file the server does not have as GRUB_ERR_IO with
+       the server's own message (grub-core/net/tftp.c, TFTP_ERROR), not as
+       FILE_NOT_FOUND, so a missing file on a PXE boot would read as a
+       hard error and stop gork before its first request. */
+    case GRUB_ERR_IO:
+      e = grub_strstr (grub_errmsg, "not found") != NULL ? ENOENT : EIO;
+      break;
     default:
       e = EIO;
     }
@@ -664,7 +671,13 @@ find_fs (const char *full, struct where *w)
   return 0;
 }
 
-/* 0 if path on a disk is a directory, else -errno */
+/* 0 if path on a disk is a directory, else -errno.
+   A net device is never asked: GRUB's TFTP "file system" has no
+   directories, and its fs_dir answers GRUB_ERR_NONE for any path at all
+   (grub-core/net/net.c, grub_net_fs_dir), so every missing file on a PXE
+   boot would read as an existing empty directory -- gork then reported
+   EISDIR where a rules file that is simply not there is ENOENT, and
+   refused to start.  A file on a net device is proved by opening it. */
 static int
 disk_dir (const char *path)
 {
@@ -673,6 +686,12 @@ disk_dir (const char *path)
 
   if ((r = find_fs (path, &w)) < 0)
     return r;
+  if (w.dev->net)
+    {
+      grub_device_close (w.dev);
+      grub_errno = GRUB_ERR_NONE;
+      return -ENOTDIR;
+    }
   w.fs->fs_dir (w.dev, w.path, stop_hook, NULL);
   r = grub_errno == GRUB_ERR_NONE ? 0 : gerr ();
   grub_device_close (w.dev);
@@ -1309,21 +1328,28 @@ run_on_own_stack (int argc, char **argv)
    arguments go in %eax and %edx, and the callee pops nothing.  gork's half
    is built with the same flags, so this is a plain call on gork's own
    stack.  The registers are named outright, as there are too few for
-   constraints and the arguments at once. */
+   constraints and the arguments at once.
+   %ebp is NOT touched: every [..] operand here is addressed through the
+   compiler's frame pointer, and the first version saved GRUB's %esp in
+   %ebp, so the operands after it -- argc, argv and the result -- were read
+   and written at %ebp-relative offsets into gork's own stack.  gork then
+   started with a garbage argc and argv and hung in main().  GRUB's %esp is
+   kept in a local instead, which the asm addresses through %ebp. */
 static int __attribute__ ((noinline))
 run_on_own_stack (int argc, char **argv)
 {
   char *top = gork_stack + GORK_STACK;
+  char *saved;
   long r;
 
-  asm volatile ("movl %%esp, %%ebp\n\t"	/* callee-saved: GRUB's stack */
+  asm volatile ("movl %%esp, %[s]\n\t"		/* GRUB's stack, in `saved` */
 		"movl %[top], %%esp\n\t"
 		"movl %[a], %%eax\n\t"		/* argc, then argv */
 		"movl %[v], %%edx\n\t"
 		"call gork_start\n\t"
-		"movl %%ebp, %%esp\n\t"
+		"movl %[s], %%esp\n\t"
 		"movl %%eax, %[r]"
-		: [r] "=m" (r)
+		: [r] "=m" (r), [s] "=m" (saved)
 		: [a] "m" (argc), [v] "m" (argv), [top] "m" (top)
 		: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory", "cc");
   return r;

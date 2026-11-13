@@ -3,11 +3,16 @@
 
 Usage:  python3 testing/grubtest.py PACKAGE FAKEAPI
 
-PACKAGE is gork-<version>-grub-x64.zip or -grub-aa64.zip, FAKEAPI
-testing/fakeapi.c built for this machine.  GRUB (EFI/BOOT/BOOTX64.EFI or
-BOOTAA64.EFI, with gork in it) boots from a FAT disk under OVMF in a q35
-machine, or AAVMF in a virt one, with a virtio network card on QEMU's user
-network, which takes it to the fake API on 10.0.2.2.  The firmware runs
+PACKAGE is gork-<version>-grub-x64.zip, -grub-aa64.zip or -grub-i386.zip,
+FAKEAPI testing/fakeapi.c built for this machine.  For the first two, GRUB
+(EFI/BOOT/BOOTX64.EFI or BOOTAA64.EFI, with gork in it) boots from a FAT
+disk under OVMF in a q35 machine, or AAVMF in a virt one, with a virtio
+network card on QEMU's user network, which takes it to the fake API on
+10.0.2.2.  The i386 package's gork.pxe is fetched by a card's PXE ROM
+instead -- the only way a BIOS PC has a card at all -- from QEMU's own
+TFTP server, and its grub.cfg comes the same way: QEMU serves DIRECTORY as
+the root, so the checks' grub.cfg and gork.cnf are written in a temporary
+one.  The firmware runs
 without its own network stack (no random number generator: no virtio one,
 and an arm64 processor from before RNDR), so the card is GRUB's and
 gork's alone.  The checks are typed at GRUB's prompt
@@ -36,6 +41,51 @@ MACHINES = {
                       "-netdev", "user,id=n",
                       "-device", "virtio-net-pci,netdev=n,romfile="]),
 }
+
+
+# The checks, for the BIOS package: GRUB's console is the serial line, and
+# the commands come from this file rather than from keys typed at the
+# prompt, which race it.  Same checks as the typed ones below.
+PXE_CFG = """serial --unit=0 --speed=115200
+terminal_output serial console
+echo ==prefix $prefix
+echo ==version
+gork --version
+echo ==notui
+gork
+echo ==hello
+gork hello
+echo ==seed
+set GORK_DIR=(gork)/w
+gork w1
+echo ==go
+set GORK_ALLOW_RUN=1
+gork go
+unset GORK_ALLOW_RUN
+echo ==esc
+gork esc
+echo ==sub
+set GORK_DIR=(gork)/w/sub
+gork w1
+echo ==ro
+set GORK_DIR=$prefix
+gork w1
+echo ==slow
+set GORK_DIR=(gork)/w
+set AGENT_TIMEOUT=5
+gork slow; echo ==status $?
+unset AGENT_TIMEOUT
+sleep 31
+echo ==again
+gork hello
+echo ==out
+cat (gork)/w/out.txt
+echo ==w1
+cat (gork)/w/sub/w1.txt
+echo ==ls
+ls (gork)/
+echo ==END
+"""
 
 
 class Console:
@@ -85,29 +135,65 @@ def main():
     esp, fdir = os.path.join(t, "esp"), os.path.join(t, "f")
     os.makedirs(fdir)
     with zipfile.ZipFile(pkg) as z:
-        boot = [n for n in z.namelist() if n.startswith("EFI/BOOT/BOOT")][0]
-        z.extract(boot, esp)
-    fw, machine = MACHINES[os.path.basename(boot)]
+        boots = [n for n in z.namelist() if n.startswith("EFI/BOOT/BOOT")]
+        pxe = None if boots else z.extract("gork.pxe", esp)
+    if boots:
+        with zipfile.ZipFile(pkg) as z:
+            z.extract(boots[0], esp)
+        boot, fw, machine = boots[0], *MACHINES[os.path.basename(boots[0])]
+    else:
+        # A BIOS PC: no firmware of its own to speak of, and no disk to
+        # read -- the PXE ROM fetches gork.pxe, and GRUB's prefix is on
+        # the TFTP server, which is this directory.
+        boot = None
+        tftp = os.path.join(t, "tftp")
+        os.makedirs(os.path.join(tftp, "boot", "grub"))
+        shutil.copy(pxe, os.path.join(tftp, "gork.pxe"))
+        fw = None
+        machine = ["qemu-system-i386", "-m", "256", "-boot", "n",
+                   "-netdev", "user,id=n0,tftp=" + tftp + ",bootfile=gork.pxe",
+                   "-device", "rtl8139,netdev=n0"]
     # the settings beside grub.cfg, in $prefix; and a file to read
-    with open(os.path.join(esp, "EFI", "BOOT", "gork.cnf"), "w") as f:
+    prefix = os.path.join(tftp, "boot", "grub") if boot is None else \
+             os.path.join(esp, "EFI", "BOOT")
+    with open(os.path.join(prefix, "gork.cnf"), "w") as f:
         f.write("relay = 10.0.2.2:%d\napi_key = sk-fake\ntimeout = 20\n"
                 "retries = 0\n" % PORT)
-    img = os.path.join(t, "esp.img")
-    sh("mkfs.fat", "-C", "-F", "16", "-n", "GORK", img, "65536",
-       stdout=subprocess.DEVNULL)
-    sh("mcopy", "-i", img, "-s", "-Q", os.path.join(esp, "EFI"), "::/")
-    vars_fd = os.path.join(t, "vars.fd")
-    shutil.copy(fw % "VARS", vars_fd)
+    extra = []
+    if boot is None:
+        # GRUB's own console is the serial line here, not a firmware's, so
+        # grub.cfg turns it on first; the file it runs is fetched by GRUB
+        # from the same TFTP server as gork.pxe.
+        with open(os.path.join(prefix, "grub.cfg"), "w") as f:
+            f.write(PXE_CFG)
+    else:
+        img = os.path.join(t, "esp.img")
+        sh("mkfs.fat", "-C", "-F", "16", "-n", "GORK", img, "65536",
+           stdout=subprocess.DEVNULL)
+        sh("mcopy", "-i", img, "-s", "-Q", os.path.join(esp, "EFI"), "::/")
+        vars_fd = os.path.join(t, "vars.fd")
+        shutil.copy(fw % "VARS", vars_fd)
+        extra = ["-drive", "if=pflash,format=raw,readonly=on,file=" + fw % "CODE",
+                 "-drive", "if=pflash,format=raw,file=" + vars_fd,
+                 "-drive", "if=none,id=esp,format=raw,file=" + img] + NOPXE
 
     fp = subprocess.Popen([fake, str(PORT)], cwd=fdir, stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL)
     c = Console(machine + [
-                 "-display", "none", "-serial", "stdio", "-monitor", "none",
-                 "-drive", "if=pflash,format=raw,readonly=on,file=" + fw % "CODE",
-                 "-drive", "if=pflash,format=raw,file=" + vars_fd,
-                 "-drive", "if=none,id=esp,format=raw,file=" + img]
-                + NOPXE)
+                 "-display", "none", "-serial", "stdio", "-monitor", "none"]
+                + extra)
     part = {}
+    if boot is None:
+        # the whole run comes from PXE_CFG: wait for the end, not a prompt
+        try:
+            c.expect(b"==END", 600)
+        except TimeoutError as e:
+            print("grubtest: " + str(e))
+        finally:
+            c.p.kill()
+            fp.terminate()
+            fp.wait()
+        return report(c, fdir, part, fake, t)
     try:
         c.expect(PROMPT, 180)
         # how GRUB's clock keeps up with real time: in the log, for when
@@ -149,9 +235,38 @@ def main():
         c.p.kill()
         fp.terminate()
         fp.wait()
+    return report(c, fdir, part, fake, t)
+
+
+def sections(text):
+    """The serial transcript cut at its ==MARKER lines, into {marker: text}:
+    each marker in PXE_CFG names the check its command feeds.  A command
+    that echoes its own status puts it at the top of that section."""
+    got, name, cur = {}, "boot", []
+    for line in text.splitlines():
+        line = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", line)
+        if line.startswith("=="):
+            # the marker is the previous command's output -- `echo ==status
+            # $?` is how a command reports its status -- so it stays there,
+            # and the new section starts with the blank line the echoed
+            # command line leaves, as the typed checks see it.
+            cur.append(line)
+            got[name] = "\n" + "\n".join(cur)
+            name, cur = line[2:].strip(), []
+        else:
+            cur.append(line)
+    got[name] = "\n" + "\n".join(cur)
+    return got
+
+
+def report(c, fdir, part, fake, t):
     out = c.all.decode("utf-8", "replace").replace("\r", "")
     if os.environ.get("GRUBTEST_VERBOSE"):
         print(out)
+    if not part and b"==END" in c.all:
+        # The PXE run is one transcript: each ==MARKER in PXE_CFG names the
+        # check it feeds, and the command's own echo lands in it.
+        part = sections(out)
 
     log = ""
     if os.path.exists(os.path.join(fdir, "fakeapi.log")):

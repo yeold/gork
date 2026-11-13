@@ -99,7 +99,7 @@ of `testing/looptest.py`.
 | DOS, 32-bit (experimental; the `dos` package) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | MS-DOS 2 and Windows/386 2.11: use the 16-bit build (DJGPP needs DOS 3) |
 | UEFI (experimental; the `uefi` package) | UEFI 2.70 on x86-64, no operating system: `gorkx64.efi` from the UEFI shell, on the firmware's TCP/IP; EDK2's OVMF 2025.02, in QEMU. Batch mode only | arm64 (`gorkaa64.efi`), on EDK2's AAVMF in QEMU; U-Boot 2025.01 (arm64, in QEMU) and firmware with no TCP/IP of its own, on gork's own | Real PC firmware: untested |
 | barebox (experimental; the `barebox-arm64` package) | barebox 2026.09 on arm64, as a `gork` command built in, on gork's own TCP/IP: QEMU's `virt` machine. Batch mode only | | Real boards: untested |
-| GRUB (experimental; the `grub-x64` and `grub-aa64` packages) | GRUB 2.14 on x86-64 and arm64 UEFI, as a `gork` command (a module), on gork's own TCP/IP; files written in RAM: OVMF and AAVMF 2025.02, in QEMU. Batch mode only | | Real PCs, and distributions' own GRUBs: untested |
+| GRUB (experimental; the `grub-x64`, `grub-aa64` and `grub-i386` packages) | GRUB 2.14 on x86-64 and arm64 UEFI, as a `gork` command (a module), on gork's own TCP/IP; files written in RAM: OVMF and AAVMF 2025.02, in QEMU. Batch mode only | On a BIOS PC, `gork.pxe` fetched by the card's own PXE ROM (`grub-i386`): GRUB on `i386-pc` has no network driver of its own, so a PXE boot is the only way it has a card. Reached in QEMU with an RTL8139 and QEMU's TFTP server; DHCP, and a tool-use round trip | Real PCs, distributions' own GRUBs, and a BIOS machine booted from disk (no card there): untested |
 | Classic Mac OS, 68k (experimental; the `mac68k` package) | System 7.5.3 (1994) on a 68020 or better, in Basilisk II: batch mode in a console window, MacTCP for the network. No TUI, no `run_command` and no MCP (there is no shell and no curses) | | A real Mac: untested. System 6, and MacTCP on a 68000 (a Mac Plus or SE): untested |
 | DOS, 16-bit (experimental; the `dos16` package) | MS-DOS 2.11 (1984, Compaq's), real mode, built with Open Watcom for the 8086 | MS-DOS 3.30, 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04, 2.11/386, 3.0 and 3.1, also in standard mode | An emulated 8086 and 286 (DOSBox-X), no real one. Small limits (below) |
 
@@ -133,8 +133,9 @@ and `gorkaa64.efi` for the UEFI shell ([docs/build/uefi.md](docs/build/uefi.md))
 `gork-<version>-barebox-arm64.zip`, barebox for QEMU's arm64 `virt` machine
 with gork in it ([docs/build/barebox.md](docs/build/barebox.md)),
 `gork-<version>-grub-x64.zip` and `-grub-aa64.zip`, GRUB for x86-64 and
-arm64 UEFI with gork in it and the module alone ([docs/build/grub.md](docs/build/grub.md)), and the DOS and
-Windows zips below.
+arm64 UEFI with gork in it and the module alone ([docs/build/grub.md](docs/build/grub.md)),
+`gork-<version>-grub-i386.zip`, GRUB for a BIOS PC with `gork.pxe` for its
+PXE ROM, and the DOS and Windows zips below.
 The DOS, legacy Windows and UEFI zips also come as `-nonet`
 (`gork-<version>-dos-nonet.zip` and so on): no network at all, only a
 [serial line](#serial).

@@ -209,18 +209,23 @@ pipeline {
                     steps {
                         sh '''
                             GR="$HOME/.cache/gork-grub" && mkdir -p "$GR"
-                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$GR":/work debian:stable sh -ec '
+                            # bookworm, not stable: GRUB 2.14's Makefile.in runs `automake-1.16'
+                            # and its aclocal.m4 is 1.16.5's, so trixie's 1.17 fails the build
+                            # (Error 127 from `missing', then Error 63) for x64 and aa64 too.
+                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$GR":/work debian:bookworm sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc libc6-dev binutils make bison flex gawk autoconf autoconf-archive automake autopoint gettext python3 pkg-config xz-utils patch zip curl ca-certificates gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh grubbuild.sh /out /work x64 && sh grubbuild.sh /out /work aa64 && chown -R '"$(id -u):$(id -g)"' /out /work'
+                                sh grubbuild.sh /out /work x64 && sh grubbuild.sh /out /work aa64 && sh grubbuild.sh /out /work i386 && chown -R '"$(id -u):$(id -g)"' /out /work'
                             # and boot them under OVMF and AAVMF in QEMU against the fake API
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                            # (and the i386 one over PXE, which needs qemu-system-i386)
+                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:bookworm sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 ovmf qemu-system-arm qemu-efi-aarch64 mtools dosfstools python3 gcc libc6-dev >/dev/null
                                 gcc -o /tmp/fakeapi /src/testing/fakeapi.c
                                 cd /src && python3 testing/grubtest.py /out/gork-*-grub-x64.zip /tmp/fakeapi
-                                python3 testing/grubtest.py /out/gork-*-grub-aa64.zip /tmp/fakeapi'
+                                python3 testing/grubtest.py /out/gork-*-grub-aa64.zip /tmp/fakeapi
+                                python3 testing/grubtest.py /out/gork-*-grub-i386.zip /tmp/fakeapi'
                         '''
                     }
                 }

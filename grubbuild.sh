@@ -1,13 +1,16 @@
 #!/bin/sh
-# Build GRUB for UEFI with the `gork` command in it, and the module
-# gork.mod for a GRUB 2.14 of one's own, and pack them as
-# OUT/gork-<version>-grub-ARCH.zip: ARCH x64 (x86-64, the default) or
-# aa64 (arm64, with the aarch64-linux-gnu gcc and binutils, CROSS).
+# Build GRUB with the `gork` command in it, and the module gork.mod for a
+# GRUB 2.14 of one's own, and pack them as
+# OUT/gork-<version>-grub-ARCH.zip: ARCH x64 (x86-64 UEFI, the default),
+# aa64 (arm64 UEFI, with the aarch64-linux-gnu gcc and binutils, CROSS),
+# i386 (a BIOS PC: gork.pxe for a card's PXE ROM, plus a disk image) or of
+# (PowerPC Open Firmware, with powerpc-linux-gnu, unproven).
 # GRUB's source is fetched into WORK, checksum pinned.  Needs an x86-64
 # gcc and binutils, make, bison, flex, gawk, python3, xz and zip, and
 # automake 1.16 (Debian bookworm, not `stable`: configure bakes the version
-# in, and GRUB 2.14 was generated with 1.16); autoconf and autopoint are
-# not needed, see below.  Run from the source tree:
+# in, and GRUB 2.14 was generated with 1.16, while trixie's 1.17 refuses
+# GRUB's aclocal.m4); autoconf and autopoint are not needed, see below.
+# Run from the source tree:
 #     sh grubbuild.sh [OUT] [WORK] [ARCH]   (KEEP=1: keep the build tree)
 #
 # gork's half (main.c, relay.c, notui.c, cJSON, ip.c, fwlibc.c and
@@ -42,7 +45,11 @@ i386) # a BIOS PC: GRUB's one driver there is the PXE ROM's (pxe.c), so
       # -mrtd -mregparm=3 is GRUB's own calling convention on i386 (glue.c
       # is compiled with it by GRUB): arguments in eax, edx and ecx, and
       # the callee pops.  Both halves must agree, bb_* and card_* included.
-      CROSS=; target=i386; platform=pc; fmt=i386-pc; boot=gork-biospxe.bin
+      # -O i386-pc-pxe: a BIOS core image for the card's own PXE ROM to
+      # fetch, which is the one way a BIOS PC that gork can reach the
+      # network on boots at all.  -O i386-pc, the disk image, does not run
+      # from a PXE ROM, and is packed beside it under its own name.
+      CROSS=; target=i386; platform=pc; fmt=i386-pc-pxe; boot=gork.pxe
       LDFLAGS="-m elf_i386"
       MFLAGS="-m32 -march=i386 -mno-mmx -mno-sse -mno-sse2 -fcf-protection=none
           -mrtd -mregparm=3" ;;
@@ -162,14 +169,24 @@ efi)
         part_gpt part_msdos fat ext2 iso9660 search search_fs_file \
         efinet net linux chain efi_gop all_video ;;
 pc)
-    # A BIOS install is two images: boot.img (the boot sector) and the core
-    # image, which grub-bios-setup writes with the block lists it finds.
-    # (pxe) comes from the card's ROM at boot, so it cannot be built in;
-    # tftp and normal are what a netboot then needs.
+    # Two ways to boot a BIOS PC, and the PXE one is the only one that has
+    # a network card: a card's PXE ROM fetches gork.pxe, so the PXE image
+    # is what the package is for.  (pxe) is the ROM's, so it cannot be
+    # built in; tftp and normal are what a netboot then needs.  serial and
+    # terminal are in both images, or a netboot's console is VGA only and
+    # nothing can be scripted over it.
     "$B/build/grub-mkimage" -d "$g" -O $fmt -p '(pxe)/boot/grub' \
         -o "$d/$boot" \
         gork normal configfile echo cat ls test true sleep reboot halt \
-        pxe tftp net part_msdos fat ext2 iso9660 search search_fs_file
+        serial terminal pxe tftp net \
+        part_msdos fat ext2 iso9660 search search_fs_file
+    # The disk install too, beside it: a core image with its boot sector,
+    # which grub-bios-setup writes with the block lists it finds.  No card
+    # is reachable from it, so it is for gork's file tools only.
+    "$B/build/grub-mkimage" -d "$g" -O i386-pc -p /boot/grub \
+        -o "$d/gork-disk.img" \
+        gork normal configfile echo cat ls test true sleep reboot halt \
+        serial terminal part_msdos fat ext2 iso9660 search search_fs_file
     cp "$B/build/grub-core/boot.img" "$d/boot.img"
     cp "$B/build/grub-bios-setup" "$d/" 2>/dev/null || : ;;
 ieee1275)
