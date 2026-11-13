@@ -100,28 +100,41 @@ card's ROM to fetch. There is no floppy or disk image that would give
 BIOS GRUB a card.
 
 Boot it in QEMU, with a card whose ROM knows PXE and QEMU's own TFTP
-server (no `grub.cfg` needed: GRUB stops at its prompt, on the serial
-line `grub.cfg` asks for, or on VGA):
+server. QEMU serves `tftp`'s contents as the TFTP root, so GRUB's prefix
+is `(pxe)/boot/grub` there, and its `grub.cfg` — if any — and `gork.cnf`
+are fetched from it:
 
 ```sh
 mkdir -p tftp/boot/grub
-unzip gork-<version>-grub-i386.zip -d tftp
+unzip gork-<version>-grub-i386.zip -d tftp   # gork.pxe lands at tftp's root
 cat >tftp/boot/grub/gork.cnf <<EOF
 relay = 10.0.2.2:8443
 api_key = sk-ant-...
 EOF
-qemu-system-i386 -m 256 -display none -serial stdio \
+qemu-system-i386 -m 256 -display none \
     -netdev user,id=n0,tftp=tftp,bootfile=gork.pxe \
     -device rtl8139,netdev=n0 -boot n
 ```
 
-A scripted run needs a `grub.cfg` (`testing/grubtest.py` writes one), and
-it has to turn the serial console on itself, since on BIOS GRUB's console
-is VGA: `serial --unit=0 --speed=115200` then
-`terminal_output serial console`, both of which are modules in the image.
+Without a `grub.cfg` GRUB stops at its prompt on **VGA**, not on the serial
+line: on BIOS the serial console is off until something turns it on, which
+is why this gork carries the `serial` and `terminal` modules. A `grub.cfg`
+therefore has to do it itself, and the whole run can be scripted:
+
+```
+serial --unit=0 --speed=115200
+terminal_output serial console
+gork "write hello.txt with a greeting in it"
+cat (gork)/hello.txt
+```
+
+(`testing/grubtest.py` writes exactly such a file and reads the transcript
+back; with `-serial stdio` it is what you see.)
 The `(pxe)` device is GRUB's TFTP "file system": a file is fetched when it
-is opened, and there are no directories there, so gork's working directory
-is `(gork)` as usual and `$prefix` is `(pxe)/boot/grub`.
+is opened, there are no directories there (GRUB's own `ls` on it prints
+nothing, and `cat` of a missing file is the only way to tell), so gork's
+working directory is `(gork)` as usual and `$prefix` is `(pxe)/boot/grub`,
+where `gork.cnf` is read from.
 
 Two things the UEFI builds never showed, both fixed in `glue.c`:
 
@@ -134,9 +147,18 @@ Two things the UEFI builds never showed, both fixed in `glue.c`:
   server's message, not as `GRUB_ERR_FILE_NOT_FOUND`, so the same missing
   file was a hard error; `gerr()` reads the message.
 
-The package also keeps `gork-disk.img`, a plain `i386-pc` core image with
-`boot.img` and `grub-bios-setup`, for `gork`'s file tools on a machine
-booted from disk. No card is reachable from it.
+The package also carries `gork-disk.img`, a plain `i386-pc` core image, with
+`boot.img` and `grub-bios-setup` beside them, to write onto a disk:
+
+```sh
+./grub-bios-setup -b boot.img -c gork-disk.img /dev/sdX
+```
+
+That is the disk-install route, for `gork`'s file tools on a machine booted
+from it; no card is reachable that way, since the PXE ROM is what provides
+one. **Untested**: `grub-bios-setup` cannot run in a container (it
+canonicalizes the backing device and refuses an overlay), so nothing here has
+booted that image. The PXE one is what `testing/grubtest.py` covers.
 
 ## In a GRUB of one's own
 

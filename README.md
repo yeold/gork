@@ -16,8 +16,9 @@ as well on a current Linux, macOS or Windows 11. One codebase for all of
 them, with a batch CLI mode and a full-screen interactive curses TUI. The
 [table below](#tested-systems) says what it has been run on.
 
-It is small: about 5,000 lines of strict ANSI C89 and a binary of about
-100 KB (x86-64 Linux, stripped), with no dependencies beyond libc, a curses
+It is small: about 7,200 lines of strict ANSI C89 in its four main files
+(main.c, relay.c, tui.c, mcp.c) and a binary of about 120 KB (x86-64 Linux,
+`-O2`, dynamic, stripped), with no dependencies beyond libc, a curses
 library (`ncurses`, System V `curses`, or `PDCurses`) and the vendored cJSON.
 It builds with gcc 2.4.5, with a single compiler command where `configure`
 cannot run, and asks the system for little: TCP sockets (or IPX/SPX on DOS
@@ -35,7 +36,7 @@ runs on, and where to download it.
 
 ## Features at a glance
 
-- **Strict ANSI C89 / ISO C90**: ~5,000 lines of portable C, ~100 KB stripped binary, no C99, no threads, no OpenSSL/TLS library required on the target machine.
+- **Strict ANSI C89 / ISO C90**: ~7,200 lines of portable C in the four main files (a few thousand more across the per-system ports), a ~120 KB stripped binary, no C99, no threads, no OpenSSL/TLS library required on the target machine.
 - **Runs across four decades of hardware and OSes**: 16-bit real-mode MS-DOS (8086, 640 KB RAM) and 32-bit DOS (DJGPP), Windows 1.0 to 11 and NT 3.1+, early Linux (kernel 1.0, Slackware, Debian), FreeBSD/NetBSD/OpenBSD/DragonFly/MidnightBSD, commercial Unix (SunOS 4, Solaris, illumos, AIX, HP-UX, SVR4), NeXTSTEP/OPENSTEP, OS/2 Warp, BeOS, Haiku, QNX, Minix 2 & 3, Plan 9 (9front), GNU/Hurd, macOS (PowerPC Tiger to Apple silicon), classic Mac OS on 68k, bare-metal UEFI (`x86-64` and `arm64`, with its own built-in TCP/IP stack when firmware lacks one), and the barebox and GRUB boot loaders (as a command, on that stack).
 - **Full agentic coding workflow**: local tools for reading, creating and editing files (`read_file`, `write_file`, `edit_file`), directory listing (`list_dir`), shell command execution (`run_command`), project rules (`GORK.md`), `SKILL.md` skills (compatible with Claude Code and Cline), and **Model Context Protocol (MCP)** servers over stdio and streamable HTTP.
 - **Interactive curses TUI & batch CLI**: full-screen terminal chat interface with tool approval prompts, directory trust, context window tracking and auto-compaction (`/compact`), or scriptable one-shot batch mode.
@@ -99,7 +100,7 @@ of `testing/looptest.py`.
 | DOS, 32-bit (experimental; the `dos` package) | MS-DOS 3.30 (1988), with DJGPP, PDCurses and Watt-32, 386 or better | MS-DOS 4.01 and 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04 (1987, on MS-DOS 3.30), 2.03 and 2.11 (on MS-DOS 4.01), 3.0 and 3.1 (386 enhanced mode) | MS-DOS 2 and Windows/386 2.11: use the 16-bit build (DJGPP needs DOS 3) |
 | UEFI (experimental; the `uefi` package) | UEFI 2.70 on x86-64, no operating system: `gorkx64.efi` from the UEFI shell, on the firmware's TCP/IP; EDK2's OVMF 2025.02, in QEMU. Batch mode only | arm64 (`gorkaa64.efi`), on EDK2's AAVMF in QEMU; U-Boot 2025.01 (arm64, in QEMU) and firmware with no TCP/IP of its own, on gork's own | Real PC firmware: untested |
 | barebox (experimental; the `barebox-arm64` package) | barebox 2026.09 on arm64, as a `gork` command built in, on gork's own TCP/IP: QEMU's `virt` machine. Batch mode only | | Real boards: untested |
-| GRUB (experimental; the `grub-x64`, `grub-aa64` and `grub-i386` packages) | GRUB 2.14 on x86-64 and arm64 UEFI, as a `gork` command (a module), on gork's own TCP/IP; files written in RAM: OVMF and AAVMF 2025.02, in QEMU. Batch mode only | On a BIOS PC, `gork.pxe` fetched by the card's own PXE ROM (`grub-i386`): GRUB on `i386-pc` has no network driver of its own, so a PXE boot is the only way it has a card. Reached in QEMU with an RTL8139 and QEMU's TFTP server; DHCP, and a tool-use round trip | Real PCs, distributions' own GRUBs, and a BIOS machine booted from disk (no card there): untested |
+| GRUB (experimental; the `grub-x64`, `grub-aa64` and `grub-i386` packages) | GRUB 2.14 as a `gork` command (a module), on gork's own TCP/IP, files written in RAM: x86-64 and arm64 UEFI (OVMF and AAVMF 2025.02, in QEMU), and a BIOS PC over PXE (`grub-i386`: `gork.pxe`, fetched by the card's own ROM, with QEMU's TFTP server and an RTL8139). Batch mode only; a tool-use round trip on each, over DHCP on the PXE one | | Real PCs and distributions' own GRUBs: untested. A BIOS PC booted from disk has no card, since the PXE ROM is what provides one |
 | Classic Mac OS, 68k (experimental; the `mac68k` package) | System 7.5.3 (1994) on a 68020 or better, in Basilisk II: batch mode in a console window, MacTCP for the network. No TUI, no `run_command` and no MCP (there is no shell and no curses) | | A real Mac: untested. System 6, and MacTCP on a 68000 (a Mac Plus or SE): untested |
 | DOS, 16-bit (experimental; the `dos16` package) | MS-DOS 2.11 (1984, Compaq's), real mode, built with Open Watcom for the 8086 | MS-DOS 3.30, 6.22, DR-DOS 7.03, FreeDOS 1.3; in a DOS box under Windows 1.04, 2.11/386, 3.0 and 3.1, also in standard mode | An emulated 8086 and 286 (DOSBox-X), no real one. Small limits (below) |
 
