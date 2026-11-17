@@ -1684,7 +1684,13 @@ def check_tui_home_end_sequences():
                 time.sleep(0.2)
                 os.write(fd, b"X\r")
                 sent = 1
-            elif sent == 1 and len(H.said) == i + 1:
+            # The step turns on gork being idle, not on the fake having the
+            # POST: keys typed while a reply is in flight are dropped, so on
+            # a slow arch (m68k under qemu-user) the line and its key arrive
+            # before gork is listening and only its "X" is left -- and a
+            # /quit then typed lands there too.  "Enter send" is in `out` for
+            # good after the first prompt, so the reply is the marker.
+            elif sent == 1 and idle_after(out, b"reply%d" % (i + 1)):
                 i += 1
                 sent = 0
         os.write(fd, b"/quit\r")
