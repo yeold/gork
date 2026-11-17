@@ -915,10 +915,15 @@ int gork_start(int argc, char **argv)
 
 /* A 32-bit machine has no 64-bit divide instruction, and a freestanding
    build does not get the compiler's helpers: cJSON's doubles and a file's
-   size divide 64-bit numbers, so the four helpers are here, in plain C.
+   size divide 64-bit numbers, so the helpers are here, in plain C.
    (64-bit targets have them in the hardware.)  Kernighan and Ritchie's
-   long division, shifted; unsigned, with the signed ones on top. */
-#if defined(__i386__)
+   long division, shifted; unsigned, with the signed ones on top.
+   __i386__ and 32-bit __powerpc__ both need them, and for the same reason:
+   GRUB links its own compiler-rt into the kernel, not into a module, so
+   moddep.lst cannot resolve these from gork.mod (the PowerPC build fails
+   on exactly this list).  The int/float conversions are here too, since a
+   double's exponent makes them 64-bit work as well. */
+#if defined(__i386__) || defined(__powerpc__)
 #include <stddef.h>             /* NULL, for __udivmoddi4 below */
 
 unsigned long long
@@ -950,9 +955,10 @@ long long
 __divmoddi4(long long a, long long b, long long *rem)
 {
     int neg = (a < 0) != (b < 0);
+    unsigned long long ua = a < 0 ? -(unsigned long long)a : (unsigned long long)a;
+    unsigned long long ub = b < 0 ? -(unsigned long long)b : (unsigned long long)b;
     unsigned long long r;
-    unsigned long long q = __udivmoddi4(a < 0 ? -(unsigned long long)a : a,
-                                        b < 0 ? -(unsigned long long)b : b, &r);
+    unsigned long long q = __udivmoddi4(ua, ub, &r);
     if (rem != NULL) *rem = a < 0 ? -(long long)r : (long long)r;
     return neg ? -(long long)q : (long long)q;
 }
@@ -966,17 +972,83 @@ unsigned long long __umoddi3(unsigned long long a, unsigned long long b)
 
 long long __divdi3(long long a, long long b)
 {
-    int neg = (a < 0) != (b < 0);
-    unsigned long long q = __udivmoddi4(a < 0 ? -(unsigned long long)a : a,
-                                        b < 0 ? -(unsigned long long)b : b, NULL);
-    return neg ? -(long long)q : (long long)q;
+    return __divmoddi4(a, b, NULL);
 }
 
 long long __moddi3(long long a, long long b)
 {
-    unsigned long long r;
-    __udivmoddi4(a < 0 ? -(unsigned long long)a : a,
-                 b < 0 ? -(unsigned long long)b : b, &r);
-    return a < 0 ? -(long long)r : (long long)r;
+    long long r;
+    __divmoddi4(a, b, &r);
+    return r;
 }
+
+/* double <-> 64-bit int, for the same reason: no libgcc in a module.
+   Step a power-of-two double rather than casting (1ULL << i), which the
+   compiler would turn into a recursive call to __floatundidf. */
+long long __fixdfdi(double d)
+{
+    unsigned long long u = 0;
+    double             p = 4611686018427387904.0;   /* 2^62 */
+    int                neg = d < 0, i;
+
+    if (neg) d = -d;
+    if (d >= 9223372036854775808.0) d = 9223372036854775808.0;  /* saturate */
+    for (i = 62; i >= 0; i--) {
+        if (d >= p) { d -= p; u |= 1ULL << i; }
+        p *= 0.5;
+    }
+    return neg ? -(long long)u : (long long)u;
+}
+
+double __floatundidf(unsigned long long n)
+{
+    double d = 0;
+    int    i;
+
+    for (i = 63; i >= 0; i--) {
+        d *= 2.0;
+        if ((n >> i) & 1) d += 1.0;
+    }
+    return d;
+}
+
+double __floatdidf(long long n)
+{
+    return n < 0 ? -__floatundidf(-(unsigned long long)n)
+                 :  __floatundidf((unsigned long long)n);
+}
+#endif
+
+#if defined(__powerpc__)
+/* The SysV PowerPC FPR prologue/epilogue helpers from libgcc's crtsavfpr.o,
+   crtresfpr.o and crtresxfpr.o, which a GRUB module cannot reach from the
+   kernel.  With -mno-altivec/-mno-vsx -Os (GRUB's powerpc-ieee1275 flags),
+   gcc emits `bl _savefpr_N` in the prologue and `b _restfpr_N_x` at the end
+   of a function that keeps doubles in fN..f31 across a call.  Each entry
+   point falls through to 31 (saving or restoring fN..f31 off r11, which
+   points at the top of the frame); the `_x` exit tail-call also restores LR
+   from 4(r11) and the caller's stack pointer r1 from r11 before returning. */
+__asm__ (
+    ".globl _savefpr_28, _savefpr_29, _savefpr_30, _savefpr_31\n"
+    "_savefpr_28: stfd 28,-32(11)\n"
+    "_savefpr_29: stfd 29,-24(11)\n"
+    "_savefpr_30: stfd 30,-16(11)\n"
+    "_savefpr_31: stfd 31,-8(11)\n\t"
+    "blr\n"
+    ".globl _restfpr_28, _restfpr_29, _restfpr_30, _restfpr_31\n"
+    "_restfpr_28: lfd 28,-32(11)\n"
+    "_restfpr_29: lfd 29,-24(11)\n"
+    "_restfpr_30: lfd 30,-16(11)\n"
+    "_restfpr_31: lfd 31,-8(11)\n\t"
+    "blr\n"
+    ".globl _restfpr_28_x, _restfpr_29_x, _restfpr_30_x, _restfpr_31_x\n"
+    "_restfpr_28_x: lfd 28,-32(11)\n"
+    "_restfpr_29_x: lfd 29,-24(11)\n"
+    "_restfpr_30_x: lfd 30,-16(11)\n"
+    "_restfpr_31_x: lwz 0,4(11)\n\t"
+    "lfd 31,-8(11)\n\t"
+    "mtlr 0\n\t"
+    "mr 1,11\n\t"
+    "blr\n"
+);
 #endif

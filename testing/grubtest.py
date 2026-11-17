@@ -3,7 +3,8 @@
 
 Usage:  python3 testing/grubtest.py PACKAGE FAKEAPI
 
-PACKAGE is gork-<version>-grub-x64.zip, -grub-aa64.zip or -grub-i386.zip,
+PACKAGE is gork-<version>-grub-x64.zip, -grub-aa64.zip, -grub-i386.zip or
+-grub-of.zip,
 FAKEAPI testing/fakeapi.c built for this machine.  For the first two, GRUB
 (EFI/BOOT/BOOTX64.EFI or BOOTAA64.EFI, with gork in it) boots from a FAT
 disk under OVMF in a q35 machine, or AAVMF in a virt one, with a virtio
@@ -12,14 +13,17 @@ network card on QEMU's user network, which takes it to the fake API on
 instead -- the only way a BIOS PC has a card at all -- from QEMU's own
 TFTP server, and its grub.cfg comes the same way: QEMU serves DIRECTORY as
 the root, so the checks' grub.cfg and gork.cnf are written in a temporary
-one.  The firmware runs
+one.  The Open Firmware package's gork-of.elf (32-bit big-endian PowerPC
+IEEE 1275) boots the same way under SLOF in a pseries machine, on
+Open Firmware's own network device (ofnet).  The firmware runs
 without its own network stack (no random number generator: no virtio one,
 and an arm64 processor from before RNDR), so the card is GRUB's and
 gork's alone.  The checks are typed at GRUB's prompt
 on the serial console; the files they leave are in (gork), in RAM, and
 looked at with GRUB's own `cat`.  Prints "ok:" or "FAIL:" per check and
-exits 1 if any failed.  Needs qemu-system-x86_64 and OVMF, or
-qemu-system-aarch64 and qemu-efi-aarch64, mtools and dosfstools.
+exits 1 if any failed.  Needs qemu-system-x86_64 and OVMF,
+qemu-system-aarch64 and qemu-efi-aarch64, qemu-system-i386, or
+qemu-system-ppc64, mtools and dosfstools.
 """
 import json, os, re, select, shutil, subprocess, sys, tempfile, time, zipfile
 
@@ -43,12 +47,15 @@ MACHINES = {
 }
 
 
-# The checks, for the BIOS package: GRUB's console is the serial line, and
-# the commands come from this file rather than from keys typed at the
-# prompt, which race it.  Same checks as the typed ones below.
-PXE_CFG = """serial --unit=0 --speed=115200
+# The checks, for the netboot packages (BIOS PXE and PowerPC Open Firmware):
+# the commands come from this file rather than from keys typed at the prompt,
+# which race it.  On BIOS, GRUB's console is VGA until grub.cfg switches it
+# to the serial line; on Open Firmware with -vga none, the firmware's
+# console is the serial line already.  Same checks as the typed ones below.
+PXE_SERIAL = """serial --unit=0 --speed=115200
 terminal_output serial console
-echo ==prefix $prefix
+"""
+PXE_CFG = """echo ==prefix $prefix
 echo ==version
 gork --version
 echo ==notui
@@ -136,23 +143,29 @@ def main():
     os.makedirs(fdir)
     with zipfile.ZipFile(pkg) as z:
         boots = [n for n in z.namelist() if n.startswith("EFI/BOOT/BOOT")]
-        pxe = None if boots else z.extract("gork.pxe", esp)
+        nb = "gork.pxe" if "gork.pxe" in z.namelist() else "gork-of.elf"
+        pxe = None if boots else z.extract(nb, esp)
     if boots:
         with zipfile.ZipFile(pkg) as z:
             z.extract(boots[0], esp)
         boot, fw, machine = boots[0], *MACHINES[os.path.basename(boots[0])]
     else:
-        # A BIOS PC: no firmware of its own to speak of, and no disk to
-        # read -- the PXE ROM fetches gork.pxe, and GRUB's prefix is on
-        # the TFTP server, which is this directory.
+        # BIOS PXE or PowerPC Open Firmware: the firmware's netboot fetches
+        # gork.pxe or gork-of.elf, and GRUB's prefix is on the TFTP server,
+        # which is this directory.
         boot = None
         tftp = os.path.join(t, "tftp")
         os.makedirs(os.path.join(tftp, "boot", "grub"))
-        shutil.copy(pxe, os.path.join(tftp, "gork.pxe"))
+        shutil.copy(pxe, os.path.join(tftp, nb))
         fw = None
-        machine = ["qemu-system-i386", "-m", "256", "-boot", "n",
-                   "-netdev", "user,id=n0,tftp=" + tftp + ",bootfile=gork.pxe",
-                   "-device", "rtl8139,netdev=n0"]
+        if nb == "gork.pxe":
+            machine = ["qemu-system-i386", "-m", "256", "-boot", "n",
+                       "-netdev", "user,id=n0,tftp=" + tftp + ",bootfile=gork.pxe",
+                       "-device", "rtl8139,netdev=n0"]
+        else:
+            machine = ["qemu-system-ppc64", "-M", "pseries", "-m", "512",
+                       "-vga", "none", "-no-reboot", "-boot", "n",
+                       "-nic", "user,tftp=" + tftp + ",bootfile=gork-of.elf"]
     # the settings beside grub.cfg, in $prefix; and a file to read
     prefix = os.path.join(tftp, "boot", "grub") if boot is None else \
              os.path.join(esp, "EFI", "BOOT")
@@ -161,11 +174,11 @@ def main():
                 "retries = 0\n" % PORT)
     extra = []
     if boot is None:
-        # GRUB's own console is the serial line here, not a firmware's, so
-        # grub.cfg turns it on first; the file it runs is fetched by GRUB
-        # from the same TFTP server as gork.pxe.
+        # On BIOS, GRUB's console is VGA until grub.cfg turns serial on; on
+        # Open Firmware with -vga none, the firmware console is serial
+        # already.  The file is fetched from the same TFTP server.
         with open(os.path.join(prefix, "grub.cfg"), "w") as f:
-            f.write(PXE_CFG)
+            f.write((PXE_SERIAL if nb == "gork.pxe" else "") + PXE_CFG)
     else:
         img = os.path.join(t, "esp.img")
         sh("mkfs.fat", "-C", "-F", "16", "-n", "GORK", img, "65536",

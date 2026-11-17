@@ -1355,25 +1355,27 @@ run_on_own_stack (int argc, char **argv)
   return r;
 }
 #elif defined (__powerpc__)
-/* PowerPC: arguments in r3 and r4; the stack pointer is r1 and the chain
-   word lives above it, both the caller's to keep.  r31 is callee-saved, so
-   GRUB's caller expects it back; r0 and the volatile registers below the
-   arguments are not named, as GRUB's flags forbid clobbering r11 and r12,
-   which the linker and the ABI use. */
+/* PowerPC: arguments in r3 and r4; the stack pointer is r1, and the SysV
+   ABI writes the caller's LR at 4(r1) before stepping r1 down, so top is
+   16 bytes below the end of gork_stack.  r30 is callee-saved, so gork_start
+   keeps it across the call and gcc saves/restores GRUB's r30 around the asm;
+   r11 and r12 are not named, as GRUB's flags forbid clobbering them. */
 static int __attribute__ ((noinline))
 run_on_own_stack (int argc, char **argv)
 {
   register long r asm ("r3") = argc;
   register char **v asm ("r4") = argv;
-  register char *top asm ("r5") = gork_stack + GORK_STACK;
+  register char *top asm ("r5") = gork_stack + GORK_STACK - 16;
 
-  asm volatile ("mr 31, 1\n\t"		/* callee-saved: GRUB's stack */
+  asm volatile ("mr 30, 1\n\t"		/* callee-saved: GRUB's stack */
+		"li 0, 0\n\t"
+		"stw 0, 0(5)\n\t"
 		"mr 1, 5\n\t"
 		"bl gork_start\n\t"
-		"mr 1, 31"
+		"mr 1, 30"
 		: "+r" (r), "+r" (v), "+r" (top)
 		:
-		: "r0", "r6", "r7", "r8", "r9", "r10",
+		: "r0", "r6", "r7", "r8", "r9", "r10", "r30",
 		  "cr0", "ctr", "lr", "memory");
   return r;
 }

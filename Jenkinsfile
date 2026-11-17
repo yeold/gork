@@ -202,9 +202,9 @@ pipeline {
                         '''
                     }
                 }
-                // GRUB for x86-64 and arm64 UEFI with the gork module in it,
-                // built from GRUB's source, and its checks typed at GRUB's
-                // prompt
+                // GRUB for x86-64 and arm64 UEFI, BIOS PXE and PowerPC Open
+                // Firmware with the gork module in it, built from GRUB's
+                // source, and its checks run in QEMU
                 stage('grub') {
                     steps {
                         sh '''
@@ -214,18 +214,20 @@ pipeline {
                             # (Error 127 from `missing', then Error 63) for x64 and aa64 too.
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$GR":/work debian:bookworm sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc libc6-dev binutils make bison flex gawk autoconf autoconf-archive automake autopoint gettext python3 pkg-config xz-utils patch zip curl ca-certificates gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc libc6-dev binutils make bison flex gawk autoconf autoconf-archive automake autopoint gettext python3 pkg-config xz-utils patch zip curl ca-certificates gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu gcc-powerpc-linux-gnu binutils-powerpc-linux-gnu >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh grubbuild.sh /out /work x64 && sh grubbuild.sh /out /work aa64 && sh grubbuild.sh /out /work i386 && chown -R '"$(id -u):$(id -g)"' /out /work'
+                                sh grubbuild.sh /out /work x64 && sh grubbuild.sh /out /work aa64 && sh grubbuild.sh /out /work i386 && sh grubbuild.sh /out /work of && chown -R '"$(id -u):$(id -g)"' /out /work'
                             # and boot them under OVMF and AAVMF in QEMU against the fake API
-                            # (and the i386 one over PXE, which needs qemu-system-i386)
+                            # (and the i386 and of ones over TFTP, which need qemu-system-i386
+                            # and qemu-system-ppc64)
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:bookworm sh -ec '
                                 apt-get -qq update
-                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 ovmf qemu-system-arm qemu-efi-aarch64 mtools dosfstools python3 gcc libc6-dev >/dev/null
+                                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 ovmf qemu-system-arm qemu-efi-aarch64 qemu-system-ppc mtools dosfstools python3 gcc libc6-dev >/dev/null
                                 gcc -o /tmp/fakeapi /src/testing/fakeapi.c
                                 cd /src && python3 testing/grubtest.py /out/gork-*-grub-x64.zip /tmp/fakeapi
                                 python3 testing/grubtest.py /out/gork-*-grub-aa64.zip /tmp/fakeapi
-                                python3 testing/grubtest.py /out/gork-*-grub-i386.zip /tmp/fakeapi'
+                                python3 testing/grubtest.py /out/gork-*-grub-i386.zip /tmp/fakeapi
+                                python3 testing/grubtest.py /out/gork-*-grub-of.zip /tmp/fakeapi'
                         '''
                     }
                 }

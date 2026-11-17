@@ -318,7 +318,23 @@ double floor(double x)
 
 double sqrt(double x)
 {
-    return __builtin_sqrt(x);           /* sqrtsd, no library call */
+#if defined(__i386__) || defined(__x86_64__) || defined(__aarch64__)
+    return __builtin_sqrt(x);           /* sqrtsd / fsqrt, no library call */
+#else
+    /* A target whose FPU the compiler cannot use for it (32-bit PowerPC
+       without -mhard-float: GRUB builds powerpc-ieee1275 that way) turns
+       __builtin_sqrt into a call to sqrt() itself, which the linker then
+       finds undefined.  Newton's method instead; cJSON only needs it for
+       NAN, and its accuracy only has to beat double's. */
+    double g;
+    int    i;
+
+    if (x != x || x < 0) return 0.0 / 0.0;      /* NaN */
+    if (x == 0) return x;
+    g = x > 1 ? x : 1;
+    for (i = 0; i < 60; i++) g = (g + x / g) / 2;
+    return g;
+#endif
 }
 
 static unsigned long long to_ull(const char *s, char **end, int base,

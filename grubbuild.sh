@@ -4,7 +4,7 @@
 # OUT/gork-<version>-grub-ARCH.zip: ARCH x64 (x86-64 UEFI, the default),
 # aa64 (arm64 UEFI, with the aarch64-linux-gnu gcc and binutils, CROSS),
 # i386 (a BIOS PC: gork.pxe for a card's PXE ROM, plus a disk image) or of
-# (PowerPC Open Firmware, with powerpc-linux-gnu, unproven).
+# (PowerPC Open Firmware: gork-of.elf, with powerpc-linux-gnu).
 # GRUB's source is fetched into WORK, checksum pinned.  Needs an x86-64
 # gcc and binutils, make, bison, flex, gawk, python3, xz and zip, and
 # automake 1.16 (Debian bookworm, not `stable`: configure bakes the version
@@ -190,8 +190,13 @@ pc)
     cp "$B/build/grub-core/boot.img" "$d/boot.img"
     cp "$B/build/grub-bios-setup" "$d/" 2>/dev/null || : ;;
 ieee1275)
-    cp "$B/build/grub.ppc" "$d/$boot" 2>/dev/null ||
-        cp "$B/build/grub" "$d/$boot" 2>/dev/null || : ;;
+    # Open Firmware loads an ELF, and that is what grub-mkimage makes for
+    # ieee1275; there is no disk image to make, as there is on BIOS.
+    "$B/build/grub-mkimage" -d "$g" -O $fmt -p /boot/grub \
+        -o "$d/$boot" \
+        gork normal configfile echo cat ls test true sleep reboot halt \
+        serial terminal ofnet tftp net \
+        part_msdos part_gpt part_apple fat ext2 iso9660 search search_fs_file ;;
 esac
 z=$OUT/gork-$ver-grub-$ARCH.zip
 rm -f "$z"

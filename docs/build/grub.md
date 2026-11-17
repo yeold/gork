@@ -7,8 +7,9 @@ on gork's own TCP/IP (`ip.c`, the one the UEFI and barebox ports use) over
 GRUB's network card drivers. The release has GRUB 2.14 for UEFI with
 `gork` built in, and the module alone: `gork-<version>-grub-x64.zip` for
 x86-64 PCs (`BOOTX64.EFI`) and `gork-<version>-grub-aa64.zip` for arm64
-(`BOOTAA64.EFI`); and `gork-<version>-grub-i386.zip` for a BIOS PC
-(`gork.pxe`), which is PXE only -- see below.
+(`BOOTAA64.EFI`); `gork-<version>-grub-i386.zip` for a BIOS PC
+(`gork.pxe`), which is PXE only; and `gork-<version>-grub-of.zip` for
+PowerPC Open Firmware (`gork-of.elf`) -- see below.
 
 ## Run, in QEMU
 
@@ -160,13 +161,41 @@ one. **Untested**: `grub-bios-setup` cannot run in a container (it
 canonicalizes the backing device and refuses an overlay), so nothing here has
 booted that image. The PXE one is what `testing/grubtest.py` covers.
 
+## PowerPC Open Firmware (`powerpc-ieee1275`)
+
+On Open Firmware (IEEE 1275) GRUB's `ofnet` driver (`grub-core/net/drivers/ieee1275/ofnet.c`)
+drives the network device in the firmware's device tree. `gork-<version>-grub-of.zip`
+carries `gork-of.elf`, a 32-bit big-endian PowerPC ELF image made by
+`grub-mkimage -O powerpc-ieee1275` that Open Firmware loads directly (do not
+pass it to QEMU with `-kernel`, which loads a Linux kernel rather than an
+Open Firmware client program).
+
+Boot it over TFTP in QEMU's `pseries` machine under SLOF (`-vga none` puts
+Open Firmware's console on the serial line `/vdevice/vty@71000000`):
+
+```sh
+mkdir -p tftp/boot/grub
+unzip gork-<version>-grub-of.zip -d tftp     # gork-of.elf lands at tftp's root
+cat >tftp/boot/grub/gork.cnf <<EOF
+relay = 10.0.2.2:8443
+api_key = sk-ant-...
+EOF
+qemu-system-ppc64 -M pseries -m 512 -vga none -display none -serial stdio \
+    -boot n -nic user,tftp=tftp,bootfile=gork-of.elf
+```
+
+`ofnet` sets `$prefix` to `(tftp,10.0.2.2)/boot/grub`, so `grub.cfg` and
+`gork.cnf` are read from there over TFTP, and `gork` gets its own address by
+DHCP on the `/vdevice/l-lan` card.
+
 ## In a GRUB of one's own
 
 `gork.mod` is for GRUB 2.14 on UEFI (`x86_64-efi`, or `arm64-efi` in the
-`aa64` package; `i386-pc` in the `i386` one), as GNU releases it. Put it with GRUB's other modules
+`aa64` package; `i386-pc` in the `i386` one; `powerpc-ieee1275` in the `of`
+one), as GNU releases it. Put it with GRUB's other modules
 (`$prefix/x86_64-efi/` or `$prefix/arm64-efi/`) and
 `insmod gork`; GRUB loads `net`, `normal`, `datetime` and `setjmp` with
-it. It needs a network card driver (`efinet`) loaded too. Distributions
+it. It needs a network card driver (`efinet`, `pxe` or `ofnet`) loaded too. Distributions
 patch their GRUB, and under Secure Boot their GRUB loads no module
 that is not signed into it, so it may refuse gork.mod: the
 `BOOTX64.EFI` or `BOOTAA64.EFI` of the package is the sure route.
@@ -178,19 +207,21 @@ sh grubbuild.sh [OUT] [WORK] [x64|aa64|i386|of]
 ```
 
 On x86-64; `aa64` with the `aarch64-linux-gnu-` gcc and binutils too
-(`CROSS` names another prefix), and `i386` with the host's gcc and
-`gcc-multilib` (`-m32`); `of` (PowerPC Open Firmware) with
-`powerpc-linux-gnu-` and still unproven. `i386` builds 32-bit code with
+(`CROSS` names another prefix), `i386` with the host's gcc and
+`gcc-multilib` (`-m32`), and `of` (PowerPC Open Firmware) with
+`powerpc-linux-gnu-`. `i386` builds 32-bit code with
 GRUB's own calling convention (`-mrtd -mregparm=3`) and no MMX or SSE,
 as GRUB builds `i386-pc`; `grub/glue.c` matches it for every `bb_*` and
-`card_*` call. Needs gcc and binutils, make, bison, flex, gawk, autoconf,
-autoconf-archive, automake, autopoint (gettext), python3, xz and zip. It
+`card_*` call. `of` builds 32-bit big-endian PowerPC code (`-mno-altivec
+-mno-vsx`) and supplies the 64-bit integer/float and FPR save/restore
+helpers that GRUB's kernel does not export to modules. Needs gcc and
+binutils, make, bison, flex, gawk, automake 1.16, python3, xz and zip. It
 fetches GRUB's source (checksum pinned), builds gork's half, adds the
-module to GRUB's `grub-core/Makefile.core.def`, builds GRUB for
-`x86_64-efi` or `arm64-efi` and makes `BOOTX64.EFI` or `BOOTAA64.EFI`
-with `grub-mkimage`. `testing/grubtest.py` boots it in QEMU under OVMF or
-AAVMF, or the `i386` package over PXE with QEMU's TFTP server, and runs
-the checks against `testing/fakeapi.c`.
+module to GRUB's `grub-core/Makefile.core.def`, builds GRUB for the target
+platform and makes `BOOTX64.EFI`, `BOOTAA64.EFI`, `gork.pxe` or
+`gork-of.elf` with `grub-mkimage`. `testing/grubtest.py` boots it in QEMU
+under OVMF or AAVMF, or the `i386` and `of` packages over TFTP with QEMU's
+TFTP server, and runs the checks against `testing/fakeapi.c`.
 
 ## How it works
 
