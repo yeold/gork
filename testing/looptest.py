@@ -531,14 +531,26 @@ def kill_gork(pid):
         pass
 
 
-def reap(pid, fd):
+def reap(pid, fd, timeout=30):
     """Wait for gork to exit while still reading its pty.  On the way out it
     waits for its output to drain, and a BSD pty never drains into a master
-    nobody reads (Linux does not block there)."""
+    nobody reads (Linux does not block there).
+
+    Bounded, or a check that ends by typing /quit into a gork that is still
+    busy (it drops those keys) hangs the whole suite instead of failing: kill
+    it, and the check's own assertion then says which step was never reached."""
+    deadline = time.time() + timeout
+    killed = False
     while True:
         done, status = os.waitpid(pid, os.WNOHANG)
         if done:
             return status
+        if time.time() > deadline:
+            if killed:
+                return None             # it will not die; let the check fail
+            kill_gork(pid)
+            killed = True
+            deadline = time.time() + 5
         if select.select([fd], [], [], 0.1)[0]:
             try:
                 os.read(fd, 4096)
@@ -1531,7 +1543,7 @@ def check_tui_wheel_tail_not_typed():
                 time.sleep(0.3)
                 os.write(fd, b"plain\r")       # typed with an empty line
                 step = 1
-            elif step == 1 and said:
+            elif step == 1 and idle_after(out, b"ok"):
                 os.write(fd, b"/quit\r")
                 step = 2
         if step < 2:
