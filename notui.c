@@ -6,6 +6,7 @@
  */
 #include <stddef.h>
 #include "tui.h"
+#include "acp.h"
 
 int   tui_init(const char *status, const char *title)
 {
@@ -25,3 +26,22 @@ int   tui_confirm(const char *title, const char *detail)
 void  tui_suspend(void) {}
 void  tui_resume(void) {}
 int   tui_poll_abort(void) { return 0; }
+
+/* ACP stubs for GORK_NO_FORK builds (GRUB, barebox, UEFI, Mac): these
+   targets have no fork, so ACP is not available, but main.c references
+   the functions inside #ifndef GORK_NO_FORK guards.  The guards should
+   work, but on some cross-compilers they don't; provide no-op stubs
+   here to satisfy the linker. */
+#ifdef GORK_NO_FORK
+
+int  acp_serve(const struct acp_hooks *h) { (void) h; return -1; }
+void acp_text(const char *t) { (void) t; }
+void acp_tool_start(const char *a, const char *b, const char *c,
+                    const char *d) { (void) a; (void) b; (void) c; (void) d; }
+void acp_tool_done(const char *a, int b) { (void) a; (void) b; }
+void acp_usage(void) { }
+int  acp_ask(const char *a, const char *b) { (void) a; (void) b; return 0; }
+int  acp_cancelled(void) { return 0; }
+const char *acp_kind(const char *name) { (void) name; return "other"; }
+
+#endif /* GORK_NO_FORK */

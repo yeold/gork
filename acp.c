@@ -696,15 +696,4 @@ int acp_serve(const struct acp_hooks *h)
     return 0;
 }
 
-#else /* GORK_NO_FORK */
-
-int  acp_serve(const struct acp_hooks *h) { (void) h; return -1; }
-void acp_text(const char *t) { (void) t; }
-void acp_tool_start(const char *a, const char *b, const char *c,
-                    const char *d) { (void) a; (void) b; (void) c; (void) d; }
-void acp_tool_done(const char *a, int b) { (void) a; (void) b; }
-void acp_usage(void) { }
-int  acp_ask(const char *a, const char *b) { (void) a; (void) b; return 0; }
-int  acp_cancelled(void) { return 0; }
-
 #endif /* !GORK_NO_FORK */
