@@ -26,7 +26,7 @@ pipeline {
     stages {
         stage('dist') {
             steps {
-                sh '''
+                sh """
                     # bsdwork/ was the bsd stage's cache in the workspace
                     # once; every stage copies the workspace, so not there
                     rm -rf out bsdwork && mkdir out
@@ -46,7 +46,7 @@ pipeline {
         // its own, not beside the others: the agent's disk holds no more
         stage('options') {
             steps {
-                sh '''
+                sh """
                     docker run --rm -e TAG_NAME -v "$PWD":/src:ro debian:stable sh -ec '
                         apt-get -qq update
                         DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git build-essential autoconf automake libncurses-dev python3 ca-certificates curl libssl-dev openssl >/dev/null
@@ -74,14 +74,14 @@ pipeline {
                         cd /tmp/src
                         python3 testing/fakeacp.py /tmp/b_a2a/gork
                     '''
-                '''
+                """
             }
         }
         stage('packages') {
             parallel {
                 stage('rpm') {
                     steps {
-                        sh '''
+                        sh """
                             docker run --rm -v "$PWD/out":/out fedora:latest sh -ec '
                                 dnf -yq install rpm-build gcc make ncurses-devel ncurses-static
                                 # the source tarball, not the Linux and BSD binaries beside it
@@ -95,7 +95,7 @@ pipeline {
                 }
                 stage('linux') {
                     steps {
-                        sh '''
+                        sh """
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git \
@@ -120,7 +120,7 @@ pipeline {
                 }
                 stage('dos') {
                     steps {
-                        sh '''
+                        sh """
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git curl ca-certificates bzip2 unzip zip make >/dev/null
@@ -146,7 +146,7 @@ pipeline {
                 }
                 stage('dos16') {
                     steps {
-                        sh '''
+                        sh """
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git curl ca-certificates xz-utils zip >/dev/null
@@ -172,7 +172,7 @@ pipeline {
                 }
                 stage('windows') {
                     steps {
-                        sh '''
+                        sh """
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc-mingw-w64-i686 curl ca-certificates zip make >/dev/null
@@ -198,7 +198,7 @@ pipeline {
                 // aarch64 gcc, and its checks typed at the barebox prompt
                 stage('barebox') {
                     steps {
-                        sh '''
+                        sh """
                             BB="$HOME/.cache/gork-barebox" && mkdir -p "$BB"
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$BB":/work debian:stable sh -ec '
                                 apt-get -qq update
@@ -219,18 +219,18 @@ pipeline {
                 // source, and its checks run in QEMU
                 stage('grub') {
                     steps {
-                        sh '''
+                        sh """
                             GR="$HOME/.cache/gork-grub" && mkdir -p "$GR"
                             # bookworm, not stable: GRUB 2.14's Makefile.in runs `automake-1.16'
-                            # and its aclocal.m4 is 1.16.5's, so trixie's 1.17 refuses
-                            # the build (Error 127 from `missing', then Error 63) for x64 and aa64 too.
+                            // and its aclocal.m4 is 1.16.5's, so trixie's 1.17 refuses
+                            // the build (Error 127 from `missing', then Error 63) for x64 and aa64 too.
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$GR":/work debian:bookworm sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc libc6-dev binutils make bison flex gawk autoconf autoconf-archive automake autopoint gettext python3 pkg-config xz-utils patch zip curl ca-certificates gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu gcc-powerpc-linux-gnu binutils-powerpc-linux-gnu >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
                                 sh grubbuild.sh /out /work x64 && sh grubbuild.sh /out /work aa64 && sh grubbuild.sh /out /work i386 && sh grubbuild.sh /out /work of && chown -R '"$(id -u):$(id -g)"' /out /work'
                             # and boot them under OVMF and AAVMF in QEMU against the fake API
-                            # (and the i386 and of ones over TFTP, which need qemu-system-i386
+                            // (and the i386 and of ones over TFTP, which need qemu-system-i386
                             // and qemu-system-ppc64)
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:bookworm sh -ec '
                                 apt-get -qq update
@@ -251,7 +251,7 @@ pipeline {
                 // hand), else built and not run.
                 stage('mac') {
                     steps {
-                        sh '''
+                        sh """
                             MC="$HOME/.cache/gork-mac" && mkdir -p "$MC"
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$MC":/work debian:stable sh -ec '
                                 apt-get -qq update
@@ -285,7 +285,7 @@ pipeline {
                         // the sysroots and the VM disks (compressed),
                         // kept between builds (about 6 GB), outside the
                         // workspace: every stage copies that
-                        sh '''
+                        sh """
                             BW="$HOME/.cache/gork-bsd" && mkdir -p "$BW"
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$BW":/work debian:stable sh -ec '
                                 apt-get -qq update
@@ -316,7 +316,7 @@ pipeline {
                                     echo "== uefi $m"
                                     TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi.zip /tmp/fakeapi $m || rc=1
                                 done
-                                // the -nonet one, over COM2 to gork-relay -S
+                                # the -nonet one, over COM2 to gork-relay -S
                                 echo "== uefi-nonet x64"
                                 GORK_RELAY=$(sh testing/getrelay.sh) TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi-nonet.zip /tmp/fakeapi x64 || rc=1
                                 chown -R '"$(id -u):$(id -g)"' /work
@@ -326,7 +326,7 @@ pipeline {
                 }
                 stage('deb') {
                     steps {
-                        sh '''
+                        sh """
                             docker run --rm -v "$PWD/out":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y build-essential debhelper libncurses-dev >/dev/null
@@ -343,7 +343,7 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'github-release-token', variable: 'GITHUB_TOKEN'),
                                  string(credentialsId: 'forgejo-release-token', variable: 'FORGEJO_TOKEN')]) {
-                    sh '''
+                    sh """
                         docker run --rm -v "$PWD":/w:ro -w /w -e TAG="$TAG_NAME" -e GITHUB_TOKEN -e FORGEJO_TOKEN debian:stable sh -ec '
                             apt-get -qq update
                             DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl jq ca-certificates >/dev/null
