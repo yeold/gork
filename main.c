@@ -210,6 +210,18 @@ char *os2_realpath(const char *path, char *out)
 #define acp_cancelled()          0
 #endif
 
+#if defined(GORK_NO_TUI)
+/* No curses: batch mode only.  tui.c is left out. */
+#define tui_init(s, t)             (-1)
+#define tui_end()                  ((void) 0)
+#define tui_read_line()            ((char *) 0)
+#define tui_drain()                ((void) 0)
+#define tui_confirm(t, d)          ('n')
+#define tui_suspend()              ((void) 0)
+#define tui_resume()               ((void) 0)
+#define tui_poll_abort()           0
+#endif
+
 #ifdef GORK_NO_FORK
 #define ALLOW_SEP ";"           /* ':' belongs to the drive letter */
 /* Text mode for the files the model reads and writes: it sees and sends
