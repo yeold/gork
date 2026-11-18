@@ -27,3 +27,21 @@ int   tui_confirm(const char *title, const char *detail)
 void  tui_suspend(void) {}
 void  tui_resume(void) {}
 int   tui_poll_abort(void) { return 0; }
+
+/* ACP stubs for real firmware builds (GRUB, barebox, UEFI, Mac):
+   These targets compile notui.c but NOT acp.c.
+   The GORK_BARE test configuration compiles both, so exclude it. */
+
+#if defined(GORK_GRUB) || defined(GORK_BAREBOX) || defined(GORK_EFI) || defined(GORK_MAC)
+
+int  acp_serve(const struct acp_hooks *h) { (void) h; return -1; }
+void acp_text(const char *t) { (void) t; }
+void acp_tool_start(const char *a, const char *b, const char *c,
+                    const char *d) { (void) a; (void) b; (void) c; (void) d; }
+void acp_tool_done(const char *a, int b) { (void) a; (void) b; }
+void acp_usage(void) { }
+int  acp_ask(const char *a, const char *b) { (void) a; (void) b; return 0; }
+int  acp_cancelled(void) { return 0; }
+const char *acp_kind(const char *name) { (void) name; return "other"; }
+
+#endif

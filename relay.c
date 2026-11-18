@@ -1452,26 +1452,3 @@ int relay_http(const char *method, const char *conn_host, long conn_port,
   buf_free(&rx.head);
   return status;
 }
-
-/* ------------------------------------------------------------------ ACP stubs for firmware builds (GORK_NO_FORK)
- *
- * The GRUB, barebox, UEFI and Mac builds compile relay.c and define
- * GORK_GRUB/GORK_BAREBOX/GORK_EFI/GORK_MAC which imply GORK_NO_FORK via
- * port.h.  The real ACP code is in acp.c (not compiled for these targets),
- * so provide no-op stubs here so main.c's references resolve at link time.
- */
-#ifdef GORK_NO_FORK
-
-struct acp_hooks;                /* forward declaration */
-
-int  acp_serve(const struct acp_hooks *h) { (void) h; return -1; }
-void acp_text(const char *t) { (void) t; }
-void acp_tool_start(const char *a, const char *b, const char *c,
-                    const char *d) { (void) a; (void) b; (void) c; (void) d; }
-void acp_tool_done(const char *a, int b) { (void) a; (void) b; }
-void acp_usage(void) { }
-int  acp_ask(const char *a, const char *b) { (void) a; (void) b; return 0; }
-int  acp_cancelled(void) { return 0; }
-const char *acp_kind(const char *name) { (void) name; return "other"; }
-
-#endif /* GORK_NO_FORK */
