@@ -57,6 +57,8 @@ case "$enable_mcp" in
 esac
 if test "$enable_mcp" = yes; then
   CPPFLAGS="$CPPFLAGS -DGORK_MCP"
+else
+  CPPFLAGS="$CPPFLAGS -DGORK_NO_MCP"
 fi
 
 AC_ARG_ENABLE([acp],
@@ -69,6 +71,8 @@ case "$enable_acp" in
 esac
 if test "$enable_acp" = yes; then
   CPPFLAGS="$CPPFLAGS -DGORK_ACP"
+else
+  CPPFLAGS="$CPPFLAGS -DGORK_NO_ACP"
 fi
 
 AC_ARG_ENABLE([a2a],
@@ -81,6 +85,8 @@ case "$enable_a2a" in
 esac
 if test "$enable_a2a" = yes; then
   CPPFLAGS="$CPPFLAGS -DGORK_A2A"
+else
+  CPPFLAGS="$CPPFLAGS -DGORK_NO_A2A"
 fi
 
 AC_ARG_WITH([openssl],

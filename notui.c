@@ -44,4 +44,14 @@ int  acp_ask(const char *a, const char *b) { (void) a; (void) b; return 0; }
 int  acp_cancelled(void) { return 0; }
 const char *acp_kind(const char *name) { (void) name; return "other"; }
 
+/* MCP stubs for the same firmware builds: they compile notui.c but not mcp.c. */
+
+void  mcp_start(const char *path) { (void) path; }
+void  mcp_stop(void) { }
+int   mcp_tool_count(void) { return 0; }
+int   mcp_add_tools(void *tools) { (void) tools; return 0; }
+int   mcp_find(const char *name) { (void) name; return -1; }
+int  *mcp_always(int i) { (void) i; return NULL; }
+char *mcp_call(int i, void *input, int *is_err) { (void) i; (void) input; (void) is_err; return NULL; }
+
 #endif

@@ -199,6 +199,18 @@ char *os2_realpath(const char *path, char *out)
 #define mcp_call(i, input, err)  ((char *) 0)
 #endif
 
+#if defined(GORK_NO_FORK) || defined(GORK_NO_ACP)
+/* No fork (or --without-acp), so no ACP: acp.c is left out. */
+#define acp_serve(h)             (-1)
+#define acp_text(t)              ((void) (t))
+#define acp_tool_start(a,b,c,d)  ((void) (a), (void) (b), (void) (c), (void) (d))
+#define acp_tool_done(a,b)       ((void) (a), (void) (b))
+#define acp_usage()              ((void) 0)
+#define acp_ask(a,b)             ((void) (a), (void) (b), 0)
+#define acp_cancelled()          0
+#define acp_kind(name)           ((void) (name), "other")
+#endif
+
 #ifdef GORK_NO_FORK
 #define ALLOW_SEP ";"           /* ':' belongs to the drive letter */
 /* Text mode for the files the model reads and writes: it sees and sends
