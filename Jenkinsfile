@@ -53,7 +53,7 @@ pipeline {
                         export GORK_RELAY=$(sh testing/getrelay.sh)
                         for o in --without-tui --without-mcp --with-openssl --with-serial; do
                             echo "== $o"
-                            mkdir /tmp/b$o && cd /tmp/b$o && /tmp/src/configure $o >/dev/null && make
+                            mkdir /tmp/b$o && cd /tmp/b$o && /tmp/src/configure $o --enable-acp >/dev/null && make
                             cd /tmp/src
                             case $o in
                             --with-serial) python3 testing/serialtest.py /tmp/b$o/gork ;;
