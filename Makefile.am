@@ -35,7 +35,8 @@ EXTRA_DIST = README.md LICENSE CONTRIBUTING.md docs/BUILD.md docs/build/aix.md d
              fwinclude/sys/types.h fwinclude/sys/wait.h \
              fwinclude/time.h fwinclude/unistd.h \
              gork.spec debian/changelog debian/control \
-             debian/rules debian/copyright debian/source/format
+             debian/rules debian/copyright debian/source/format \
+             a2a.c a2a.h
 
 iconsdir = $(datadir)/icons/hicolor/256x256/apps
 dist_icons_DATA = images/gork.png
