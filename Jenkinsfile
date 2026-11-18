@@ -51,7 +51,7 @@ pipeline {
                         DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git build-essential autoconf automake libncurses-dev python3 ca-certificates curl libssl-dev openssl >/dev/null
                         cp -r /src /tmp/src && cd /tmp/src && autoreconf -i
                         export GORK_RELAY=$(sh testing/getrelay.sh)
-                        for o in --without-tui --without-mcp --with-openssl --with-serial; do
+                        for o in --disable-tui --disable-mcp --with-openssl --with-serial; do
                             echo "== $o"
                             mkdir /tmp/b$o && cd /tmp/b$o && /tmp/src/configure $o --enable-acp >/dev/null && make
                             cd /tmp/src
