@@ -30,12 +30,12 @@ pipeline {
                     # bsdwork/ was the bsd stage's cache in the workspace
                     # once; every stage copies the workspace, so not there
                     rm -rf out bsdwork && mkdir out
-                    docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                    docker run --rm -e TAG_NAME -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out debian:stable sh -ec '
                         apt-get -qq update
                         DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git build-essential autoconf automake libncurses-dev >/dev/null
                         cp -r /src /tmp/src && cd /tmp/src
                         autoreconf -i && ./configure --enable-tui --enable-mcp --enable-acp && make dist
-                        cp gork-*.tar.gz /out/ && chown -R '"$(id -u):$(id -g)"' /out'
+                        cp gork-*.tar.gz /out/ && chown -R '"\$(id -u):\$(id -g)"' /out'
                 '''
             }
         }
@@ -47,26 +47,26 @@ pipeline {
         stage('options') {
             steps {
                 sh """
-                    docker run --rm -e TAG_NAME -v "$PWD":/src:ro debian:stable sh -ec '
+                    docker run --rm -e TAG_NAME -v \"\$PWD\":/src:ro debian:stable sh -ec '
                         apt-get -qq update
                         DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git build-essential autoconf automake libncurses-dev python3 ca-certificates curl libssl-dev openssl >/dev/null
                         cp -r /src /tmp/src && cd /tmp/src && autoreconf -i
-                        export GORK_RELAY=$(sh testing/getrelay.sh)
+                        export GORK_RELAY=\$(sh testing/getrelay.sh)
                         for o in --without-tui --without-mcp --with-openssl --with-serial; do
-                            echo "== $o"
-                            mkdir /tmp/b$o && cd /tmp/b$o && /tmp/src/configure $o >/dev/null && make
+                            echo \"== \$o\"
+                            mkdir /tmp/b\$o && cd /tmp/b\$o && /tmp/src/configure \$o >/dev/null && make
                             cd /tmp/src
-                            case $o in
-                            --with-serial) python3 testing/serialtest.py /tmp/b$o/gork ;;
-                            --with-openssl) python3 testing/looptest.py /tmp/b$o/gork
-                                            python3 testing/tlstest.py /tmp/b$o/gork ;;
-                            *) python3 testing/looptest.py /tmp/b$o/gork ;;
+                            case \$o in
+                            --with-serial) python3 testing/serialtest.py /tmp/b\$o/gork ;;
+                            --with-openssl) python3 testing/looptest.py /tmp/b\$o/gork
+                                            python3 testing/tlstest.py /tmp/b\$o/gork ;;
+                            *) python3 testing/looptest.py /tmp/b\$o/gork ;;
                             esac
                             # ACP is in every one of these builds: it needs fork, and nothing else
                             # --with-serial (-DGORK_SERIAL) has no TCP/IP, only serial transport;
                             # fakeacp.py speaks HTTP, so it cannot run there.
-                            if [ "$o" != "--with-serial" ]; then
-                                python3 testing/fakeacp.py /tmp/b$o/gork
+                            if [ \"\$o\" != \"--with-serial\" ]; then
+                                python3 testing/fakeacp.py /tmp/b\$o/gork
                             fi
                         done
                         # Also test --enable-a2a (only on default build with all features)
@@ -82,21 +82,21 @@ pipeline {
                 stage('rpm') {
                     steps {
                         sh """
-                            docker run --rm -v "$PWD/out":/out fedora:latest sh -ec '
+                            docker run --rm -v \"\$PWD/out\":/out fedora:latest sh -ec '
                                 dnf -yq install rpm-build gcc make ncurses-devel ncurses-static
                                 # the source tarball, not the Linux and BSD binaries beside it
-                                rpmbuild -ta "$(ls /out/gork-*.tar.gz | grep -vE -- "-(linux|freebsd|netbsd|openbsd)-")" --define "_topdir /tmp/rpm"
+                                rpmbuild -ta \"\$(ls /out/gork-*.tar.gz | grep -vE -- \"-(linux|freebsd|netbsd|openbsd)-\")\" --define \"_topdir /tmp/rpm\"
                                 # curses must be static or the package runs only
                                 # on Fedora (see gork.spec)
                                 ! rpm -qp --requires /tmp/rpm/RPMS/*/gork-[0-9]*.rpm | grep -q libncurses
-                                cp /tmp/rpm/SRPMS/*.rpm /tmp/rpm/RPMS/*/*.rpm /out/ && chown -R '"$(id -u):$(id -g)"' /out'
+                                cp /tmp/rpm/SRPMS/*.rpm /tmp/rpm/RPMS/*/*.rpm /out/ && chown -R '"\$(id -u):\$(id -g)"' /out'
                         '''
                     }
                 }
                 stage('linux') {
                     steps {
                         sh """
-                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                            docker run --rm -e TAG_NAME -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git \
                                     gcc libc6-dev make curl ca-certificates ncurses-bin \
@@ -108,85 +108,85 @@ pipeline {
                                     libc6-dev-ppc64el-cross libc6-dev-powerpc-cross libc6-dev-m68k-cross \
                                     libc6-dev-hppa-cross >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh linuxbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
+                                sh linuxbuild.sh /out && chown -R '"\$(id -u):\$(id -g)"' /out'
                             # and run each: the whole suite, under qemu-user, with
-                            # a gork-relay in front of every fake API
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                            // a gork-relay in front of every fake API
+                            docker run --rm -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out:ro debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends python3 qemu-user-static ca-certificates curl gcc libc6-dev make libssl-dev >/dev/null
-                                cd /src && GORK_RELAY=$(sh testing/getrelay.sh) sh testing/linuxtest.sh /out'
+                                cd /src && GORK_RELAY=\$(sh testing/getrelay.sh) sh testing/linuxtest.sh /out'
                         '''
                     }
                 }
                 stage('dos') {
                     steps {
                         sh """
-                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                            docker run --rm -e TAG_NAME -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git curl ca-certificates bzip2 unzip zip make >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh dosbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
+                                sh dosbuild.sh /out && chown -R '"\$(id -u):\$(id -g)"' /out'
                             # and run it: FreeDOS in QEMU against a fake API, with
-                            # a gork-relay for the SPX check.  FreeDOS's zips are
-                            # kept in DL, as ibiblio is down now and then.
-                            DL="$HOME/.cache/gork-dos" && mkdir -p "$DL"
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$DL":/dl debian:stable sh -ec '
+                            // a gork-relay for the SPX check.  FreeDOS's zips are
+                            // kept in DL, as ibiblio is down now and then.
+                            DL=\"\$HOME/.cache/gork-dos\" && mkdir -p \"\$DL\"
+                            docker run --rm -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out:ro -v \"\$DL\":/dl debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev >/dev/null
                                 mkdir -p /tmp/vm/dostest && cp /dl/*.zip /tmp/vm/dostest/ 2>/dev/null || :
                                 rc=0
                                 # then the -nonet zip, over COM1 to gork-relay -S
-                                cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos.zip &&
-                                    GORK_RELAY=$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos-nonet.zip || rc=$?
+                                cd /src && relay=\$(sh testing/getrelay.sh) && GORK_RELAY=\$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos.zip &&
+                                    GORK_RELAY=\$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos-nonet.zip || rc=\$?
                                 cp /tmp/vm/dostest/*.zip /dl/ 2>/dev/null || :
-                                chown -R '"$(id -u):$(id -g)"' /dl
-                                exit $rc'
+                                chown -R '"\$(id -u):\$(id -g)"' /dl
+                                exit \$rc'
                         '''
                     }
                 }
                 stage('dos16') {
                     steps {
                         sh """
-                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                            docker run --rm -e TAG_NAME -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git curl ca-certificates xz-utils zip >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh dos16build.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
+                                sh dos16build.sh /out && chown -R '"\$(id -u):\$(id -g)"' /out'
                             # the same checks as for the 32-bit one, with the
-                            # address from DHCP here; then on an 8086 and a 286
-                            # in DOSBox-X.  FreeDOS's zips kept in DL, as for dos.
-                            DL="$HOME/.cache/gork-dos16" && mkdir -p "$DL"
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$DL":/dl debian:stable sh -ec '
+                            // address from DHCP here; then on an 8086 and a 286
+                            // in DOSBox-X.  FreeDOS's zips kept in DL, as for dos.
+                            DL=\"\$HOME/.cache/gork-dos16\" && mkdir -p \"\$DL\"
+                            docker run --rm -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out:ro -v \"\$DL\":/dl debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 mtools unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev dosbox-x >/dev/null
                                 mkdir -p /tmp/vm/dostest && cp /dl/*.zip /tmp/vm/dostest/ 2>/dev/null || :
                                 rc=0
-                                cd /src && relay=$(sh testing/getrelay.sh) && GORK_RELAY=$relay GORK_DOS_DHCP=1 GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16.zip &&
-                                    GORK_RELAY=$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16-nonet.zip &&
-                                    GORK_VM=/tmp/vm python3 testing/dosboxtest.py /out/gork-*-dos16.zip || rc=$?
+                                cd /src && relay=\$(sh testing/getrelay.sh) && GORK_RELAY=\$relay GORK_DOS_DHCP=1 GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16.zip &&
+                                    GORK_RELAY=\$relay GORK_VM=/tmp/vm python3 testing/dostest.py /out/gork-*-dos16-nonet.zip &&
+                                    GORK_VM=/tmp/vm python3 testing/dosboxtest.py /out/gork-*-dos16.zip || rc=\$?
                                 cp /tmp/vm/dostest/*.zip /dl/ 2>/dev/null || :
-                                chown -R '"$(id -u):$(id -g)"' /dl
-                                exit $rc'
+                                chown -R '"\$(id -u):\$(id -g)"' /dl
+                                exit \$rc'
                         '''
                     }
                 }
                 stage('windows') {
                     steps {
                         sh """
-                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
+                            docker run --rm -e TAG_NAME -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc-mingw-w64-i686 curl ca-certificates zip make >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh winbuild.sh /out && chown -R '"$(id -u):$(id -g)"' /out'
+                                sh winbuild.sh /out && chown -R '"\$(id -u):\$(id -g)"' /out'
                             # and run it: one gork.exe for 9x and NT, here under Wine,
-                            # with a gork-relay in front of every fake API
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                            // with a gork-relay in front of every fake API
+                            docker run --rm -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out:ro debian:stable sh -ec '
                                 dpkg --add-architecture i386
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends wine wine32:i386 unzip python3 ca-certificates curl gcc libc6-dev make libssl-dev socat >/dev/null
                                 mkdir /tmp/w /tmp/wn && cd /tmp/w && unzip -q /out/gork-*-win32-legacy.zip
                                 cd /tmp/wn && unzip -q /out/gork-*-win32-legacy-nonet.zip
-                                cd /src && export GORK_RELAY=$(sh testing/getrelay.sh) &&
+                                cd /src && export GORK_RELAY=\$(sh testing/getrelay.sh) &&
                                     python3 testing/wintest.py wine /tmp/w/gork.exe &&
                                     python3 testing/wintest.py wine /tmp/w/gorknt3.exe &&
                                     GORK_NONET=1 python3 testing/wintest.py wine /tmp/wn/gork.exe &&
@@ -199,14 +199,14 @@ pipeline {
                 stage('barebox') {
                     steps {
                         sh """
-                            BB="$HOME/.cache/gork-barebox" && mkdir -p "$BB"
-                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$BB":/work debian:stable sh -ec '
+                            BB=\"\$HOME/.cache/gork-barebox\" && mkdir -p \"\$BB\"
+                            docker run --rm -e TAG_NAME -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out -v \"\$BB\":/work debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu gcc libc6-dev make bison flex libssl-dev bc lzop lz4 zstd python3 xz-utils file pkg-config zip curl ca-certificates >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh bareboxbuild.sh /out /work && chown -R '"$(id -u):$(id -g)"' /out /work'
+                                sh bareboxbuild.sh /out /work && chown -R '"\$(id -u):\$(id -g)"' /out /work'
                             # and boot it in QEMU against the fake API
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:stable sh -ec '
+                            docker run --rm -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out:ro debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-arm python3 gcc libc6-dev >/dev/null
                                 gcc -o /tmp/fakeapi /src/testing/fakeapi.c
@@ -220,19 +220,19 @@ pipeline {
                 stage('grub') {
                     steps {
                         sh """
-                            GR="$HOME/.cache/gork-grub" && mkdir -p "$GR"
-                            # bookworm, not stable: GRUB 2.14's Makefile.in runs `automake-1.16'
+                            GR=\"\$HOME/.cache/gork-grub\" && mkdir -p \"\$GR\"
+                            # bookworm, not stable: GRUB 2.14's Makefile.in runs \`automake-1.16'
                             // and its aclocal.m4 is 1.16.5's, so trixie's 1.17 refuses
-                            // the build (Error 127 from `missing', then Error 63) for x64 and aa64 too.
-                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$GR":/work debian:bookworm sh -ec '
+                            // the build (Error 127 from \`missing', then Error 63) for x64 and aa64 too.
+                            docker run --rm -e TAG_NAME -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out -v \"\$GR\":/work debian:bookworm sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc libc6-dev binutils make bison flex gawk autoconf autoconf-archive automake autopoint gettext python3 pkg-config xz-utils patch zip curl ca-certificates gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu gcc-powerpc-linux-gnu binutils-powerpc-linux-gnu >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh grubbuild.sh /out /work x64 && sh grubbuild.sh /out /work aa64 && sh grubbuild.sh /out /work i386 && sh grubbuild.sh /out /work of && chown -R '"$(id -u):$(id -g)"' /out /work'
+                                sh grubbuild.sh /out /work x64 && sh grubbuild.sh /out /work aa64 && sh grubbuild.sh /out /work i386 && sh grubbuild.sh /out /work of && chown -R '"\$(id -u):\$(id -g)"' /out /work'
                             # and boot them under OVMF and AAVMF in QEMU against the fake API
                             // (and the i386 and of ones over TFTP, which need qemu-system-i386
                             // and qemu-system-ppc64)
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:bookworm sh -ec '
+                            docker run --rm -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out:ro debian:bookworm sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 ovmf qemu-system-arm qemu-efi-aarch64 qemu-system-ppc mtools dosfstools python3 gcc libc6-dev >/dev/null
                                 gcc -o /tmp/fakeapi /src/testing/fakeapi.c
@@ -252,28 +252,28 @@ pipeline {
                 stage('mac') {
                     steps {
                         sh """
-                            MC="$HOME/.cache/gork-mac" && mkdir -p "$MC"
-                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$MC":/work debian:stable sh -ec '
+                            MC=\"\$HOME/.cache/gork-mac\" && mkdir -p \"\$MC\"
+                            docker run --rm -e TAG_NAME -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out -v \"\$MC\":/work debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git ca-certificates build-essential cmake bison flex texinfo ruby libgmp-dev libmpfr-dev libmpc-dev libboost-all-dev zlib1g-dev python3 zip >/dev/null
                                 cp -r /src /tmp/src && cd /tmp/src
-                                sh macbuild.sh /out /work && chown -R '"$(id -u):$(id -g)"' /out /work'
-                            if [ ! -f "$MC/q800.rom" ]; then
-                                echo "mac: no ROM in $MC/q800.rom: not run"
+                                sh macbuild.sh /out /work && chown -R '"\$(id -u):\$(id -g)"' /out /work'
+                            if [ ! -f \"\$MC/q800.rom\" ]; then
+                                echo \"mac: no ROM in \$MC/q800.rom: not run\"
                                 exit 0
                             fi
                             # System 7.5.3 from the Internet Archive, kept in
                             // the cache; Basilisk II is in contrib
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$MC":/mc debian:stable sh -ec '
-                                sed -i "s/Components: main/Components: main contrib/\" /etc/apt/sources.list.d/debian.sources
+                            docker run --rm -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out:ro -v \"\$MC\":/mc debian:stable sh -ec '
+                                sed -i \"s/Components: main/Components: main contrib/\" /etc/apt/sources.list.d/debian.sources
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends basilisk2 xvfb python3-pip gcc libc6-dev ca-certificates >/dev/null
                                 pip install -q --break-system-packages --root-user-action=ignore machfs==1.3 macresources==1.2
                                 gcc -o /tmp/fakeapi /src/testing/fakeapi.c
                                 rc=0
-                                cd /src && GORK_VM=/mc/vm python3 testing/mactest.py /out/gork-*-mac68k.zip /tmp/fakeapi /mc/q800.rom || rc=$?
-                                chown -R '"$(id -u):$(id -g)"' /mc
-                                exit $rc'
+                                cd /src && GORK_VM=/mc/vm python3 testing/mactest.py /out/gork-*-mac68k.zip /tmp/fakeapi /mc/q800.rom || rc=\$?
+                                chown -R '"\$(id -u):\$(id -g)"' /mc
+                                exit \$rc'
                         '''
                     }
                 }
@@ -286,26 +286,26 @@ pipeline {
                         // kept between builds (about 6 GB), outside the
                         // workspace: every stage copies that
                         sh """
-                            BW="$HOME/.cache/gork-bsd" && mkdir -p "$BW"
-                            docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$BW":/work debian:stable sh -ec '
+                            BW=\"\$HOME/.cache/gork-bsd\" && mkdir -p \"\$BW\"
+                            docker run --rm -e TAG_NAME -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out -v \"\$BW\":/work debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git clang lld llvm curl ca-certificates xz-utils zip >/dev/null
-                                # not "cp -r /src": /src/out is the live output directory the other
+                                # not \"cp -r /src\": /src/out is the live output directory the other
                                 // stages are writing into, and a file of theirs vanishing mid-copy
                                 // failed this stage on master #53 (ziDA8CYD: No such file or directory)
                                 mkdir -p /tmp/src && tar -C /src --exclude=./out -cf - . | tar -C /tmp/src -xf - && cd /tmp/src
                                 sh bsdbuild.sh /out /work && sh uefibuild.sh /out /tmp/uefi &&
-                                    chown -R '"$(id -u):$(id -g)"' /out /work'
+                                    chown -R '"\$(id -u):\$(id -g)"' /out /work'
                             # and run each on its own system: the official VM
                             // image, booted in QEMU, the checks of testing/vmcheck.sh
-                            docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$BW":/work debian:stable sh -ec '
+                            docker run --rm -v \"\$PWD\":/src:ro -v \"\$PWD/out\":/out:ro -v \"\$BW\":/work debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils qemu-efi-aarch64 ovmf genisoimage python3 xz-utils gzip curl ca-certificates \
                                     u-boot-qemu efi-shell-x64 efi-shell-aa64 mtools dosfstools gcc libc6-dev make libssl-dev socat >/dev/null
                                 cd /src && mkdir -p /work/tmp && rc=0
                                 for t in freebsd-amd64 freebsd-arm64 netbsd-amd64 netbsd-arm64 openbsd-amd64 openbsd-arm64; do
-                                    echo "== $t"
-                                    GORK_VM=/work/vm TMPDIR=/work/tmp python3 testing/bsdtest.py $t /out/gork-*-$t.tar.gz /work/$t/fakeapi || rc=1
+                                    echo \"== \$t\"
+                                    GORK_VM=/work/vm TMPDIR=/work/tmp python3 testing/bsdtest.py \$t /out/gork-*-$t.tar.gz /work/\$t/fakeapi || rc=1
                                 done
                                 # gork for UEFI from the UEFI shell: on the TCP/IP of the
                                 // firmware (OVMF, AAVMF) and on its own (OVMF without its
@@ -313,26 +313,26 @@ pipeline {
                                 // (no apostrophes in here: this is all one quoted script)
                                 gcc -o /tmp/fakeapi testing/fakeapi.c
                                 for m in x64 aa64 x64-own uboot; do
-                                    echo "== uefi $m"
-                                    TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi.zip /tmp/fakeapi $m || rc=1
+                                    echo \"== uefi \$m\"
+                                    TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi.zip /tmp/fakeapi \$m || rc=1
                                 done
-                                # the -nonet one, over COM2 to gork-relay -S
-                                echo "== uefi-nonet x64"
-                                GORK_RELAY=$(sh testing/getrelay.sh) TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi-nonet.zip /tmp/fakeapi x64 || rc=1
-                                chown -R '"$(id -u):$(id -g)"' /work
-                                exit $rc'
+                                // the -nonet one, over COM2 to gork-relay -S
+                                echo \"== uefi-nonet x64\"
+                                GORK_RELAY=\$(sh testing/getrelay.sh) TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi-nonet.zip /tmp/fakeapi x64 || rc=1
+                                chown -R '"\$(id -u):\$(id -g)"' /work
+                                exit \$rc'
                         '''
                     }
                 }
                 stage('deb') {
                     steps {
                         sh """
-                            docker run --rm -v "$PWD/out":/out debian:stable sh -ec '
+                            docker run --rm -v \"\$PWD/out\":/out debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y build-essential debhelper libncurses-dev >/dev/null
-                                mkdir /tmp/deb && tar xzf "$(ls /out/gork-*.tar.gz | grep -vE -- "-(linux|freebsd|netbsd|openbsd)-")" -C /tmp/deb
+                                mkdir /tmp/deb && tar xzf \"\$(ls /out/gork-*.tar.gz | grep -vE -- \"-(linux|freebsd|netbsd|openbsd)-)\" -C /tmp/deb
                                 cd /tmp/deb/gork-* && dpkg-buildpackage -us -uc
-                                cd /tmp/deb && cp *.deb *.dsc *.tar.xz *.buildinfo *.changes /out/ && chown -R '"$(id -u):$(id -g)"' /out'
+                                cd /tmp/deb && cp *.deb *.dsc *.tar.xz *.buildinfo *.changes /out/ && chown -R '"\$(id -u):\$(id -g)"' /out'
                         '''
                     }
                 }
@@ -344,7 +344,7 @@ pipeline {
                 withCredentials([string(credentialsId: 'github-release-token', variable: 'GITHUB_TOKEN'),
                                  string(credentialsId: 'forgejo-release-token', variable: 'FORGEJO_TOKEN')]) {
                     sh """
-                        docker run --rm -v "$PWD":/w:ro -w /w -e TAG="$TAG_NAME" -e GITHUB_TOKEN -e FORGEJO_TOKEN debian:stable sh -ec '
+                        docker run --rm -v \"\$PWD\":/w:ro -w /w -e TAG=\"\$TAG_NAME\" -e GITHUB_TOKEN -e FORGEJO_TOKEN debian:stable sh -ec '
                             apt-get -qq update
                             DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl jq ca-certificates >/dev/null
                             sh release.sh out'
