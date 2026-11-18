@@ -67,7 +67,7 @@ pipeline {
                             if [ "$o" != "--with-serial" ]; then
                                 python3 testing/fakeacp.py /tmp/b$o/gork
                             fi
-                        done
+                        done'
                         # Also test --enable-a2a (only on default build with all features)
                         mkdir /tmp/b_a2a && cd /tmp/b_a2a && /tmp/src/configure --enable-a2a >/dev/null && make
                         cd /tmp/src
