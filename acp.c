@@ -509,7 +509,7 @@ static void do_initialize(cJSON *id, cJSON *params)
         cJSON_AddBoolToObject(caps, "loadSession", 0) == NULL ||
         cJSON_AddStringToObject(info, "name", "gork") == NULL ||
         cJSON_AddStringToObject(info, "title", "gork") == NULL ||
-        cJSON_AddStringToObject(info, "version", GORK_VERSION) == NULL) {
+        cJSON_AddStringToObject(info, "version", hooks->version) == NULL) {
         cJSON_Delete(r); cJSON_Delete(caps); cJSON_Delete(info);
         cJSON_Delete(auth); cJSON_Delete(pc); cJSON_Delete(mc);
         send_error(id, -32603, "out of memory");

@@ -3799,6 +3799,7 @@ int main(int argc, char **argv)
             h.run        = acp_run;
             h.tokens     = acp_conv_tokens;
             h.ctx_window = (int) c.ctx_window;
+            h.version    = VERSION;
             report_overrides();
             if (c.mcp_config != NULL) mcp_start(c.mcp_config);
             done = acp_serve(&h) == 0;

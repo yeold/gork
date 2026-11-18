@@ -21,6 +21,7 @@ struct acp_hooks {
     long  (*tokens)(void *conv);
 
     int    ctx_window;              /* for usage_update's `size` */
+    const char *version;            /* agent version string for initialize */
 };
 
 /* Serve ACP on stdin/stdout until the client closes it or sends `exit`. */
