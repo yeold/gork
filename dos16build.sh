@@ -77,7 +77,7 @@ gver=$(sh version.sh)          # what --version says
 for f in main.c relay.c tui.c dosspx.c cJSON/cJSON.c; do
     n=$(basename "$f" .c)
     wcc -q -ml -bt=dos -os -fpc -w3 -wcd=200 -wcd=201 -zq -zc -zm -zt64 -nt="${n}_T" \
-        -DGORK_VERSION="\"$gver\"" -DCJSON_NESTING_LIMIT=40 -I"$WORK/pdcurses" -I"$WORK/watt/inc" \
+        -DGORK_VERSION="\"$gver\"" -DGORK_TUI -DCJSON_NESTING_LIMIT=40 -I"$WORK/pdcurses" -I"$WORK/watt/inc" \
         -fo="$obj/$n.obj" "$f"
 done
 # packcode=1: the linker must not gather code segments into groups, or
@@ -101,7 +101,7 @@ for f in main.c relay.c serline.c tui.c cJSON/cJSON.c; do
     n=$(basename "$f" .c)
     zu=; [ "$n" = serline ] && zu=-zu
     wcc -q -ml -bt=dos -os -fpc -w3 -wcd=200 -wcd=201 -zq -zc -zm -zt64 $zu -nt="${n}_T" \
-        -DGORK_VERSION="\"$gver\"" -DCJSON_NESTING_LIMIT=40 -DGORK_SERIAL -I"$WORK/pdcurses" \
+        -DGORK_VERSION="\"$gver\"" -DGORK_TUI -DCJSON_NESTING_LIMIT=40 -DGORK_SERIAL -I"$WORK/pdcurses" \
         -fo="$non/$n.obj" "$f"
 done
 (cd "$non" && wlink option quiet system dos option packcode=1 \

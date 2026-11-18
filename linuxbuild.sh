@@ -50,14 +50,14 @@ for a in $ARCHES; do
             { tail -20 "$b/ncurses.log"; exit 1; }
     fi
     # _FILE_OFFSET_BITS: on a 32-bit CPU, a directory on a file system
-    # with 64-bit inode numbers (XFS, btrfs, overlayfs) otherwise reads as
-    # empty, and stat() fails there.
-    "$host-gcc" -std=gnu89 -O2 -static -D_FILE_OFFSET_BITS=64 \
-        -DGORK_UNICODE -DVERSION="\"$gver\"" \
-        -I"$b/nc/include/ncursesw" -I"$b/nc/include" -o "$b/gork" \
-        main.c relay.c tui.c mcp.c cJSON/cJSON.c \
-        -L"$b/nc/lib" -lncursesw -lm 2>"$b/link.log" ||
-        { cat "$b/link.log"; exit 1; }
+        # with 64-bit inode numbers (XFS, btrfs, overlayfs) otherwise reads as
+        # empty, and stat() fails there.
+        "$host-gcc" -std=gnu89 -O2 -static -D_FILE_OFFSET_BITS=64 \
+            -DGORK_UNICODE -DGORK_TUI -DGORK_MCP -DGORK_ACP -DVERSION="\"$gver\"" \
+            -I"$b/nc/include/ncursesw" -I"$b/nc/include" -o "$b/gork" \
+            main.c relay.c tui.c mcp.c acp.c cJSON/cJSON.c \
+            -L"$b/nc/lib" -lncursesw -lm 2>"$b/link.log" || \
+            { cat "$b/link.log"; exit 1; }
     "$host-strip" "$b/gork"
     d=$b/gork-$ver-linux-$arch
     rm -rf "$d" && mkdir "$d"

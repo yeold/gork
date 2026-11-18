@@ -45,6 +45,7 @@ struct a2a_task {
     cJSON          *messages;        /* gork's conversation (cJSON array) */
     char           *artifact_text;   /* final answer text */
     int             has_artifact;
+    const struct conn *conn;         /* connection for running the task */
 };
 
 static struct a2a_task tasks[A2A_MAX_TASKS];
@@ -73,7 +74,8 @@ static void a2a_task_free(struct a2a_task *t)
 
 static struct a2a_task *a2a_task_find(const char *id)
 {
-    for (int i = 0; i < task_count; i++)
+    int i;
+    for (i = 0; i < task_count; i++)
         if (tasks[i].id && strcmp(tasks[i].id, id) == 0)
             return &tasks[i];
     return NULL;
@@ -81,7 +83,8 @@ static struct a2a_task *a2a_task_find(const char *id)
 
 static struct a2a_task *a2a_task_find_by_context(const char *context_id)
 {
-    for (int i = 0; i < task_count; i++)
+    int i;
+    for (i = 0; i < task_count; i++)
         if (tasks[i].context_id && strcmp(tasks[i].context_id, context_id) == 0)
             return &tasks[i];
     return NULL;
