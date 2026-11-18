@@ -19,6 +19,7 @@
 // Docker Pipeline plugin needed).  Containers build as root in their own
 // /tmp and only copy finished packages into out/, chowned back to the
 // Jenkins user.
+
 pipeline {
     agent { label 'docker' }
     options { buildDiscarder(logRotator(numToKeepStr: '20')) }
@@ -33,7 +34,7 @@ pipeline {
                         apt-get -qq update
                         DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git build-essential autoconf automake libncurses-dev >/dev/null
                         cp -r /src /tmp/src && cd /tmp/src
-                        autoreconf -i && ./configure && make dist
+                        autoreconf -i && ./configure --enable-tui --enable-mcp --enable-acp && make dist
                         cp gork-*.tar.gz /out/ && chown -R '"$(id -u):$(id -g)"' /out'
                 '''
             }
@@ -67,7 +68,12 @@ pipeline {
                             if [ "$o" != "--with-serial" ]; then
                                 python3 testing/fakeacp.py /tmp/b$o/gork
                             fi
-                        done'
+                        done
+                        # Also test --enable-a2a (only on default build with all features)
+                        mkdir /tmp/b_a2a && cd /tmp/b_a2a && /tmp/src/configure --enable-a2a >/dev/null && make
+                        cd /tmp/src
+                        python3 testing/fakeacp.py /tmp/b_a2a/gork
+                    '''
                 '''
             }
         }
@@ -216,8 +222,8 @@ pipeline {
                         sh '''
                             GR="$HOME/.cache/gork-grub" && mkdir -p "$GR"
                             # bookworm, not stable: GRUB 2.14's Makefile.in runs `automake-1.16'
-                            # and its aclocal.m4 is 1.16.5's, so trixie's 1.17 fails the build
-                            # (Error 127 from `missing', then Error 63) for x64 and aa64 too.
+                            # and its aclocal.m4 is 1.16.5's, so trixie's 1.17 refuses
+                            # the build (Error 127 from `missing', then Error 63) for x64 and aa64 too.
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$GR":/work debian:bookworm sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git gcc libc6-dev binutils make bison flex gawk autoconf autoconf-archive automake autopoint gettext python3 pkg-config xz-utils patch zip curl ca-certificates gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu gcc-powerpc-linux-gnu binutils-powerpc-linux-gnu >/dev/null
@@ -225,7 +231,7 @@ pipeline {
                                 sh grubbuild.sh /out /work x64 && sh grubbuild.sh /out /work aa64 && sh grubbuild.sh /out /work i386 && sh grubbuild.sh /out /work of && chown -R '"$(id -u):$(id -g)"' /out /work'
                             # and boot them under OVMF and AAVMF in QEMU against the fake API
                             # (and the i386 and of ones over TFTP, which need qemu-system-i386
-                            # and qemu-system-ppc64)
+                            // and qemu-system-ppc64)
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro debian:bookworm sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 ovmf qemu-system-arm qemu-efi-aarch64 qemu-system-ppc mtools dosfstools python3 gcc libc6-dev >/dev/null
@@ -257,9 +263,9 @@ pipeline {
                                 exit 0
                             fi
                             # System 7.5.3 from the Internet Archive, kept in
-                            # the cache; Basilisk II is in contrib
+                            // the cache; Basilisk II is in contrib
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$MC":/mc debian:stable sh -ec '
-                                sed -i "s/Components: main/Components: main contrib/" /etc/apt/sources.list.d/debian.sources
+                                sed -i "s/Components: main/Components: main contrib/\" /etc/apt/sources.list.d/debian.sources
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends basilisk2 xvfb python3-pip gcc libc6-dev ca-certificates >/dev/null
                                 pip install -q --break-system-packages --root-user-action=ignore machfs==1.3 macresources==1.2
@@ -285,13 +291,13 @@ pipeline {
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git clang lld llvm curl ca-certificates xz-utils zip >/dev/null
                                 # not "cp -r /src": /src/out is the live output directory the other
-                                # stages are writing into, and a file of theirs vanishing mid-copy
-                                # failed this stage on master #53 (ziDA8CYD: No such file or directory)
+                                // stages are writing into, and a file of theirs vanishing mid-copy
+                                // failed this stage on master #53 (ziDA8CYD: No such file or directory)
                                 mkdir -p /tmp/src && tar -C /src --exclude=./out -cf - . | tar -C /tmp/src -xf - && cd /tmp/src
                                 sh bsdbuild.sh /out /work && sh uefibuild.sh /out /tmp/uefi &&
                                     chown -R '"$(id -u):$(id -g)"' /out /work'
                             # and run each on its own system: the official VM
-                            # image, booted in QEMU, the checks of testing/vmcheck.sh
+                            // image, booted in QEMU, the checks of testing/vmcheck.sh
                             docker run --rm -v "$PWD":/src:ro -v "$PWD/out":/out:ro -v "$BW":/work debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils qemu-efi-aarch64 ovmf genisoimage python3 xz-utils gzip curl ca-certificates \
@@ -302,15 +308,15 @@ pipeline {
                                     GORK_VM=/work/vm TMPDIR=/work/tmp python3 testing/bsdtest.py $t /out/gork-*-$t.tar.gz /work/$t/fakeapi || rc=1
                                 done
                                 # gork for UEFI from the UEFI shell: on the TCP/IP of the
-                                # firmware (OVMF, AAVMF) and on its own (OVMF without its
-                                # network stack, U-Boot), against a fake API built here
-                                # (no apostrophes in here: this is all one quoted script)
+                                // firmware (OVMF, AAVMF) and on its own (OVMF without its
+                                // network stack, U-Boot), against a fake API built here
+                                // (no apostrophes in here: this is all one quoted script)
                                 gcc -o /tmp/fakeapi testing/fakeapi.c
                                 for m in x64 aa64 x64-own uboot; do
                                     echo "== uefi $m"
                                     TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi.zip /tmp/fakeapi $m || rc=1
                                 done
-                                # the -nonet one, over COM2 to gork-relay -S
+                                // the -nonet one, over COM2 to gork-relay -S
                                 echo "== uefi-nonet x64"
                                 GORK_RELAY=$(sh testing/getrelay.sh) TMPDIR=/work/tmp python3 testing/uefitest.py /out/gork-*-uefi-nonet.zip /tmp/fakeapi x64 || rc=1
                                 chown -R '"$(id -u):$(id -g)"' /work
