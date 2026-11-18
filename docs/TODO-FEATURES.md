@@ -1,6 +1,7 @@
 # TODO: features to add
 
-Planned features and build options. No implementation yet.
+Planned features and build options. ACP is implemented (2026-11-18) and
+checked by `testing/fakeacp.py`; A2A is planned only.
 
 All items previously listed here (`--with-max-file-size`, `--enable-unicode` with
 autodetection and ASCII fallback, `--without-tui`, `--without-mcp`, session
@@ -8,6 +9,19 @@ save/resume via `/save` and `/load`, and showing the target path and file name o
 file operations) have been implemented.
 
 ## Agent Client Protocol (ACP): gork as an agent an editor can drive
+
+**Status 2026-11-18: done.** `acp.c`, `acp.h` and the seams in `main.c` carry
+it behind `--acp`: `initialize`, `authenticate`, `session/new`,
+`session/prompt`, `session/cancel` and `exit` dispatch; text streams as
+`agent_message_chunk`; tool calls become cards with the tool's `kind`; the
+approval is a `session/request_permission` round trip, whose `allow_always`
+sets the same `always_ok[]` the TUI's `a` does; and a cancel is read *while*
+the reply is in flight. Checked by `testing/fakeacp.py` (eight checks, in
+Jenkins' `options` stage), and written up in the README and
+`docs/MAINTAINING.md`. Two faults found there and fixed: stdin was only read
+between turns, so a `session/cancel` could not be seen mid-reply, and
+`relay_abort` was armed only in the TUI's loop, so nothing polled for it
+anyway. The rest of this section is the plan it was built from.
 
 ACP is Zed's protocol for editors and agents: JSON-RPC 2.0 over the agent's
 stdin/stdout, one message per line, nothing else on stdout (stderr is for logs).

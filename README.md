@@ -16,8 +16,8 @@ as well on a current Linux, macOS or Windows 11. One codebase for all of
 them, with a batch CLI mode and a full-screen interactive curses TUI. The
 [table below](#tested-systems) says what it has been run on.
 
-It is small: about 7,200 lines of strict ANSI C89 in its four main files
-(main.c, relay.c, tui.c, mcp.c) and a binary of about 120 KB (x86-64 Linux,
+It is small: about 8,100 lines of strict ANSI C89 in its five main files
+(main.c, relay.c, tui.c, mcp.c, acp.c) and a binary of about 120 KB (x86-64 Linux,
 `-O2`, dynamic, stripped), with no dependencies beyond libc, a curses
 library (`ncurses`, System V `curses`, or `PDCurses`) and the vendored cJSON.
 It builds with gcc 2.4.5, with a single compiler command where `configure`
@@ -36,10 +36,11 @@ runs on, and where to download it.
 
 ## Features at a glance
 
-- **Strict ANSI C89 / ISO C90**: ~7,200 lines of portable C in the four main files (a few thousand more across the per-system ports), a ~120 KB stripped binary, no C99, no threads, no OpenSSL/TLS library required on the target machine.
+- **Strict ANSI C89 / ISO C90**: ~8,100 lines of portable C in the five main files (a few thousand more across the per-system ports), a ~120 KB stripped binary, no C99, no threads, no OpenSSL/TLS library required on the target machine.
 - **Runs across four decades of hardware and OSes**: 16-bit real-mode MS-DOS (8086, 640 KB RAM) and 32-bit DOS (DJGPP), Windows 1.0 to 11 and NT 3.1+, early Linux (kernel 1.0, Slackware, Debian), FreeBSD/NetBSD/OpenBSD/DragonFly/MidnightBSD, commercial Unix (SunOS 4, Solaris, illumos, AIX, HP-UX, SVR4), NeXTSTEP/OPENSTEP, OS/2 Warp, BeOS, Haiku, QNX, Minix 2 & 3, Plan 9 (9front), GNU/Hurd, macOS (PowerPC Tiger to Apple silicon), classic Mac OS on 68k, bare-metal UEFI (`x86-64` and `arm64`, with its own built-in TCP/IP stack when firmware lacks one), and the barebox and GRUB boot loaders (as a command, on that stack).
 - **Full agentic coding workflow**: local tools for reading, creating and editing files (`read_file`, `write_file`, `edit_file`), directory listing (`list_dir`), shell command execution (`run_command`), project rules (`GORK.md`), `SKILL.md` skills (compatible with Claude Code and Cline), and **Model Context Protocol (MCP)** servers over stdio and streamable HTTP.
 - **Interactive curses TUI & batch CLI**: full-screen terminal chat interface with tool approval prompts, directory trust, context window tracking and auto-compaction (`/compact`), or scriptable one-shot batch mode.
+- **Agent Client Protocol (ACP)**: `./gork --acp` makes gork the agent an editor drives over JSON-RPC 2.0 on stdin/stdout -- streamed text, tool-call cards and approval prompts in the editor's own chat pane, no terminal involved.
 - **Anthropic, OpenAI & local LLMs**: native `/v1/messages` and `/v1/chat/completions` (`protocol = openai`) support for Claude, OpenAI, Ollama, llama.cpp, LM Studio and vLLM over TCP/IP or IPX/SPX.
 
 ## Contents
@@ -51,6 +52,7 @@ runs on, and where to download it.
 - [Build](#build)
 - [Run](#run)
   - [Interactive TUI](#interactive)
+  - [Editors: the Agent Client Protocol](#acp)
   - [Local models (LM Studio, Ollama, llama.cpp, OpenAI)](#local-models)
   - [Without TCP/IP: IPX/SPX](#without-tcpip-spx)
   - [Without any network: a serial line](#serial)
@@ -309,6 +311,28 @@ shows it, and so does the status bar. It starts at `default_effort`.
 
 `/save [path]` writes the conversation to `.gork/session.json` (`_gork/session.jsn`
 on Windows) or the given file; `/load [path]` (or `/resume [path]`) restores it.
+
+<a id="acp"></a>
+### Editors: the Agent Client Protocol
+
+With `--acp` gork is not a terminal program at all: it speaks the
+[Agent Client Protocol](https://agentclientprotocol.com/protocol/v1/) on
+stdin and stdout, and any ACP client -- Zed, for one -- draws the chat pane,
+the streamed answer and a card per tool call, and asks its own way whether a
+tool may run.
+
+```sh
+./gork --acp
+```
+
+stdout is the protocol and nothing else; the answer also goes to stderr, so a
+human running it by hand still sees what gork is doing. `session/new`'s `cwd`
+is the directory the file tools are confined to, so the editor decides what
+gork may touch, and `allow always` there is remembered exactly as the TUI's
+`a` is. A `session/cancel` from the client stops the reply in flight.
+
+Not in the DOS, Windows or firmware builds: those have no `fork`, and ACP
+needs one. The checks are `testing/fakeacp.py`.
 
 <a id="local-models"></a>
 ### Local models (LM Studio, Ollama, llama.cpp, vLLM & OpenAI)

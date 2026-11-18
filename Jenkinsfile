@@ -61,6 +61,8 @@ pipeline {
                                             python3 testing/tlstest.py /tmp/b$o/gork ;;
                             *) python3 testing/looptest.py /tmp/b$o/gork ;;
                             esac
+                            # ACP is in every one of these builds: it needs fork, and nothing else
+                            python3 testing/fakeacp.py /tmp/b$o/gork
                         done'
                 '''
             }
@@ -278,7 +280,10 @@ pipeline {
                             docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out -v "$BW":/work debian:stable sh -ec '
                                 apt-get -qq update
                                 DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git clang lld llvm curl ca-certificates xz-utils zip >/dev/null
-                                cp -r /src /tmp/src && cd /tmp/src
+                                # not "cp -r /src": /src/out is the live output directory the other
+                                # stages are writing into, and a file of theirs vanishing mid-copy
+                                # failed this stage on master #53 (ziDA8CYD: No such file or directory)
+                                mkdir -p /tmp/src && tar -C /src --exclude=./out -cf - . | tar -C /tmp/src -xf - && cd /tmp/src
                                 sh bsdbuild.sh /out /work && sh uefibuild.sh /out /tmp/uefi &&
                                     chown -R '"$(id -u):$(id -g)"' /out /work'
                             # and run each on its own system: the official VM

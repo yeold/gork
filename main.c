@@ -75,6 +75,7 @@
 #include "relay.h"
 #include "tui.h"
 #include "mcp.h"
+#include "acp.h"
 #include "cJSON/cJSON.h"
 
 /* GNU/Hurd has no path length limit, so no PATH_MAX.
@@ -1109,6 +1110,15 @@ static char *tool_edit_file(cJSON *input, int *is_err)
    point, and every tool call still pending is declined. */
 static int aborted;
 
+/* ACP front end: --acp, and the turn runs with an editor watching instead of
+   a terminal.  Defined here because the approval and abort seams below use
+   them, long before acp.c's hooks appear.  Guarded like every other use of
+   them: the front end needs fork, so a GORK_NO_FORK build has none. */
+#ifndef GORK_NO_FORK
+static int acp_mode;                    /* set by acp_run(): no TUI, no prompts */
+static int acp_wanted;                  /* --acp was given on the command line */
+static const char *acp_kind(const char *name);
+#endif
 /*
  * Runs anything the model asks, as the user running gork -- which is why
  * it is only offered when GORK_ALLOW_RUN is set.  No path confinement is
@@ -1690,16 +1700,43 @@ static int tool_asks(const struct tool *t)
 
 static int check_abort(void)
 {
+#ifndef GORK_NO_FORK
+    /* No keyboard in ACP mode: the client's session/cancel is what stops a
+       turn, and acp_cancelled() is where it is read -- here, because this
+       is polled while the reply is still arriving. */
+    if (acp_mode) {
+        if (!aborted && acp_cancelled()) aborted = 1;
+        return aborted;
+    }
+#endif
     if (!aborted && tui_poll_abort()) aborted = 1;
     return aborted;
 }
 
-static int approved(const char *name, int ask, int *always, cJSON *input)
+static int approved(const char *call_id, const char *name, int ask,
+                    int *always, cJSON *input)
 {
     int   ans;
     char *detail;
 
     if (aborted) return 0;
+#ifndef GORK_NO_FORK
+    /* An editor is watching, not a terminal: ask it, and its allow_always
+       is gork's remembered `a`.  The ask names the tool_call card it is
+       for -- the tool_use id, not the tool's name -- or the editor cannot
+       match the answer to the card. */
+    if (acp_mode) {
+        if (!ask || *always) return 1;
+        detail = describe_input(input);
+        ans = acp_ask(call_id, detail != NULL ? detail : name);
+        free(detail);
+        if (ans == 2) *always = 1;
+        if (ans == 0) return 0;
+        return 1;
+    }
+#else
+    (void) call_id;             /* no editor, so no card to name */
+#endif
     if (!interactive_mode || !ask || *always) return 1;
     detail = describe_input(input);
     if (detail == NULL) return 0;       /* never ask blind */
@@ -1879,6 +1916,17 @@ static int print_text_blocks(cJSON *content)
             continue;
         text = cJSON_GetObjectItem(block, "text");
         if (cJSON_IsString(text)) {
+#ifndef GORK_NO_FORK
+            /* In ACP mode stdout carries the protocol and nothing else, so
+               the answer goes to the editor and to stderr, as stream_text()
+               does it.  \n here, as below: ACP's chunks are the text. */
+            if (acp_mode) {
+                acp_text(text->valuestring);
+                fprintf(stderr, "%s\n", text->valuestring);
+                n++;
+                continue;
+            }
+#endif
 #ifdef _WIN32   /* a console shows its code page, not UTF-8; the TUI's
                    capture file and a redirected stdout get it as it is */
             char *shown = isatty(1) ? kstrdup(text->valuestring) : NULL;
@@ -1942,13 +1990,19 @@ static cJSON *run_tools(cJSON *content)
         is_err = 1;
         tool   = tool_lookup(name->valuestring);
         m      = tool == NULL ? mcp_find(name->valuestring) : -1;
+#ifndef GORK_NO_FORK
+        if (acp_mode)
+            acp_tool_start(id->valuestring, name->valuestring,
+                           acp_kind(name->valuestring), name->valuestring);
+#endif
         if (tool == NULL && m < 0)
             out = kstrdup("error: no such tool");
         else if (tool != NULL
-                 ? !approved(tool->name,
+                 ? !approved(id->valuestring, tool->name,
                              tool_asks(tool),
                              &always_ok[tool - TOOLS], input)
-                 : !approved(name->valuestring, 1, mcp_always(m), input))
+                 : !approved(id->valuestring, name->valuestring, 1,
+                             mcp_always(m), input))
             out = kstrdup("error: the user declined this action");
         else if (tool != NULL)
             out = tool->fn(input, &is_err);
@@ -1958,6 +2012,9 @@ static cJSON *run_tools(cJSON *content)
             cJSON_Delete(results);
             return NULL;
         }
+#ifndef GORK_NO_FORK
+        if (acp_mode) acp_tool_done(id->valuestring, is_err);
+#endif
 
         res = cJSON_CreateObject();
         if (res == NULL ||
@@ -2412,6 +2469,17 @@ static void stream_reset(void)
 static void stream_text(const char *t)
 {
     if (*t == '\0') return;
+#ifndef GORK_NO_FORK
+    if (acp_mode) {
+        /* The editor renders it; stderr keeps a copy for a human reading the
+           log, and stdout stays the protocol's alone. */
+        acp_text(t);
+        fputs(t, stderr);
+        fflush(stderr);
+        st.midline = st.printed = 1;
+        return;
+    }
+#endif
 #ifdef _WIN32
     if (isatty(1)) {
         char *shown = kstrdup(t);
@@ -3068,6 +3136,103 @@ static int run_task(const struct conn *c, cJSON *messages)
     return -1;
 }
 
+/* ------------------------------------------------------------------- ACP */
+#ifndef GORK_NO_FORK
+/*
+ * gork as an ACP agent: acp.c owns the wire, this side owns the conversation.
+ * The hooks map one ACP session onto one `cJSON` conversation, exactly as the
+ * TUI does, and `cwd` from session/new becomes the confinement root.
+ */
+struct acp_conv {
+    const struct conn *c;
+    cJSON             *messages;
+};
+
+/* main() has the one `struct conn`, and the hooks below take no argument
+   through which to reach it: acp_conv_new() is handed a cwd and nothing
+   else, so the connection comes from here.  Leaving it NULL is a crash in
+   run_task(), not a fallback. */
+static const struct conn *acp_conn_global;
+
+/* ACP's ToolKind, from the tool's name: what an editor draws a card with. */
+static const char *acp_kind(const char *name)
+{
+    if (strcmp(name, "read_file") == 0) return "read";
+    if (strcmp(name, "write_file") == 0) return "edit";
+    if (strcmp(name, "edit_file") == 0) return "edit";
+    if (strcmp(name, "list_dir") == 0) return "read";
+    if (strcmp(name, "run_command") == 0) return "execute";
+    if (strcmp(name, "skill") == 0) return "think";
+    return "other";
+}
+
+static void *acp_conv_new(const char *cwd)
+{
+    struct acp_conv *k;
+
+    if (acp_conn_global == NULL) return NULL;
+    k = (struct acp_conv *) malloc(sizeof *k);
+    if (k == NULL) return NULL;
+    k->c = acp_conn_global;
+    k->messages = cJSON_CreateArray();
+    if (k->messages == NULL) {
+        free(k);
+        return NULL;
+    }
+    /* The editor's cwd is the session's root: it is what the file tools are
+       confined to, so it replaces work_root rather than adding to it.  It
+       must resolve, or every later confine() would compare against "" and
+       refuse everything. */
+    if (cwd != NULL && *cwd != '\0') {
+        char real[PATH_MAX];
+
+        if (realpath(cwd, real) != NULL)
+            strcpy(work_root, real);
+        else
+            fprintf(stderr, "gork: ACP cwd %s: %s; keeping %s\n",
+                    cwd, strerror(errno), work_root);
+    }
+    return k;
+}
+
+static void acp_conv_free(void *v)
+{
+    struct acp_conv *k = (struct acp_conv *) v;
+
+    if (k == NULL) return;
+    cJSON_Delete(k->messages);
+    free(k);
+}
+
+static long acp_conv_tokens(void *v)
+{
+    (void) v;
+    return ctx_tokens;
+}
+
+static const char *acp_run(void *v, const char *text)
+{
+    struct acp_conv *k = (struct acp_conv *) v;
+    int              rc;
+
+    if (append_text_message(k->messages, "user", text) != 0)
+        return "end_turn";
+    acp_mode = 1;
+    aborted = 0;
+    /* The TUI's loop is the only other place that arms this, and there is no
+       TUI here: without it relay.c never polls check_abort, so a
+       session/cancel would not be read until the reply had already
+       arrived. */
+    relay_abort = check_abort;
+    rc = run_task(k->c, k->messages);
+    relay_abort = NULL;
+    acp_mode = 0;
+    if (aborted) return "cancelled";
+    if (rc == 0) return "max_turn_requests";
+    return "end_turn";
+}
+#endif /* !GORK_NO_FORK */
+
 #ifndef GORK_BARE
 #if defined(GORK_NO_FORK) || defined(GORK_EMX)
 #define SESSION_FILE DOT_GORK "/session.jsn"
@@ -3325,6 +3490,10 @@ static void print_help(const char *prog)
     printf("Without: the interactive TUI, which asks before writes and "
            "commands.\n");
 #endif
+#ifndef GORK_NO_FORK
+    printf("--acp: speak the Agent Client Protocol on stdin/stdout, as an "
+           "editor's agent.\n");
+#endif
     printf("\nSettings: %s, `key = value`, or the variable shown; the\n"
            "variable beats the file.  An empty `default` takes the "
            "model's own.\n\n", conf_hint);
@@ -3361,9 +3530,14 @@ int main(int argc, char **argv)
         print_help(argv[0]);
         return 0;
     }
+#ifndef GORK_NO_FORK
+    if (argc == 2 && strcmp(argv[1], "--acp") == 0)
+        acp_wanted = 1;
+    else
+#endif
     if (argc > 2) {
-        fprintf(stderr, "usage: %s [\"task\" | --help | --version]\n",
-                argv[0]);
+        fprintf(stderr, "usage: %s [\"task\" | --acp | --help | "
+                        "--version]\n", argv[0]);
         return 2;
     }
 #ifdef __MSDOS__
@@ -3615,6 +3789,22 @@ int main(int argc, char **argv)
         done = interactive(&c) == 0;
     } else {
         const char *task = argv[1];
+#ifndef GORK_NO_FORK
+        if (acp_wanted) {
+            struct acp_hooks h;
+
+            acp_conn_global = &c;
+            h.conv_new   = acp_conv_new;
+            h.conv_free  = acp_conv_free;
+            h.run        = acp_run;
+            h.tokens     = acp_conv_tokens;
+            h.ctx_window = (int) c.ctx_window;
+            report_overrides();
+            if (c.mcp_config != NULL) mcp_start(c.mcp_config);
+            done = acp_serve(&h) == 0;
+        } else
+#endif
+        {
 #ifdef _WIN32   /* the command line is in the ANSI code page */
         char       *utf8 = win_input_to_utf8(task, 0);
 
@@ -3638,6 +3828,7 @@ int main(int argc, char **argv)
 #ifdef _WIN32
         free(utf8);
 #endif
+        }
     }
 
     mcp_stop();

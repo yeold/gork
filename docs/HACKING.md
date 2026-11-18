@@ -12,6 +12,7 @@ are made.
 | [relay.c](../relay.c), [relay.h](../relay.h) | HTTP POST through the relay; growable buffer |
 | [tui.c](../tui.c), [tui.h](../tui.h) | Interactive chat pane, input line, approvals |
 | [mcp.c](../mcp.c), [mcp.h](../mcp.h) | MCP client: stdio servers, JSON-RPC, tool calls |
+| [acp.c](../acp.c), [acp.h](../acp.h) | ACP front end (`--acp`): gork as the agent an editor drives, JSON-RPC 2.0 on stdin/stdout; `main.c` owns the conversation and fills in `struct acp_hooks` |
 | [port.h](../port.h), [win.c](../win.c) | What differs without `fork` (DOS, Windows); the Windows replacements for POSIX calls |
 | [Makefile.dj](../Makefile.dj), [dosbuild.sh](../dosbuild.sh), [Makefile.w32](../Makefile.w32), [winbuild.sh](../winbuild.sh) | The DOS (DJGPP) and Windows (MinGW) cross builds |
 | [cygpack.sh](../cygpack.sh) | Packs the Cygwin build as the `win32` zip |
