@@ -28,17 +28,17 @@ pipeline {
     stages {
         stage('dist') {
             steps {
-                sh '''
-                    # bsdwork/ was the bsd stage's cache in the workspace
-                    # once; every stage copies the workspace, so not there
-                    rm -rf out bsdwork && mkdir out
-                    docker run --rm -e TAG_NAME -v "$PWD":/src:ro -v "$PWD/out":/out debian:stable sh -ec '
-                        apt-get -qq update
-                        DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git build-essential autoconf automake libncurses-dev >/dev/null
-                        cp -r /src /tmp/src && cd /tmp/src
-                        autoreconf -i && ./configure --enable-tui --enable-mcp --enable-acp && make dist
-                        cp gork-*.tar.gz /out/ && chown -R '"$(id -u):$(id -g)"' /out'
-                '''
+                sh """
+                # bsdwork/ was the bsd stage's cache in the workspace
+# once; every stage copies the workspace, so not there
+rm -rf out bsdwork && mkdir out
+docker run --rm -e TAG_NAME -v "\$PWD":/src:ro -v "\$PWD/out":/out debian:stable sh -ec '
+    apt-get -qq update
+    DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git build-essential autoconf automake libncurses-dev >/dev/null
+    cp -r /src /tmp/src && cd /tmp/src
+    autoreconf -i && ./configure --enable-tui --enable-mcp --enable-acp && make dist
+    cp gork-*.tar.gz /out/ && chown -R '"\$(id -u):\$(id -g)"' /out'
+                """
             }
         }
         // The build options that leave things out: looptest.py
@@ -48,35 +48,35 @@ pipeline {
         // its own, not beside the others: the agent's disk holds no more
         stage('options') {
             steps {
-                sh '''
-                    docker run --rm -e TAG_NAME -v "$PWD":/src:ro debian:stable sh -ec '
-                        apt-get -qq update
-                        DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git build-essential autoconf automake libncurses-dev python3 ca-certificates curl libssl-dev openssl >/dev/null
-                        cp -r /src /tmp/src && cd /tmp/src && autoreconf -i
-                        export GORK_RELAY=$(sh testing/getrelay.sh)
-                        for o in --disable-tui --disable-mcp --with-openssl --with-serial; do
-                            echo "== $o"
-                            mkdir /tmp/b$o && cd /tmp/b$o && /tmp/src/configure $o --enable-acp >/dev/null && make
-                            cd /tmp/src
-                            case $o in
-                            --with-serial) python3 testing/serialtest.py /tmp/b$o/gork ;;
-                            --with-openssl) python3 testing/looptest.py /tmp/b$o/gork
-                                            python3 testing/tlstest.py /tmp/b$o/gork ;;
-                            *) python3 testing/looptest.py /tmp/b$o/gork ;;
-                            esac
-                            # ACP is in every one of these builds: it needs fork, and nothing else
-                            # --with-serial (-DGORK_SERIAL) has no TCP/IP, only serial transport;
-                            # fakeacp.py speaks HTTP, so it cannot run there.
-                            if [ "$o" != "--with-serial" ]; then
-                                python3 testing/fakeacp.py /tmp/b$o/gork
-                            fi
-                        done
-                        # Also test --enable-a2a (only on default build with all features)
-                        mkdir /tmp/b_a2a && cd /tmp/b_a2a && /tmp/src/configure --enable-a2a >/dev/null && make
-                        cd /tmp/src
-                        python3 testing/fakeacp.py /tmp/b_a2a/gork
-                    '''
-                '''
+                sh """
+                docker run --rm -e TAG_NAME -v "\$PWD":/src:ro debian:stable sh -ec '
+    apt-get -qq update
+    DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends git build-essential autoconf automake libncurses-dev python3 ca-certificates curl libssl-dev openssl >/dev/null
+    cp -r /src /tmp/src && cd /tmp/src && autoreconf -i
+    export GORK_RELAY=\$(sh testing/getrelay.sh)
+    for o in --disable-tui --disable-mcp --with-openssl --with-serial; do
+        echo "== \$o"
+        mkdir /tmp/b\$o && cd /tmp/b\$o && /tmp/src/configure \$o --enable-acp >/dev/null && make
+        cd /tmp/src
+        case \$o in
+        --with-serial) python3 testing/serialtest.py /tmp/b\$o/gork ;;
+        --with-openssl) python3 testing/looptest.py /tmp/b\$o/gork
+                        python3 testing/tlstest.py /tmp/b\$o/gork ;;
+        *) python3 testing/looptest.py /tmp/b\$o/gork ;;
+        esac
+        # ACP is in every one of these builds: it needs fork, and nothing else
+        # --with-serial (-DGORK_SERIAL) has no TCP/IP, only serial transport;
+        # fakeacp.py speaks HTTP, so it cannot run there.
+        if [ "\$o" != "--with-serial" ]; then
+            python3 testing/fakeacp.py /tmp/b\$o/gork
+        fi
+    done
+    # Also test --enable-a2a (only on default build with all features)
+    mkdir /tmp/b_a2a && cd /tmp/b_a2a && /tmp/src/configure --enable-a2a >/dev/null && make
+    cd /tmp/src
+    python3 testing/fakeacp.py /tmp/b_a2a/gork
+'''
+                """
             }
         }
         stage('packages') {
@@ -372,12 +372,12 @@ docker run --rm -v "\$PWD":/src:ro -v "\$PWD/out":/out:ro -v "\$BW":/work debian
             steps {
                 withCredentials([string(credentialsId: 'github-release-token', variable: 'GITHUB_TOKEN'),
                                  string(credentialsId: 'forgejo-release-token', variable: 'FORGEJO_TOKEN')]) {
-                    sh '''
-                        docker run --rm -v "$PWD":/w:ro -w /w -e TAG="$TAG_NAME" -e GITHUB_TOKEN -e FORGEJO_TOKEN debian:stable sh -ec '
-                            apt-get -qq update
-                            DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl jq ca-certificates >/dev/null
-                            sh release.sh out'
-                    '''
+                    sh """
+                    docker run --rm -v "\$PWD":/w:ro -w /w -e TAG="\$TAG_NAME" -e GITHUB_TOKEN -e FORGEJO_TOKEN debian:stable sh -ec '
+    apt-get -qq update
+    DEBIAN_FRONTEND=noninteractive apt-get -qq install -y curl jq ca-certificates >/dev/null
+    sh release.sh out'
+                    """
                 }
             }
         }
