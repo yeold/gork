@@ -208,7 +208,6 @@ char *os2_realpath(const char *path, char *out)
 #define acp_usage()              ((void) 0)
 #define acp_ask(a,b)             ((void) (a), (void) (b), 0)
 #define acp_cancelled()          0
-#define acp_kind(name)           ((void) (name), "other")
 #endif
 
 #ifdef GORK_NO_FORK
