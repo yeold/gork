@@ -45,6 +45,8 @@ case "$enable_tui" in
 esac
 if test "$enable_tui" = yes; then
   CPPFLAGS="$CPPFLAGS -DGORK_TUI"
+else
+  CPPFLAGS="$CPPFLAGS -DGORK_NO_TUI"
 fi
 
 AC_ARG_ENABLE([mcp],
