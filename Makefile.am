@@ -1,5 +1,5 @@
 bin_PROGRAMS = gork
-gork_SOURCES = main.c relay.c relay.h serline.c serline.h tui.c tui.h port.h \
+gork_SOURCES = main.c relay.c relay.h serline.c serline.h port.h \
                 cJSON/cJSON.c cJSON/cJSON.h
 
 if HAVE_TUI
