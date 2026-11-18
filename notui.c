@@ -5,6 +5,7 @@
  * docs/build/plan9.md.
  */
 #include <stddef.h>
+#include "port.h"
 #include "tui.h"
 #include "acp.h"
 
