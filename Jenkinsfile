@@ -73,7 +73,6 @@ pipeline {
                         cd /tmp/src
                         python3 testing/fakeacp.py /tmp/b_a2a/gork
                     '''
-                '''
             }
         }
         stage('packages') {
