@@ -62,7 +62,11 @@ pipeline {
                             *) python3 testing/looptest.py /tmp/b$o/gork ;;
                             esac
                             # ACP is in every one of these builds: it needs fork, and nothing else
-                            python3 testing/fakeacp.py /tmp/b$o/gork
+                            # --with-serial (-DGORK_SERIAL) has no TCP/IP, only serial transport;
+                            # fakeacp.py speaks HTTP, so it cannot run there.
+                            if [ "$o" != "--with-serial" ]; then
+                                python3 testing/fakeacp.py /tmp/b$o/gork
+                            fi
                         done'
                 '''
             }
