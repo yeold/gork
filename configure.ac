@@ -35,25 +35,52 @@ case "$enable_unicode" in
   *) AC_MSG_ERROR([--enable-unicode=$enable_unicode: want yes, no or auto]) ;;
 esac
 
-AC_ARG_WITH([tui],
-  [AS_HELP_STRING([--without-tui],
-                  [build without the curses TUI (batch mode only)])],
-  [with_tui=$withval], [with_tui=yes])
-case "$with_tui" in
+AC_ARG_ENABLE([tui],
+  [AS_HELP_STRING([--enable-tui],
+                  [build with the curses TUI (interactive mode)])],
+  [enable_tui=$enableval], [enable_tui=no])
+case "$enable_tui" in
   yes|no) ;;
-  *) AC_MSG_ERROR([--with-tui=$with_tui: want yes or no]) ;;
+  *) AC_MSG_ERROR([--enable-tui=$enable_tui: want yes or no]) ;;
 esac
+if test "$enable_tui" = yes; then
+  CPPFLAGS="$CPPFLAGS -DGORK_TUI"
+fi
 
-AC_ARG_WITH([mcp],
-  [AS_HELP_STRING([--without-mcp],
-                  [build without the MCP client])],
-  [with_mcp=$withval], [with_mcp=yes])
-case "$with_mcp" in
+AC_ARG_ENABLE([mcp],
+  [AS_HELP_STRING([--enable-mcp],
+                  [build with Model Context Protocol (MCP) client])],
+  [enable_mcp=$enableval], [enable_mcp=no])
+case "$enable_mcp" in
   yes|no) ;;
-  *) AC_MSG_ERROR([--with-mcp=$with_mcp: want yes or no]) ;;
+  *) AC_MSG_ERROR([--enable-mcp=$enable_mcp: want yes or no]) ;;
 esac
-if test "$with_mcp" = no; then
-  CPPFLAGS="$CPPFLAGS -DGORK_NO_MCP"
+if test "$enable_mcp" = yes; then
+  CPPFLAGS="$CPPFLAGS -DGORK_MCP"
+fi
+
+AC_ARG_ENABLE([acp],
+  [AS_HELP_STRING([--enable-acp],
+                  [build with Agent Client Protocol (ACP) front end])],
+  [enable_acp=$enableval], [enable_acp=no])
+case "$enable_acp" in
+  yes|no) ;;
+  *) AC_MSG_ERROR([--enable-acp=$enable_acp: want yes or no]) ;;
+esac
+if test "$enable_acp" = yes; then
+  CPPFLAGS="$CPPFLAGS -DGORK_ACP"
+fi
+
+AC_ARG_ENABLE([a2a],
+  [AS_HELP_STRING([--enable-a2a],
+                  [build with Agent2Agent (A2A) server])],
+  [enable_a2a=$enableval], [enable_a2a=no])
+case "$enable_a2a" in
+  yes|no) ;;
+  *) AC_MSG_ERROR([--enable-a2a=$enable_a2a: want yes or no]) ;;
+esac
+if test "$enable_a2a" = yes; then
+  CPPFLAGS="$CPPFLAGS -DGORK_A2A"
 fi
 
 AC_ARG_WITH([openssl],
@@ -155,6 +182,11 @@ if test "$with_openssl" != no; then
 fi
 
 CFLAGS=$save_CFLAGS
+
+AM_CONDITIONAL([HAVE_TUI], [test "$enable_tui" = yes])
+AM_CONDITIONAL([HAVE_MCP], [test "$enable_mcp" = yes])
+AM_CONDITIONAL([HAVE_ACP], [test "$enable_acp" = yes])
+AM_CONDITIONAL([HAVE_A2A], [test "$enable_a2a" = yes])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

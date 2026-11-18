@@ -1,7 +1,8 @@
 # TODO: features to add
 
 Planned features and build options. ACP is implemented (2026-11-18) and
-checked by `testing/fakeacp.py`; A2A is planned only.
+checked by `testing/fakeacp.py`; A2A is planned for 1.7; MCP improvements
+planned for 1.7.
 
 All items previously listed here (`--with-max-file-size`, `--enable-unicode` with
 autodetection and ASCII fallback, `--without-tui`, `--without-mcp`, session
@@ -64,6 +65,12 @@ request → cancel; `docs/MAINTAINING.md` and the README get their rows with it.
 
 ## Agent2Agent (A2A): gork as a remote agent other agents delegate to
 
+**Status 2026-11-18: planned for 1.7.** `a2a.c`, `a2a.h` exist as a spike (uncommitted),
+implementing `message/send`, `tasks/get`, `tasks/cancel` with an HTTP listener
+and JSON-RPC dispatch. Remaining: `--a2a PORT` flag in `main()`/`Makefile.am`,
+Agent Card version injection, bearer token auth from config, `testing/fakea2a.py`
+for CI, confinement rule (`cwd`/`allow` required), push notifications/SSE later.
+
 A2A is the Linux Foundation protocol for one agent calling another over HTTP.
 gork would be the **server**: publish an Agent Card, accept `message/send`, run
 `run_task`, hand back the answer, and let the caller poll `tasks/get` or cancel
@@ -101,3 +108,21 @@ the config) matter more here than anywhere else. `PK` builds only: no DOS, no
 firmware, no serial. A card and a `message/send` round trip against
 `testing/fakea2a.py` (a client, per the spec's worked examples) are the check;
 `message/stream` (SSE) and push notifications are a second step and can wait.
+
+## Model Context Protocol (MCP): improvements for 1.7
+
+**Status 2026-11-18: planned for 1.7.** MCP is implemented (`mcp.c`, `mcp.h`),
+stdio and streamable HTTP servers work. Planned improvements:
+
+- **MCP resources**: expose gork's file tools (`read_file`, `list_dir`) as MCP
+  resources so editors can browse the workspace through MCP
+- **MCP prompts**: expose `SKILL.md` skills as MCP prompt templates
+- **MCP sampling**: support the sampling protocol so gork can ask the editor's
+  model for completions (reverse of current flow)
+- **Auth improvements**: configurable auth per server (currently only bearer
+  token from config)
+- **Server management UI**: TUI commands to list/start/stop MCP servers
+- **`testing/fakemcp.py` extensions**: test resources, prompts, sampling
+
+Effort: moderate. The MCP client framework is solid; these are feature additions
+using existing JSON-RPC and transport infrastructure.

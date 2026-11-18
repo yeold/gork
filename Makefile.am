@@ -1,7 +1,22 @@
 bin_PROGRAMS = gork
-gork_SOURCES = main.c relay.c relay.h serline.c serline.h tui.c tui.h mcp.c mcp.h port.h \
-                acp.c acp.h \
+gork_SOURCES = main.c relay.c relay.h serline.c serline.h tui.c tui.h port.h \
                 cJSON/cJSON.c cJSON/cJSON.h
+
+if HAVE_TUI
+gork_SOURCES += tui.c tui.h
+endif
+
+if HAVE_MCP
+gork_SOURCES += mcp.c mcp.h
+endif
+
+if HAVE_ACP
+gork_SOURCES += acp.c acp.h
+endif
+
+if HAVE_A2A
+gork_SOURCES += a2a.c a2a.h
+endif
 EXTRA_DIST = README.md LICENSE CONTRIBUTING.md docs/BUILD.md docs/build/aix.md docs/build/beos.md docs/build/dos.md docs/build/hpux.md docs/build/minix.md docs/build/nextstep.md docs/build/os2.md docs/build/plan9.md docs/build/qnx.md docs/build/sunos4.md docs/build/svr4.md docs/build/uefi.md docs/build/windows.md docs/HACKING.md docs/MAINTAINING.md docs/SERIAL.md Makefile.dj dosbuild.sh dosspx.c win.c \
              dos16build.sh dos16/watcom.err dos16/syserr.c \
              Makefile.w32 winbuild.sh nt3crt.c aixps2.c minix2.c minix2.h nextstep.c sunos4.c beos.c svr40.c plan9.c notui.c cygpack.sh linuxbuild.sh bsdbuild.sh version.sh \

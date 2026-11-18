@@ -3483,12 +3483,11 @@ static void print_help(const char *prog)
     printf("       %s --help\n", prog);
     printf("       %s --version\n", prog);
     printf("\n");
-#ifdef GORK_NO_TUI
-    printf("Batch only in this build: give the task on the command line.\n");
-#else
-    printf("With a task: run it, print the answer on stdout, exit.\n");
+#ifdef GORK_TUI
     printf("Without: the interactive TUI, which asks before writes and "
            "commands.\n");
+#else
+    printf("Batch only in this build: give the task on the command line.\n");
 #endif
 #ifndef GORK_NO_FORK
     printf("--acp: speak the Agent Client Protocol on stdin/stdout, as an "
@@ -3730,7 +3729,18 @@ int main(int argc, char **argv)
     if (load_allow(cfg(CFG_ALLOW)) != 0) return 2;
     home = getenv("HOME");
 
-#ifdef GORK_NO_TUI
+#ifdef GORK_TUI
+    if (argc == 1) {
+        const char *status = "gork";
+        if (tui_init(status, "gork " VERSION) == 0) {
+            interactive_mode = 1;
+            done = interactive(&c) == 0;
+            tui_end();
+        } else {
+            return -1;
+        }
+    } else
+#else
     if (argc == 1) {
         fprintf(stderr, "gork: this build has no TUI: give the task on the "
                         "command line\n");
